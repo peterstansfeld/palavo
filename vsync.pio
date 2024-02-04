@@ -15,7 +15,7 @@
 
 
 
-pull block                        ; Pull from FIFO to OSR (only once)
+;pull block                        ; Pull from FIFO to OSR (only once)
 .wrap_target                      ; Program wraps to here
 
 ; ACTIVE

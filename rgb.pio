@@ -6,8 +6,8 @@
 ; Program name
 .program rgb
 
-pull block 					; Pull from FIFO to OSR (only once)
-mov y, osr 					; Copy value from OSR to y scratch register
+;pull block 					; Pull from FIFO to OSR (only once)
+;mov y, osr 					; Copy value from OSR to y scratch register
 .wrap_target
 
 set pins, 0 				; Zero RGB pins in blanking
