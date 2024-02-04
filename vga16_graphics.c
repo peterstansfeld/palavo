@@ -129,9 +129,21 @@ void initVGA() {
     // Initialize PIO state machine counters. This passes the information to the state machines
     // that they retrieve in the first 'pull' instructions, before the .wrap_target directive
     // in the assembly. Each uses these values to initialize some counting registers.
-    pio_sm_put_blocking(pio, hsync_sm, H_ACTIVE);
+    
+    // no longer need this as we've slowed the clock down to 1/16 of what it was before 
+    // pio_sm_put_blocking(pio, hsync_sm, H_ACTIVE);
     pio_sm_put_blocking(pio, vsync_sm, V_ACTIVE);
     pio_sm_put_blocking(pio, rgb_sm, RGB_ACTIVE);
+
+    // this pio_sm_exec instructions save one pio instruction
+    pio_sm_exec(pio, vsync_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
+    
+    // these pio_sm_exec instructions save two pio instructions
+    pio_sm_exec(pio, rgb_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
+    pio_sm_exec(pio, rgb_sm, pio_encode_mov(pio_y, pio_osr)); // (IfE = 0, Blk = 1)
+    //pio_sm_exec(pio, rgb_sm, pio_encode_jmp(rgb_offset + 0)); // (jmp 0)
+
+
 
 
     // Start the two pio machine IN SYNC

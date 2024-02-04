@@ -25,6 +25,15 @@
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
 #include "hardware/dma.h"
+#include "hardware/uart.h"
+
+#define UART_ID uart1
+#define BAUD_RATE 115200
+
+// We are using pins 0 and 1, but see the GPIO function select table in the
+// datasheet for information on which other pins can be used.
+#define UART_TX_PIN 4
+#define UART_RX_PIN 5
 
 // Some globals for storing timer information
 volatile unsigned int time_accum = 0;
@@ -44,10 +53,30 @@ int main() {
     // Initialize stdio
     stdio_init_all();
 
+    printf("Initialising VGA...\n");
+
+
+    uart_init(UART_ID, BAUD_RATE);
+
+    // Set the TX and RX pins by using the function select on the GPIO
+    // Set datasheet for more information on function select
+    gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
+    gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
+
+    uart_puts(UART_ID, "\n Hello, UART!\n");
+
+
     // Initialize the VGA screen
     initVGA() ;
 
-    // circle radii
+    uart_puts(UART_ID, "\n Hello, UART!\n");
+
+
+
+    // animation pause
+    bool pause = false;
+
+    // circle radii:
     short circle_x = 0 ;
 
     // color chooser
@@ -64,8 +93,39 @@ int main() {
 
     // Draw some filled rectangles
     fillRect(64, 0, 176, 50, BLUE); // blue box
-    fillRect(250, 0, 176, 50, RED); // red box
+    fillRect(250, 0, 176, 50, RED); // red box:
     fillRect(435, 0, 176, 50, GREEN); // green box
+    
+//    drawVLine(Vline_x, 300, (Vline_x>>2), color_index);
+
+    drawVLine(0, 0, 16, WHITE);
+    drawVLine(2, 0, 16, WHITE);
+
+    drawVLine(9, 0, 16, WHITE);
+    drawVLine(11, 0, 16, WHITE);
+
+ //   drawVLine(637, 0, 16, WHITE);
+
+    drawHLine(0, 479, 16, WHITE);
+    drawVLine(0, 480 - 16, 16, WHITE);
+
+    drawHLine(640 - 16, 0, 16, WHITE);
+    drawVLine(639, 0, 16, WHITE);
+
+    drawVLine(639, 480 - 16, 16, WHITE);
+    drawHLine(640 - 16, 479, 16, WHITE);
+
+    // drawHLine(630, 480 - 1, 1, WHITE);
+
+
+    for (int i = 0; i < 16; i++){
+        drawPixel(i, 0, i); // test all colours in first horizontal line following sync
+    }
+
+
+    for (int i = 0; i < 16; i++){
+        fillRect(i * 40, 51, 40, 40, i); // colour boxes
+    }
 
     // Write some text
     setTextColor(WHITE) ;
@@ -90,50 +150,84 @@ int main() {
 
     while(true) {
 
-        // Modify the color chooser
-        if (color_index ++ == 15) color_index = 0 ;
+        if (!pause) {
 
-        // A row of filled circles
-        fillCircle(disc_x, 100, 20, color_index);
-        disc_x += 35 ;
-        if (disc_x > 640) disc_x = 0;
-        
-        // Concentric empty circles
-        drawCircle(320, 200, circle_x, color_index);
-        circle_x += 1 ;        
-        if (circle_x > 130) circle_x = 0;
+            // Modify the color chooser
+            if (color_index ++ == 15) color_index = 0 ;
 
-        // A series of rectangles
-        drawRect(10, 300, box_x, box_x, color_index);
-        box_x += 5 ;
-        if (box_x > 195) box_x = 10;
+            // A row of filled circles
+            fillCircle(disc_x, 100, 20, color_index);
+            disc_x += 35 ;
+            if (disc_x > 640) disc_x = 0;
 
-        // Random lines
-        drawLine(210+(rand()&0x7f), 350+(rand()&0x7f), 210+(rand()&0x7f), 
-                 350+(rand()&0x7f), color_index);
+            // Concentric empty circles
+            drawCircle(320, 200, circle_x, color_index);
+            circle_x += 1 ;        
+            if (circle_x > 130) circle_x = 0;
 
-        // Vertical lines
-        drawVLine(Vline_x, 300, (Vline_x>>2), color_index);
-        Vline_x += 2 ;
-        if (Vline_x > 620) Vline_x = 350;
-        
-        // Horizontal lines
-        drawHLine(400, Hline_y, 150, color_index);
-        Hline_y += 2 ;
-        if (Hline_y > 400) Hline_y = 240;
+            // A series of rectangles
+            drawRect(10, 300, box_x, box_x, color_index);
+            box_x += 5 ;
+            if (box_x > 195) box_x = 10;
 
-        // Timing text
-        if (time_accum != time_accum_old) {
-            time_accum_old = time_accum ;
-            fillRect(250, 20, 176, 30, RED); // red box
-            sprintf(timetext, "%d", time_accum) ;
-            setCursor(250, 20) ;
-            setTextSize(2) ;
-            writeString(timetext) ;
+            // Random lines
+            drawLine(210+(rand()&0x7f), 350+(rand()&0x7f), 210+(rand()&0x7f), 
+                    350+(rand()&0x7f), color_index);
+
+            // Vertical lines
+            drawVLine(Vline_x, 300, (Vline_x>>2), color_index);
+            Vline_x += 2 ;
+            if (Vline_x > 620) Vline_x = 350;
+            
+            // Horizontal lines
+            drawHLine(400, Hline_y, 150, color_index);
+            Hline_y += 2 ;
+            if (Hline_y > 400) Hline_y = 240;
+
+            // Timing text
+            if (time_accum != time_accum_old) {
+                time_accum_old = time_accum ;
+                fillRect(250, 20, 176, 30, RED); // red box
+                sprintf(timetext, "%d", time_accum) ;
+                setCursor(250, 20) ;
+                setTextSize(2) ;
+                writeString(timetext) ;
+            }
         }
+
+        /*
+        
+        // cant do this getchar() is a blocking function
+        int uart_char = getchar();
+        if (uart_char != EOF) {
+            // a char has been received
+            if ((char)uart_char == ' ') {
+                pause = !pause; // toggle pause
+                printf(" SPACE ");
+            } else {
+                putchar(uart_char);
+            }
+        }
+        */
+
+// cant do this getchar() is a blocking function
+
+        if (uart_is_readable(UART_ID)) {
+            uint8_t ch = uart_getc(UART_ID);
+            // Can we send it back?
+            if (uart_is_writable(UART_ID)) {
+                uart_putc(UART_ID, ch);
+            }
+            if ((char)ch == ' ') {
+                pause = !pause; // toggle pause
+            }
+        }
+        
 
         // A brief nap
         sleep_ms(10) ;
+
+        // uart_putc(UART_ID, 'B');
 
    }
 
