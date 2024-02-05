@@ -50,8 +50,8 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 
 
 const uint CAPTURE_PIN_BASE = 16; // 16 = hsync, 17 = vsync
-const uint CAPTURE_PIN_COUNT = 1;
-const uint CAPTURE_N_SAMPLES = 640; //was 96
+const uint CAPTURE_PIN_COUNT = 2;
+const uint CAPTURE_N_SAMPLES = 640 * 2; // was 96
 
 static inline uint bits_packed_per_word(uint pin_count) {
     // If the number of pins to be sampled divides the shift register size, we
@@ -107,7 +107,14 @@ void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
         true                // Start immediately
     );
 
+    // If edge detect we need to first wait for the opposite level
+    // Warning! As it's blocking instruction it will... block
+    pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(!trigger_level, trigger_pin));
+    
+    // level trigger
     pio_sm_exec(pio, sm, pio_encode_wait_gpio(trigger_level, trigger_pin));
+    
+    
     pio_sm_set_enabled(pio, sm, true);
 }
 
@@ -132,6 +139,101 @@ void print_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint3
         uart_puts(UART_ID, "\n");
     }
 }
+
+
+void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples) {
+    // Display the capture buffer in graphical form, like this:
+    // 00: __--__--__--__--__--__--
+    // 01: ____----____----____----
+    // ...only with lines
+    // uart_puts(UART_ID, "Capture:\n");
+    // Each FIFO record may be only partially filled with bits, depending on
+    // whether pin_count is a factor of 32.
+    uint record_size_bits = bits_packed_per_word(pin_count);
+    
+ //   fillRect(0, 51, 640, 30, BLACK); // colour boxes
+    
+    uint last_sample = 1;
+    uint last_x = 0;
+
+    char line_col = YELLOW;
+
+    int trace_height = 20;
+
+    uint y = 51; 
+    uint y_padding = 2;
+
+    for (int pin = 0; pin < pin_count; ++pin) {
+        uint x = 0;
+        
+        fillRect(0, y, 640, trace_height, BLACK); // colour boxes
+
+        last_sample = 1;
+        last_x =0;
+        
+        // uart_puts(UART_ID, "%02d: ", pin + pin_base);
+        // uart_puts(UART_ID, "todo");
+        for (int sample = 0; sample < n_samples; ++sample) {
+            uint bit_index = pin + sample * pin_count;
+            uint word_index = bit_index / record_size_bits;
+            // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
+            uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
+            //uart_puts(UART_ID, buf[word_index] & word_mask ? "-" : "_");
+            if (UART_ID, buf[word_index] & word_mask) {
+                // drawPixel(x, y, line_col);
+                
+                if (last_sample) {
+                    // no need to draw yet
+                    // drawPixel(x, y, line_col);
+                } else {
+                    drawVLine(x, y, trace_height, line_col);
+
+                    drawHLine(last_x, y + trace_height - 1, x - last_x, line_col);
+
+
+                    last_sample = 1;
+                    last_x = x;
+                }
+                
+                last_sample = 1;
+            } else {
+                // no need to draw yet
+                // drawPixel(x, y + 29, line_col);
+
+                 if (last_sample == 0) {
+                    // no need to draw yet
+                    // drawPixel(x, y + 29, line_col);
+                } else {
+                    drawVLine(x, y, trace_height, line_col);
+                    drawHLine(last_x, y, x - last_x, line_col);
+
+                    last_sample = 0;
+                    last_x = x;
+                }
+
+
+            }
+            x++;
+            if (x >= 640) {
+                break;
+            }
+        }
+
+        if (last_sample) {
+            drawHLine(last_x, y, x - last_x, line_col);
+        } else {
+            drawHLine(last_x, y + trace_height - 1, x - last_x, line_col);
+        }
+        line_col = ORANGE;
+
+        y += trace_height + y_padding;
+        //trace_height += 10; // 
+
+        //uart_puts(UART_ID, "\n");
+    }
+}
+
+
 
 
 
@@ -181,7 +283,7 @@ int main() {
     uint dma_chan = dma_claim_unused_channel(true);
 
     // logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, 125000000 / (115200 * 4) /*271.267*/);
-    logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, 5 * 64 /*271.267*/);
+    logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, 5 * 4 /*271.267*/);
 
     // animation pause
     bool pause = false;
@@ -332,8 +434,10 @@ int main() {
                 pause = !pause; // toggle pause
             } else if ((char)ch == 'c') {
 
-                printf("Arming trigger (Ctrl-C to exit)\n");
-                logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, CAPTURE_PIN_BASE, false);
+                // printf("Arming trigger (Ctrl-C to exit)\n");
+
+                uart_puts(UART_ID, "Arming trigger...\n");
+                logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, CAPTURE_PIN_BASE + 1, false);
 
                 // each bit on a uart travels at 115200 bits per second
                 // the clock goes at 125,000,000 hz (I think)
@@ -346,6 +450,8 @@ int main() {
                 dma_channel_wait_for_finish_blocking(dma_chan);
 
                 print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
+                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
+
                         /* code */
             }
             
