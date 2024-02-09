@@ -54,6 +54,7 @@ const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
 const uint CAPTURE_PIN_COUNT = 3;
 const uint CAPTURE_TRIGGER_PIN = VSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2, 23 = vsync2
 const uint CAPTURE_N_SAMPLES = 640 * 2 * 4; // was 96
+const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 5 * 64; /*271.267*/ // was 5 * 4
 
 static inline uint bits_packed_per_word(uint pin_count) {
     // If the number of pins to be sampled divides the shift register size, we
@@ -344,7 +345,7 @@ int main() {
     uint dma_chan = dma_claim_unused_channel(true);
 
     // logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, 125000000 / (115200 * 4) /*271.267*/);
-    logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, 5 * 4 /*271.267*/);
+    logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_SAMPLE_FREQ_DIVISOR);
 
     // animation pause
     bool pause = false;
