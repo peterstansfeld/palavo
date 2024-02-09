@@ -10,6 +10,7 @@
 #include "rgb.pio.h"
 #include "hsync2.pio.h"
 #include "vsync2.pio.h"
+#include "rgb2.pio.h"
 // Header file
 #include "vga16_graphics.h"
 // Font file
