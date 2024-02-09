@@ -27,6 +27,7 @@
 #include "hardware/dma.h"
 #include "hardware/uart.h"
 // #include "hardware/structs/bus_ctrl.h"
+#include <string.h>
 
 #define UART_ID uart1
 #define BAUD_RATE 115200
@@ -49,9 +50,10 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 }
 
 
-const uint CAPTURE_PIN_BASE = 16; // 16 = hsync, 17 = vsync
-const uint CAPTURE_PIN_COUNT = 2;
-const uint CAPTURE_N_SAMPLES = 640 * 2; // was 96
+const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
+const uint CAPTURE_PIN_COUNT = 3;
+const uint CAPTURE_TRIGGER_PIN = VSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2, 23 = vsync2
+const uint CAPTURE_N_SAMPLES = 640 * 2 * 4; // was 96
 
 static inline uint bits_packed_per_word(uint pin_count) {
     // If the number of pins to be sampled divides the shift register size, we
@@ -149,6 +151,12 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
     // uart_puts(UART_ID, "Capture:\n");
     // Each FIFO record may be only partially filled with bits, depending on
     // whether pin_count is a factor of 32.
+
+
+    char colours[] = {YELLOW, ORANGE, RED, GREEN, BLUE};
+
+ 
+
     uint record_size_bits = bits_packed_per_word(pin_count);
     
  //   fillRect(0, 51, 640, 30, BLACK); // colour boxes
@@ -156,20 +164,37 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
     uint last_sample = 1;
     uint last_x = 0;
 
-    char line_col = YELLOW;
+    char line_col;
 
     int trace_height = 20;
 
     uint y = 51; 
     uint y_padding = 2;
 
+
+    char str[80];
+
+    setTextSize(1);
+
+
+    fillRect(0, y, 640, trace_height * 3, BLACK); // colour boxes
+        
+    char font_width = 5;
+    char font_height = 7;
+
+    // char colour = 0;
+
     for (int pin = 0; pin < pin_count; ++pin) {
         uint x = 0;
-        
-        fillRect(0, y, 640, trace_height, BLACK); // colour boxes
 
-        last_sample = 1;
-        last_x =0;
+        line_col = colours[pin];
+
+
+        // fillRect(0, y, 640, trace_height, BLACK); // colour boxes
+        setTextColor(line_col);
+        
+        last_sample = 1; // fix at high for now
+        last_x = 0;
         
         // uart_puts(UART_ID, "%02d: ", pin + pin_base);
         // uart_puts(UART_ID, "todo");
@@ -179,18 +204,38 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
             // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
             uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
             //uart_puts(UART_ID, buf[word_index] & word_mask ? "-" : "_");
-            if (UART_ID, buf[word_index] & word_mask) {
-                // drawPixel(x, y, line_col);
-                
+            
+            uint sample = buf[word_index] & word_mask ? 1 :0;
+            
+            if (x == 0) {
+                last_sample = sample;
+            }
+
+
+            if (sample) {
+                //if (x < 640) {
+                if (x < 640) {
+                    drawPixel(x, y, line_col);
+                }
+               // }
+
                 if (last_sample) {
                     // no need to draw yet
                     // drawPixel(x, y, line_col);
                 } else {
-                    drawVLine(x, y, trace_height, line_col);
+                    if (x < 640) {
+                        drawVLine(x, y, trace_height, line_col);
 
-                    drawHLine(last_x, y + trace_height - 1, x - last_x, line_col);
+                        // drawHLine(last_x, y + trace_height - 1, x - last_x, line_col);
+                        
+                    }
+                    if (x) {
 
+                        sprintf(str,"%d", x - last_x);
+                        setCursor(last_x + ((x - last_x) / 2) - ((strlen(str) * font_width) / 2 ), y + (trace_height / 2) - (font_height / 2));
+                        writeString(str);                    
 
+                    }
                     last_sample = 1;
                     last_x = x;
                 }
@@ -198,15 +243,26 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                 last_sample = 1;
             } else {
                 // no need to draw yet
-                // drawPixel(x, y + 29, line_col);
-
-                 if (last_sample == 0) {
+                if (x < 640) {
+                    drawPixel(x, y + trace_height - 1, line_col);
+                }
+                if (last_sample == 0) {
                     // no need to draw yet
                     // drawPixel(x, y + 29, line_col);
                 } else {
-                    drawVLine(x, y, trace_height, line_col);
-                    drawHLine(last_x, y, x - last_x, line_col);
+                    if (x < 640) {
+                        drawVLine(x, y, trace_height, line_col);
+                        //drawHLine(last_x, y, x - last_x, line_col);
+                    }
+                    
+                    if (x) {
 
+                        // if ((x) && (last_x < 640)){
+                        sprintf(str,"%d", x - last_x);
+                        // setCursor(last_x + 10, y + (trace_height % 2) + 2);
+                        setCursor(last_x + ((x - last_x) / 2) - ((strlen(str) * font_width) / 2 ), y + (trace_height / 2) - (font_height / 2));
+                        writeString(str);
+                    }
                     last_sample = 0;
                     last_x = x;
                 }
@@ -214,16 +270,21 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
             }
             x++;
+            /*
             if (x >= 640) {
                 break;
             }
+            */
         }
 
+        /*
         if (last_sample) {
             drawHLine(last_x, y, x - last_x, line_col);
         } else {
             drawHLine(last_x, y + trace_height - 1, x - last_x, line_col);
         }
+        */
+
         line_col = ORANGE;
 
         y += trace_height + y_padding;
@@ -311,10 +372,10 @@ int main() {
 //    drawVLine(Vline_x, 300, (Vline_x>>2), color_index);
 
     drawVLine(0, 0, 16, WHITE);
-    drawVLine(2, 0, 16, WHITE);
+//    drawVLine(2, 0, 16, WHITE);
 
-    drawVLine(9, 0, 16, WHITE);
-    drawVLine(11, 0, 16, WHITE);
+//    drawVLine(9, 0, 16, WHITE);
+//    drawVLine(11, 0, 16, WHITE);
 
  //   drawVLine(637, 0, 16, WHITE);
 
@@ -437,7 +498,7 @@ int main() {
                 // printf("Arming trigger (Ctrl-C to exit)\n");
 
                 uart_puts(UART_ID, "Arming trigger...\n");
-                logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, CAPTURE_PIN_BASE + 1, false);
+                logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, CAPTURE_TRIGGER_PIN, false);
 
                 // each bit on a uart travels at 115200 bits per second
                 // the clock goes at 125,000,000 hz (I think)
@@ -449,7 +510,7 @@ int main() {
                 // first transition. Wait until the last sample comes in from the DMA.
                 dma_channel_wait_for_finish_blocking(dma_chan);
 
-                print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
+                // print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
                 plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
 
                         /* code */

@@ -4,7 +4,7 @@
 
 
 ; Program name
-.program hsync
+.program hsync2
 
 ; frontporch: 16 clocks (0.64us at 25MHz)
 ; sync pulse: 96 clocks (3.84us at 25MHz)
@@ -64,7 +64,7 @@ backporch:
 ;    irq 0       [1]     ; Set IRQ to signal end of line (47 cycles)
 
     set pins, 1 [1]    ; High for back porch (2 cycles)
-    irq 0              ; Set IRQ to signal end of line (3 cycles)
+    irq 4              ; Set IRQ to signal end of line (3 cycles)
 
 ;this make it worse
 ;    set pins, 1    ; High for back porch (2 cycles)
@@ -77,13 +77,13 @@ backporch:
 
 
 % c-sdk {
-static inline void hsync_program_init(PIO pio, uint sm, uint offset, uint pin) {
+static inline void hsync2_program_init(PIO pio, uint sm, uint offset, uint pin) {
 
     // creates state machine configuration object c, sets
     // to default configurations. I believe this function is auto-generated
     // and gets a name of <program name>_program_get_default_config
     // Yes, page 40 of SDK guide
-    pio_sm_config c = hsync_program_get_default_config(offset);
+    pio_sm_config c = hsync2_program_get_default_config(offset);
 
     // Map the state machine's SET pin group to one pin, namely the `pin`
     // parameter to this function.

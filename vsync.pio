@@ -28,16 +28,22 @@ activefront:
 ; FRONTPORCH
 set y, 9                          ;
 frontporch:
-    wait 1 irq 0                  ;
-    jmp y-- frontporch            ;
+    wait 1 irq 0 [7]                ;
+    jmp y-- frontporch [5]           ;
 
 ; SYNC PULSE
 set pins, 0                       ; Set pin low
+
+;    set y, 31    side 0     ; First part of back porch into y scratch register (and delays a cycle) and clear vsync
+
 wait 1 irq 0                      ; Wait for one line
-wait 1 irq 0                      ; Wait for a second line
+wait 1 irq 0   [7]                   ; Wait for a second line
+
+
+;nop [5]                             ; extra delay
 
 ; BACKPORCH
-set y, 31                         ; First part of back porch into y scratch register (and delays a cycle)
+set y, 31     [5]                    ; First part of back porch into y scratch register (and delays a cycle)
 ;set pins, 1                      ; Raise high for back porch (delaying a set cycle) - REPLACED WITH SIDESET
 backporch:
     wait 1 irq 0   side 1         ; Wait for hsync to go high - SIDESET REPLACEMENT HERE

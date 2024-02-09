@@ -3,7 +3,7 @@
 ; VSync generation for VGA driver
 
 ; Program name
-.program vsync
+.program vsync2
 .side_set 1 opt
 
 ; frontporch: 10  lines
@@ -21,14 +21,14 @@
 ; ACTIVE
 mov x, osr                        ; Copy value from OSR to x scratch register
 activefront:
-    wait 1 irq 0                  ; Wait for hsync to go high
-    irq 1                         ; Signal that we're in active mode
+    wait 1 irq 4                  ; Wait for hsync to go high
+    irq 5                         ; Signal that we're in active mode
     jmp x-- activefront           ; Remain in active mode, decrementing counter
 
 ; FRONTPORCH
 set y, 9                          ;
 frontporch:
-    wait 1 irq 0 [7]                ;
+    wait 1 irq 4 [7]                ;
     jmp y-- frontporch [5]           ;
 
 ; SYNC PULSE
@@ -36,8 +36,8 @@ set pins, 0                       ; Set pin low
 
 ;    set y, 31    side 0     ; First part of back porch into y scratch register (and delays a cycle) and clear vsync
 
-wait 1 irq 0                      ; Wait for one line
-wait 1 irq 0   [7]                   ; Wait for a second line
+wait 1 irq 4                      ; Wait for one line
+wait 1 irq 4   [7]                   ; Wait for a second line
 
 
 ;nop [5]                             ; extra delay
@@ -46,7 +46,7 @@ wait 1 irq 0   [7]                   ; Wait for a second line
 set y, 31     [5]                    ; First part of back porch into y scratch register (and delays a cycle)
 ;set pins, 1                      ; Raise high for back porch (delaying a set cycle) - REPLACED WITH SIDESET
 backporch:
-    wait 1 irq 0   side 1         ; Wait for hsync to go high - SIDESET REPLACEMENT HERE
+    wait 1 irq 4   side 1         ; Wait for hsync to go high - SIDESET REPLACEMENT HERE
     jmp y-- backporch             ; Remain in backporch, decrementing counter
 
 ;wait 1 irq 0                      ; Wait for final (33rd) backporch line (eliminated)
@@ -56,13 +56,13 @@ backporch:
 
 
 % c-sdk {
-static inline void vsync_program_init(PIO pio, uint sm, uint offset, uint pin) {
+static inline void vsync2_program_init(PIO pio, uint sm, uint offset, uint pin) {
 
     // creates state machine configuration object c, sets
     // to default configurations. I believe this function is auto-generated
     // and gets a name of <program name>_program_get_default_config
     // Yes, page 40 of SDK guide
-    pio_sm_config c = vsync_program_get_default_config(offset);
+    pio_sm_config c = vsync2_program_get_default_config(offset);
 
     // Map the state machine's SET pin group to one pin, namely the `pin`
     // parameter to this function.

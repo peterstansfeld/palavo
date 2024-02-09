@@ -8,6 +8,8 @@
 #include "hsync.pio.h"
 #include "vsync.pio.h"
 #include "rgb.pio.h"
+#include "hsync2.pio.h"
+#include "vsync2.pio.h"
 // Header file
 #include "vga16_graphics.h"
 // Font file
@@ -54,6 +56,9 @@ void initVGA() {
         // Choose which PIO instance to use (there are two instances, each with 4 state machines)
     PIO pio = pio0;
 
+    PIO pio_2 = pio1;
+
+
     // Our assembled program needs to be loaded into this PIO's instruction
     // memory. This SDK function will find a location (offset) in the
     // instruction memory where there is enough space for our program. We need
@@ -68,10 +73,16 @@ void initVGA() {
     uint vsync_offset = pio_add_program(pio, &vsync_program);
     uint rgb_offset = pio_add_program(pio, &rgb_program);
 
+    uint hsync2_offset = pio_add_program(pio_2, &hsync2_program);
+    uint vsync2_offset = pio_add_program(pio_2, &vsync2_program);
+
     // Manually select a few state machines from pio instance pio0.
     uint hsync_sm = 0;
     uint vsync_sm = 1;
     uint rgb_sm = 2;
+
+    uint hsync2_sm = 0;
+    uint vsync2_sm = 1;
 
     // Call the initialization functions that are defined within each PIO file.
     // Why not create these programs here? By putting the initialization function in
@@ -81,6 +92,8 @@ void initVGA() {
     vsync_program_init(pio, vsync_sm, vsync_offset, VSYNC);
     rgb_program_init(pio, rgb_sm, rgb_offset, LO_GRN);
 
+    hsync_program_init(pio_2, hsync2_sm, hsync2_offset, HSYNC2);
+    vsync_program_init(pio_2, vsync2_sm, vsync2_offset, VSYNC2);
 
     /////////////////////////////////////////////////////////////////////////////////////////////////////
     // ============================== PIO DMA Channels =================================================
@@ -135,22 +148,29 @@ void initVGA() {
     pio_sm_put_blocking(pio, vsync_sm, V_ACTIVE);
     pio_sm_put_blocking(pio, rgb_sm, RGB_ACTIVE);
 
-    // this pio_sm_exec instructions save one pio instruction
-    pio_sm_exec(pio, vsync_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
+    pio_sm_put_blocking(pio_2, vsync2_sm, V_ACTIVE);
     
-    // these pio_sm_exec instructions save two pio instructions
+    // this pio_sm_exec instruction save one pio instruction
+    pio_sm_exec(pio, vsync_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
+
+    pio_sm_exec(pio_2, vsync2_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
+
+    // these pio_sm_exec instructions save three pio instructions
     pio_sm_exec(pio, rgb_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
-    pio_sm_exec(pio, rgb_sm, pio_encode_mov(pio_y, pio_osr)); // (IfE = 0, Blk = 1)
+    //pio_sm_exec(pio, rgb_sm, pio_encode_mov(pio_y, pio_osr)); // (IfE = 0, Blk = 1)
     //pio_sm_exec(pio, rgb_sm, pio_encode_jmp(rgb_offset + 0)); // (jmp 0)
 
-
-
+    // Shift 32 bits of the osr (RGB_ACTIVE) into y, which also triggers
+    // auto-pull once the dma is enabled. 
+    pio_sm_exec(pio, rgb_sm, pio_encode_out(pio_y, 32)); // trigger auto-pull
 
     // Start the two pio machine IN SYNC
     // Note that the RGB state machine is running at full speed,
     // so synchronization doesn't matter for that one. But, we'll
     // start them all simultaneously anyway.
     pio_enable_sm_mask_in_sync(pio, ((1u << hsync_sm) | (1u << vsync_sm) | (1u << rgb_sm)));
+
+    pio_enable_sm_mask_in_sync(pio_2, ((1u << hsync2_sm) | (1u << vsync2_sm)));
 
     // Start DMA channel 0. Once started, the contents of the pixel color array
     // will be continously DMA's to the PIO machines that are driving the screen.
