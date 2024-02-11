@@ -26,6 +26,8 @@ colorout:
 
     set pins, 0x0 side 1				; Zero RGB pins in blanking
 
+;/*
+
 ; front porch - should take 80 ins.
 
     set x, 6 [1] side 1 
@@ -49,6 +51,7 @@ pulse_loop:
 back_porch_loop:
     jmp x--, back_porch_loop [13] side 1    ; 16 * 14 = 224 + 16 from 'set' above   
 
+;*/
 
 .wrap
 
