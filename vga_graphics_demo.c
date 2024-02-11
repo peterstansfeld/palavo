@@ -51,10 +51,10 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 
 
 const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
-const uint CAPTURE_PIN_COUNT = 3;
+const uint CAPTURE_PIN_COUNT = 4;
 const uint CAPTURE_TRIGGER_PIN = VSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2, 23 = vsync2
 const uint CAPTURE_N_SAMPLES = 640 * 2 * 4; // was 96
-const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 5 * 64; /*271.267*/ // was 5 * 4
+const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 5 * 4; /*271.267*/ // was 5 * 4
 
 static inline uint bits_packed_per_word(uint pin_count) {
     // If the number of pins to be sampled divides the shift register size, we
@@ -115,9 +115,12 @@ void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(!trigger_level, trigger_pin));
     
     // level trigger
-    pio_sm_exec(pio, sm, pio_encode_wait_gpio(trigger_level, trigger_pin));
+    pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(trigger_level, trigger_pin));
     
-    
+    // level trigger
+    pio_sm_exec(pio, sm, pio_encode_wait_gpio(1, LO_GRN2));
+
+
     pio_sm_set_enabled(pio, sm, true);
 }
 
@@ -178,7 +181,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
     setTextSize(1);
 
 
-    fillRect(0, y, 640, trace_height * 3, BLACK); // colour boxes
+    fillRect(0, y, 640, (trace_height * CAPTURE_PIN_COUNT) + CAPTURE_PIN_COUNT + 3, BLACK); // colour box
         
     char font_width = 5;
     char font_height = 7;
