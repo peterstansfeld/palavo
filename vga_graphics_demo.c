@@ -52,9 +52,9 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 
 const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
 const uint CAPTURE_PIN_COUNT = 4;
-const uint CAPTURE_TRIGGER_PIN = VSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2, 23 = vsync2
+const uint CAPTURE_TRIGGER_PIN = VSYNC2; // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2
 const uint CAPTURE_N_SAMPLES = 640 * 2 * 4; // was 96
-const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 5 * 4; /*271.267*/ // was 5 * 4
+const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 5 * 4 * 4 * 4; /*271.267*/ // was 5 * 4
 
 static inline uint bits_packed_per_word(uint pin_count) {
     // If the number of pins to be sampled divides the shift register size, we
@@ -118,7 +118,7 @@ void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(trigger_level, trigger_pin));
     
     // level trigger
-    pio_sm_exec(pio, sm, pio_encode_wait_gpio(1, LO_GRN2));
+    // pio_sm_exec(pio, sm, pio_encode_wait_gpio(1, LO_GRN2));
 
 
     pio_sm_set_enabled(pio, sm, true);
@@ -351,7 +351,7 @@ int main() {
     logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_SAMPLE_FREQ_DIVISOR);
 
     // animation pause
-    bool pause = false;
+    bool pause = true;
 
     // circle radii:
     short circle_x = 0 ;
@@ -424,6 +424,16 @@ int main() {
     // Setup a 1Hz timer
     struct repeating_timer timer;
     add_repeating_timer_ms(-1000, repeating_timer_callback, NULL, &timer);
+
+    // Wait for the pios to get warmed up. Probably not necessary.
+    sleep_ms(10);
+
+    uart_puts(UART_ID, "Arming trigger...\n");
+    logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, CAPTURE_TRIGGER_PIN, false);
+    dma_channel_wait_for_finish_blocking(dma_chan);
+
+    // print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
+    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
 
     while(true) {
 

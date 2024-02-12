@@ -5,59 +5,59 @@
 
 ; Program name
 .program rgb2
-.side_set 1 ;opt
+;.side_set 1 ;opt
 
 ;pull block 					; Pull from FIFO to OSR (only once)
 ;mov y, osr 					; Copy value from OSR to y scratch register
 
 .wrap_target
 
-;set pins, 0x0 side 1				; Zero RGB pins in blanking
-mov x, isr side 1					; Initialize counter variable
+;set pins, 0x0       				; Zero RGB pins in blanking
+mov x, isr       					; Initialize counter variable
 
-;wait 1 irq 5 [4]	side 1		; Wait for vsync active mode (starts 5 cycles after execution)
+wait 1 irq 5 [4]	      		; Wait for vsync active mode (starts 5 cycles after execution)
 
 colorout:
 ;	out pins, 4	[4]			; Push out to pins (first pixel)
 ;	out pins, 4	[3]			; Push out to pins (next pixel)
-    set pins, 0xf [4] side 1
-    set pins, 0xf [3] side 1
-	jmp x-- colorout side 1		; Stay here thru horizontal active mode
+    set pins, 0xf [4]       
+    set pins, 0xf [3]       
+	jmp x-- colorout       		; Stay here thru horizontal active mode
 
-    set pins, 0x0 side 1				; Zero RGB pins in blanking
+    set pins, 0x0       				; Zero RGB pins in blanking
 
-;/*
+/*
 
 ; front porch - should take 80 ins.
 
-    set x, 6 [1] side 1 
+    set x, 6 [1]        
 front_porch_loop:
-    jmp x--, front_porch_loop [10] side 1    ; 7 * 11 = 77 
+    jmp x--, front_porch_loop [10]           ; 7 * 11 = 77 
 
 
 ; pulse - should take 480 ins.
 
-    set x, 15 [15] side 0               ;
+    set x, 15 [15]                      ;
 pulse_loop:
-    nop [12] side 0
-    jmp x--, pulse_loop [15] side 0    ; 16 * (13 + 16) = 464, need 16
+    nop [12]       
+    jmp x--, pulse_loop [15]           ; 16 * (13 + 16) = 464, need 16
 
 
 ; back porch - should take 240 ins.
 
 ; should be 15 delays, but testing this requires 7 fewer ins.
 ; should be 15 delays, but testing this requires 1 fewer ins.
-    set x, 15 [14] side 1               ;
+    set x, 15 [14]                      ;
 back_porch_loop:
-    jmp x--, back_porch_loop [13] side 1    ; 16 * 14 = 224 + 16 from 'set' above   
+    jmp x--, back_porch_loop [13]           ; 16 * 14 = 224 + 16 from 'set' above   
 
-;*/
+*/
 
 .wrap
 
 
 % c-sdk {
-static inline void rgb2_program_init(PIO pio, uint sm, uint offset, uint pin, uint sidepin) {
+static inline void rgb2_program_init(PIO pio, uint sm, uint offset, uint pin /*, uint sidepin*/) {
 
     // creates state machine configuration object c, sets
     // to default configurations. I believe this function is auto-generated
@@ -70,7 +70,7 @@ static inline void rgb2_program_init(PIO pio, uint sm, uint offset, uint pin, ui
     sm_config_set_set_pins(&c, pin, 1);
     sm_config_set_out_pins(&c, pin, 1);
 
-    sm_config_set_sideset_pins(&c, sidepin);
+    // sm_config_set_sideset_pins(&c, sidepin);
 
 
     // Set clock division (Commented out, this one runs at full speed)
@@ -89,8 +89,8 @@ static inline void rgb2_program_init(PIO pio, uint sm, uint offset, uint pin, ui
 //    pio_gpio_init(pio, pin+3);
 
     // maybe this is required?  
-    pio_gpio_init(pio, sidepin);
-    pio_sm_set_consecutive_pindirs(pio, sm, sidepin, 1, true);
+    // pio_gpio_init(pio, sidepin);
+    // pio_sm_set_consecutive_pindirs(pio, sm, sidepin, 1, true);
 
 
 

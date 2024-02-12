@@ -4,7 +4,12 @@
 
 
 ; Program name
-.program hsync2
+.program hsync3
+.side_set 1 opt
+.origin 0
+
+;    set y, v_active_state
+;    mov osr, y
 
 ; frontporch: 16 clocks (0.64us at 25MHz)
 ; sync pulse: 96 clocks (3.84us at 25MHz)
@@ -35,41 +40,91 @@
 ;pull block              ; Pull from FIFO to OSR (only happens once)
 .wrap_target            ; Program wraps to here
 
-; ACTIVE + FRONTPORCH
-;mov x, osr              ; Copy value from OSR to x scratch register
-;activeporch:
-;   jmp x-- activeporch  ; Remain high in active mode and front porch
 
 ; from vga_graphics.c  #define H_ACTIVE   655    // (active + frontporch - 1) - one cycle delay for mov
 ; this should last for 41 cycles 
+v_line_start:
+    mov y, isr          ; 479  
+
+h_line_loop:
 
     set x, 19              ; x = 19, giving 20 loops, with delay of 1 = 40 cycles + this cycle = 41
 activeporch:
    jmp x-- activeporch [1] ; Remain high in active mode and front porch
 
 
-; SYNC PULSE
-pulse:
-;    set pins, 0 [31]    ; Low for hsync pulse (32 cycles)
-;    nop [31]
-;    nop [31]
+;hsync pulse:
+    set pins, 0b0 [5]    ; Low for hsync pulse (6 cycles)
 
-    set pins, 0 [5]    ; Low for hsync pulse (6 cycles)
+;backporch:
+    set pins, 0b1 [1]    ; High for back porch (2 cycles)
 
 
-; BACKPORCH
-backporch:
-;    set pins, 1 [31]    ; High for back porch (32 cycles)
-;    nop [12]
-;    irq 0       [1]     ; Set IRQ to signal end of line (47 cycles)
+    mov x, osr
+    jmp !x active_phase
+ ;   jmp not_active_phase
 
-    set pins, 1 [1]    ; High for back porch (2 cycles)
-    irq 4              ; Set IRQ to signal end of line (3 cycles)
+    
 
-;this make it worse
-;    set pins, 1    ; High for back porch (2 cycles)
-;    irq 0     [1]         ; Set IRQ to signal end of line (3 cycles)
+not_active_phase:
+    jmp y-- h_line_loop
+;    jmp !x v_active_state
 
+    mov pc, osr          ;jump to address stored in osr
+
+
+active_phase:
+    irq 5                ;temporarily start rgb2 line buffer output
+    jmp y-- h_line_loop
+
+v_active_state:
+    set y, v_frontporch_state
+    mov osr, y
+    set y, 9
+    jmp h_line_loop
+
+v_frontporch_state:     
+    ; start of pulse
+    ;set vsync low
+    set y, v_pulse_state side 0
+    mov osr, y
+    set y, 1
+    jmp h_line_loop
+    
+v_pulse_state:     
+    ;set vsync high
+    set y, v_backporch_state side 1
+    mov osr, y
+    set y, 31
+    jmp h_line_loop
+
+v_backporch_state:    
+    ;set y, 0
+    ;mov osr, y
+    out null,32             ; clear osr
+;    jmp v_line_start
+
+
+;    set y, v_line_start
+;    ;jmp v_line_start
+;    mov osr, y
+;    mov pc, osr          ;jump to address stored in osr
+
+
+
+
+
+;    jmp pin vsync_is_high
+;vsync_is_low:
+;    nop side 1           ;set vsync high
+;    irq 5 side 1         ;temporarily start rgb2 line buffer output
+;    jmp v_line_start
+
+;vsync_is_high:
+;here every 480 loops
+;    nop side 0           ;set vsync low
+;    set y, 9
+;    jmp h_line_loop
 
 .wrap
 
@@ -77,27 +132,32 @@ backporch:
 
 
 % c-sdk {
-static inline void hsync2_program_init(PIO pio, uint sm, uint offset, uint pin) {
+static inline void hsync3_program_init(PIO pio, uint sm, uint offset, uint pin, uint sidesetpin) {
 
     // creates state machine configuration object c, sets
     // to default configurations. I believe this function is auto-generated
     // and gets a name of <program name>_program_get_default_config
     // Yes, page 40 of SDK guide
-    pio_sm_config c = hsync2_program_get_default_config(offset);
+    pio_sm_config c = hsync3_program_get_default_config(offset);
 
     // Map the state machine's SET pin group to one pin, namely the `pin`
     // parameter to this function.
     sm_config_set_set_pins(&c, pin, 1);
+    sm_config_set_out_pins(&c, pin, 1);
+
+    sm_config_set_sideset_pins(&c, sidesetpin);
+
+    sm_config_set_jmp_pin(&c, sidesetpin);
 
     // Set clock division (div by 5 for 25 MHz state machine)
     sm_config_set_clkdiv(&c, 5 * 16) ;
 
     // Set this pin's GPIO function (connect PIO to the pad)
     pio_gpio_init(pio, pin);
-    // pio_gpio_init(pio, pin+1);
+    pio_gpio_init(pio, pin+1);
     
     // Set the pin direction to output at the PIO
-    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 2, true);
 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
