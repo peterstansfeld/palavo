@@ -26,6 +26,8 @@
 #include "hardware/pio.h"
 #include "hardware/dma.h"
 #include "hardware/uart.h"
+
+#include "hardware/timer.h"
 // #include "hardware/structs/bus_ctrl.h"
 #include <string.h>
 
@@ -42,6 +44,9 @@ volatile unsigned int time_accum = 0;
 unsigned int time_accum_old = 0 ;
 char timetext[40];
 
+
+int g_mag = 1;
+
 // Timer interrupt
 bool repeating_timer_callback(struct repeating_timer *t) {
 
@@ -53,8 +58,8 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
 const uint CAPTURE_PIN_COUNT = 4;
 const uint CAPTURE_TRIGGER_PIN = VSYNC2; // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2
-const uint CAPTURE_N_SAMPLES = 640 * 2 * 4; // was 96
-const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 5 * 4 * 4 * 4; /*271.267*/ // was 5 * 4
+const uint CAPTURE_N_SAMPLES = 1280 * 2 * 4; // was 96
+const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 5 * 4 * 1; /*271.267*/ // was 5 * 4
 
 static inline uint bits_packed_per_word(uint pin_count) {
     // If the number of pins to be sampled divides the shift register size, we
@@ -118,7 +123,14 @@ void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(trigger_level, trigger_pin));
     
     // level trigger
-    // pio_sm_exec(pio, sm, pio_encode_wait_gpio(1, LO_GRN2));
+    pio_sm_exec(pio, sm, pio_encode_wait_gpio(1, LO_GRN2));
+
+    for (int i = 0; i < (513 /*+ 45*/); i++) {
+        pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(!trigger_level, HSYNC2));
+        pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(trigger_level, HSYNC2));
+    }
+
+
 
 
     pio_sm_set_enabled(pio, sm, true);
@@ -147,7 +159,7 @@ void print_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint3
 }
 
 
-void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples) {
+void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples, int magnification) {
     // Display the capture buffer in graphical form, like this:
     // 00: __--__--__--__--__--__--
     // 01: ____----____----____----
@@ -188,6 +200,8 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
     // char colour = 0;
 
+    uint magIndex = 0;
+
     for (int pin = 0; pin < pin_count; ++pin) {
         uint x = 0;
 
@@ -199,11 +213,13 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
         
         last_sample = 1; // fix at high for now
         last_x = 0;
+
+        uint last_i = 0;
         
         // uart_puts(UART_ID, "%02d: ", pin + pin_base);
         // uart_puts(UART_ID, "todo");
-        for (int sample = 0; sample < n_samples; ++sample) {
-            uint bit_index = pin + sample * pin_count;
+        for (int i = 0; i < n_samples; ++i) {
+            uint bit_index = pin + i * pin_count;
             uint word_index = bit_index / record_size_bits;
             // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
             uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
@@ -215,65 +231,47 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                 last_sample = sample;
             }
 
-
-            if (sample) {
-                //if (x < 640) {
-                if (x < 640) {
+            if (x < 640) {
+                if (sample) {
                     drawPixel(x, y, line_col);
-                }
-               // }
-
-                if (last_sample) {
-                    // no need to draw yet
-                    // drawPixel(x, y, line_col);
                 } else {
-                    if (x < 640) {
-                        drawVLine(x, y, trace_height, line_col);
-
-                        // drawHLine(last_x, y + trace_height - 1, x - last_x, line_col);
-                        
-                    }
-                    if (x) {
-
-                        sprintf(str,"%d", x - last_x);
-                        setCursor(last_x + ((x - last_x) / 2) - ((strlen(str) * font_width) / 2 ), y + (trace_height / 2) - (font_height / 2));
-                        writeString(str);                    
-
-                    }
-                    last_sample = 1;
-                    last_x = x;
-                }
-                
-                last_sample = 1;
-            } else {
-                // no need to draw yet
-                if (x < 640) {
                     drawPixel(x, y + trace_height - 1, line_col);
                 }
-                if (last_sample == 0) {
-                    // no need to draw yet
-                    // drawPixel(x, y + 29, line_col);
-                } else {
-                    if (x < 640) {
-                        drawVLine(x, y, trace_height, line_col);
-                        //drawHLine(last_x, y, x - last_x, line_col);
-                    }
-                    
-                    if (x) {
+            }
 
-                        // if ((x) && (last_x < 640)){
-                        sprintf(str,"%d", x - last_x);
-                        // setCursor(last_x + 10, y + (trace_height % 2) + 2);
-                        setCursor(last_x + ((x - last_x) / 2) - ((strlen(str) * font_width) / 2 ), y + (trace_height / 2) - (font_height / 2));
-                        writeString(str);
-                    }
-                    last_sample = 0;
-                    last_x = x;
+            if (last_sample != sample) {
+                if (x < 640) {
+                    drawVLine(x, y, trace_height, line_col);
+                }
+                if (x) {
+                    sprintf(str,"%d", i - last_i);
+                    setCursor(last_x + ((x - last_x) / 2) - ((strlen(str) * font_width) / 2 ), y + (trace_height / 2) - (font_height / 2));
+                    writeString(str);                    
+                }
+                last_sample = sample;
+                last_x = x;
+                last_i = i;
+            }
+                
+            
+            if (magnification < 1) {
+                if (++magIndex >= abs(magnification)) {
+                    magIndex = 0;
+                    x++;
                 }
 
-
+            } else if (magnification > 1) {
+                x+= magnification;
+            } else {
+                x++;
             }
-            x++;
+            
+            // last_i++;
+            
+            // x++;
+            
+            
+            
             /*
             if (x >= 640) {
                 break;
@@ -289,7 +287,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
         }
         */
 
-        line_col = ORANGE;
+        // line_col = ORANGE;
 
         y += trace_height + y_padding;
         //trace_height += 10; // 
@@ -298,11 +296,35 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
     }
 }
 
+/*
+/// \tag::get_time[]
+// Simplest form of getting 64 bit time from the timer.
+// It isn't safe when called from 2 cores because of the latching
+// so isn't implemented this way in the sdk
+static uint64_t get_time(void) {
+    // Reading low latches the high value
+    uint32_t lo = timer_hw->timelr;
+    uint32_t hi = timer_hw->timehr;
+    return ((uint64_t) hi << 32u) | lo;
+}
+/// \end::get_time[]
 
 
+bool my_uart_is_readable_within_us(uart_inst_t * uart, uint32_t us) {
+    bool r = uart_is_readable(uart);
+    if (!r) {
+        uint64_t start = get_time();
+        while (get_time() - start < us) {
+            r = uart_is_readable(uart);
+            if (r) {
+                break;
+            }
+        }
+    }
+    return r;
+}
 
-
-
+*/
 
 
 int main() {
@@ -433,7 +455,7 @@ int main() {
     dma_channel_wait_for_finish_blocking(dma_chan);
 
     // print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
-    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
+    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag);
 
     while(true) {
 
@@ -500,14 +522,120 @@ int main() {
 // cant do this getchar() is a blocking function
 
         if (uart_is_readable(UART_ID)) {
+            
+            fillRect(1, 479 - 8, 640 - 2, 8, BLUE);
+            setCursor(2, 479 - 8);
+            setTextColor(WHITE);
+            setTextSize(1);
+
+            // while (uart_is_readable(UART_ID)) {
+
             uint8_t ch = uart_getc(UART_ID);
-            // Can we send it back?
+            
+            
+            #define ESCAPE_SEQ_LEN 80
+            uint8_t escape_seq[ESCAPE_SEQ_LEN + 1];
+            escape_seq[0] = 0;
+
+            char str[80];
+            sprintf(str,"%d ", ch);
+            writeString(str);
             if (uart_is_writable(UART_ID)) {
                 uart_putc(UART_ID, ch);
             }
+
+            uint8_t noofchars = 0;
+
+            if (ch == 27 /* ESC */) {
+
+                // wait up to 2 byte times, which is (2 * 10 * 1,000,000) / 115,200 = 1737.
+
+                while (uart_is_readable_within_us(UART_ID, 1800)) {                    
+                    ch = uart_getc(UART_ID);
+                
+                    // possibly build up string here for testing later?
+                    if (noofchars < ESCAPE_SEQ_LEN){
+                        escape_seq[noofchars] = ch;
+                        escape_seq[noofchars + 1] = 0;
+                    }
+                    noofchars += 1;
+                    
+                    sprintf(str,"%d ", ch);
+                    writeString(str);
+                    if (uart_is_writable(UART_ID)) {
+                        uart_putc(UART_ID, ch);
+                    }
+                }
+                
+                writeString(escape_seq);
+                writeString(" ");
+                
+                if (strlen(escape_seq) == 2) {
+                    if ((char)escape_seq[0] == '[') {
+                        switch ((char)escape_seq[1]) {
+                            case 'A':
+                                writeString("up");
+                                break;
+                            case 'B':
+                                writeString("down");
+                                break;
+                            case 'C':
+                                writeString("right");
+                                break;
+                            case 'D':
+                                writeString("left");
+                                break;
+                        }
+                    } else if ((char)escape_seq[0] == 'O') {
+                        if ((char)escape_seq[1] == 'F') {
+                            writeString("end");
+                        }
+                    }
+                } else if (strlen(escape_seq) == 3) {
+                    if (strcmp(escape_seq, "[1~") == 0) {
+                        writeString("home");
+                    }
+                }
+            }
+                
+
+            // uint8_t ch = uart_getc(UART_ID);
+            // Can we send it back?
+
+            // sprintf(str,"%d ", ch);
+            
+            // writeString(str);
+
+            // A brief nap
+            // sleep_ms(25) ;
+        
+            // if (uart_is_writable(UART_ID)) {
+                // uart_putc(UART_ID, ch);
+            // }
+    
+
             if ((char)ch == ' ') {
                 pause = !pause; // toggle pause
+
+            } else if(((char)ch == '-') || ((char)ch == '+')) {
+                if ((char)ch == '-') {
+                    if (g_mag == 1) {
+                        g_mag = -2;
+                    } else {
+                        g_mag-= 1;
+                    }
+                } else if ((char)ch == '+' ) {
+                    if (g_mag == -2) {
+                        g_mag = 1;
+                    } else {
+                        g_mag+= 1;
+                    }
+                }
+
+                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag);
+
             } else if ((char)ch == 'c') {
+
 
                 // printf("Arming trigger (Ctrl-C to exit)\n");
 
@@ -525,7 +653,7 @@ int main() {
                 dma_channel_wait_for_finish_blocking(dma_chan);
 
                 // print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
-                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
+                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag);
 
                         /* code */
             }
