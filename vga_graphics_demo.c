@@ -40,6 +40,8 @@
 #define UART_TX_PIN 4
 #define UART_RX_PIN 5
 
+uint8_t last_uart_char = 0;
+
 // Some globals for storing timer information
 volatile unsigned int time_accum = 0;
 unsigned int time_accum_old = 0 ;
@@ -542,17 +544,19 @@ int main() {
 
 // cant do this getchar() is a blocking function
 
-        if (uart_is_readable(UART_ID)) {
+        if ((last_uart_char == 27) || uart_is_readable(UART_ID)) {
             
             fillRect(1, 479 - 8, 640 - 2, 8, BLUE);
             setCursor(2, 479 - 8);
             setTextColor(WHITE);
             setTextSize(1);
 
-            // while (uart_is_readable(UART_ID)) {
+            uint8_t ch = last_uart_char;
 
-            uint8_t ch = uart_getc(UART_ID);
-            
+            if (ch != 27) {
+                ch = uart_getc(UART_ID);
+                last_uart_char = ch;
+            }
             
             #define ESCAPE_SEQ_LEN 80
             uint8_t escape_seq[ESCAPE_SEQ_LEN + 1];
@@ -570,10 +574,11 @@ int main() {
                 ch = 0;
                 uint8_t noofchars = 0;
             
-                // wait up to 2 byte times, which is (2 * 10 * 1,000,000) / 115,200 = 1737.
+                // wait up to 2 byte times, which is (2 * 10 * 1,000,000) / 115,200 = 1737 uS.
 
                 while (uart_is_readable_within_us(UART_ID, 1800)) {                    
                     ch = uart_getc(UART_ID);
+                    last_uart_char = ch;
 
                     if (ch == 27 /* ESC */) {
                         break;
