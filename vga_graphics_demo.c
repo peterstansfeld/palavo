@@ -34,6 +34,7 @@
 #define UART_ID uart1
 #define BAUD_RATE 115200
 
+
 // We are using pins 0 and 1, but see the GPIO function select table in the
 // datasheet for information on which other pins can be used.
 #define UART_TX_PIN 4
@@ -45,7 +46,8 @@ unsigned int time_accum_old = 0 ;
 char timetext[40];
 
 
-int g_mag = 1;
+int g_mag = 0;
+int g_scrollx = 0;
 
 // Timer interrupt
 bool repeating_timer_callback(struct repeating_timer *t) {
@@ -57,8 +59,8 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 
 const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
 const uint CAPTURE_PIN_COUNT = 4;
-const uint CAPTURE_TRIGGER_PIN = VSYNC2; // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2
-const uint CAPTURE_N_SAMPLES = 1280 * 2 * 4; // was 96
+const uint CAPTURE_TRIGGER_PIN = VSYNC2; // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
+const uint CAPTURE_N_SAMPLES = CAPTURE_PIN_COUNT * 1280 * 4; // was 96
 const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 5 * 4 * 1; /*271.267*/ // was 5 * 4
 
 static inline uint bits_packed_per_word(uint pin_count) {
@@ -117,10 +119,10 @@ void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
 
     // If edge detect we need to first wait for the opposite level
     // Warning! As it's blocking instruction it will... block
-    pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(!trigger_level, trigger_pin));
+    pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(!trigger_level, VSYNC2));
     
     // level trigger
-    pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(trigger_level, trigger_pin));
+    pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(trigger_level, VSYNC2));
     
     // level trigger
     pio_sm_exec(pio, sm, pio_encode_wait_gpio(1, LO_GRN2));
@@ -159,7 +161,7 @@ void print_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint3
 }
 
 
-void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples, int magnification) {
+void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples, int magnification, int scrollx) {
     // Display the capture buffer in graphical form, like this:
     // 00: __--__--__--__--__--__--
     // 01: ____----____----____----
@@ -177,15 +179,15 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
     
  //   fillRect(0, 51, 640, 30, BLACK); // colour boxes
     
-    uint last_sample = 1;
-    uint last_x = 0;
+    int last_sample = 1;
+    int last_x = 0;
 
     char line_col;
 
     int trace_height = 20;
 
-    uint y = 51; 
-    uint y_padding = 2;
+    int y = 51; 
+    int y_padding = 2;
 
 
     char str[80];
@@ -203,7 +205,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
     uint magIndex = 0;
 
     for (int pin = 0; pin < pin_count; ++pin) {
-        uint x = 0;
+        int x = 0;
 
         line_col = colours[pin];
 
@@ -214,7 +216,8 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
         last_sample = 1; // fix at high for now
         last_x = 0;
 
-        uint last_i = 0;
+        int last_i = 0;
+        int cursor_x = 0;
         
         // uart_puts(UART_ID, "%02d: ", pin + pin_base);
         // uart_puts(UART_ID, "todo");
@@ -227,45 +230,56 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
             
             uint sample = buf[word_index] & word_mask ? 1 :0;
             
-            if (x == 0) {
+
+
+
+            if (i == 0) {
                 last_sample = sample;
             }
 
-            if (x < 640) {
-                if (sample) {
-                    drawPixel(x, y, line_col);
-                } else {
-                    drawPixel(x, y + trace_height - 1, line_col);
+            if (i >= scrollx) {
+            
+                if (x < 640) {
+                    if (sample) {
+                        drawPixel(x, y, line_col);
+                    } else {
+                        drawPixel(x, y + trace_height - 1, line_col);
+                    }
                 }
             }
 
             if (last_sample != sample) {
-                if (x < 640) {
-                    drawVLine(x, y, trace_height, line_col);
-                }
-                if (x) {
-                    sprintf(str,"%d", i - last_i);
-                    setCursor(last_x + ((x - last_x) / 2) - ((strlen(str) * font_width) / 2 ), y + (trace_height / 2) - (font_height / 2));
-                    writeString(str);                    
+                if (i >= scrollx) {
+                    if (x < 640) {
+                        drawVLine(x, y, trace_height, line_col);
+                    }
+                    if (x >= 0) {
+                        sprintf(str,"%d", i - last_i);
+                        int str_width = strlen(str) * font_width;
+                        cursor_x = (last_x + ((x - last_x) / 2)) - (str_width / 2);
+                        // cursor_x = (last_i + ((i - last_i) / 2)) - (str_width / 2) - scrollx;
+                        if ((cursor_x >= 0) && (cursor_x - str_width < 640)) {
+                            setCursor(cursor_x, y + (trace_height / 2) - (font_height / 2));
+                            writeString(str);
+                        }                    
+                    }
                 }
                 last_sample = sample;
                 last_x = x;
                 last_i = i;
             }
-                
-            
-            if (magnification < 1) {
-                if (++magIndex >= abs(magnification)) {
-                    magIndex = 0;
-                    x++;
+             
+            if (i >= scrollx) {
+                if (magnification < 0) {
+                    if (++magIndex >= abs(magnification) + 1) {
+                        x++;
+                        magIndex = 0;
+                    } 
+                } else {
+                        x+= magnification + 1;
                 }
-
-            } else if (magnification > 1) {
-                x+= magnification;
-            } else {
-                x++;
             }
-            
+                    
             // last_i++;
             
             // x++;
@@ -326,6 +340,13 @@ bool my_uart_is_readable_within_us(uart_inst_t * uart, uint32_t us) {
 
 */
 
+uint mag_factor(uint value) {
+    if (g_mag < 0) {
+        return value * (abs(g_mag) + 1);
+    } else {
+        return value / (g_mag + 1);
+    }
+}
 
 int main() {
 
@@ -455,7 +476,7 @@ int main() {
     dma_channel_wait_for_finish_blocking(dma_chan);
 
     // print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
-    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag);
+    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
 
     while(true) {
 
@@ -544,26 +565,33 @@ int main() {
                 uart_putc(UART_ID, ch);
             }
 
-            uint8_t noofchars = 0;
 
             if (ch == 27 /* ESC */) {
-
+                ch = 0;
+                uint8_t noofchars = 0;
+            
                 // wait up to 2 byte times, which is (2 * 10 * 1,000,000) / 115,200 = 1737.
 
                 while (uart_is_readable_within_us(UART_ID, 1800)) {                    
                     ch = uart_getc(UART_ID);
-                
-                    // possibly build up string here for testing later?
-                    if (noofchars < ESCAPE_SEQ_LEN){
-                        escape_seq[noofchars] = ch;
-                        escape_seq[noofchars + 1] = 0;
-                    }
-                    noofchars += 1;
+
+                    if (ch == 27 /* ESC */) {
+                        break;
                     
-                    sprintf(str,"%d ", ch);
-                    writeString(str);
-                    if (uart_is_writable(UART_ID)) {
-                        uart_putc(UART_ID, ch);
+                    } else {   
+                
+                        // possibly build up string here for testing later?
+                        if (noofchars < ESCAPE_SEQ_LEN){
+                            escape_seq[noofchars] = ch;
+                            escape_seq[noofchars + 1] = 0;
+                        }
+                        noofchars += 1;
+                        
+                        sprintf(str,"%d ", ch);
+                        writeString(str);
+                        if (uart_is_writable(UART_ID)) {
+                            uart_putc(UART_ID, ch);
+                        }
                     }
                 }
                 
@@ -581,58 +609,86 @@ int main() {
                                 break;
                             case 'C':
                                 writeString("right");
+                                g_scrollx += mag_factor(64); // 10% of the screen width                                
+                                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
                                 break;
                             case 'D':
                                 writeString("left");
+                                if (g_scrollx > 0) {
+                                    g_scrollx -= mag_factor(64); // 10% of the screen width                            
+                                    if (g_scrollx < 0) {
+                                        g_scrollx = 0;
+                                    }
+                                    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
+                                }
+                                break;
+                            default:
                                 break;
                         }
                     } else if ((char)escape_seq[0] == 'O') {
                         if ((char)escape_seq[1] == 'F') {
                             writeString("end");
+                            // it was crashing here for some reason
+                            //writeString(" debug");
+                            
+                            g_scrollx = CAPTURE_N_SAMPLES - (mag_factor(640));
+                            if (g_scrollx < 0) {
+                                g_scrollx = 0;
+                            }
+
+                            plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
+                            
                         }
                     }
                 } else if (strlen(escape_seq) == 3) {
-                    if (strcmp(escape_seq, "[1~") == 0) {
-                        writeString("home");
+                    if ((char)escape_seq[2] == '~') {
+                        if ((char)escape_seq[1] == '1') {
+                            writeString("home");
+                            g_scrollx = 0;
+                            plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
+                        
+                        } else if ((char)escape_seq[1] == '5') {
+                            writeString("page up");
+                        } else if ((char)escape_seq[1] == '6') {
+                            writeString("page down");
+                        }
+                    }
+                } else if (strlen(escape_seq) == 5) {
+                    if (strcmp(escape_seq, "[1;5D") == 0) {
+                            writeString("ctrl-left");
+                            if (g_scrollx > 0) {
+                                g_scrollx -= mag_factor(640); // 100% of the screen width
+                                if (g_scrollx < 0) {
+                                    g_scrollx = 0;
+                                }
+                                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
+                            }
+
+
+
+                    } else if (strcmp(escape_seq, "[1;5C") == 0) {
+                            writeString("ctrl-right");
+                            g_scrollx += mag_factor(640); // 100% of the screen width                                
+                            plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
                     }
                 }
-            }
-                
 
-            // uint8_t ch = uart_getc(UART_ID);
-            // Can we send it back?
-
-            // sprintf(str,"%d ", ch);
-            
-            // writeString(str);
-
-            // A brief nap
-            // sleep_ms(25) ;
-        
-            // if (uart_is_writable(UART_ID)) {
-                // uart_putc(UART_ID, ch);
-            // }
-    
-
-            if ((char)ch == ' ') {
+            } else if ((char)ch == ' ') {
                 pause = !pause; // toggle pause
 
-            } else if(((char)ch == '-') || ((char)ch == '+')) {
+            } else if (((char)ch == '-') || ((char)ch == '+') || ((char)ch == '=')) {
                 if ((char)ch == '-') {
-                    if (g_mag == 1) {
-                        g_mag = -2;
-                    } else {
-                        g_mag-= 1;
-                    }
+                    writeString("zoom out");
+                    g_mag-= 1;
                 } else if ((char)ch == '+' ) {
-                    if (g_mag == -2) {
-                        g_mag = 1;
-                    } else {
-                        g_mag+= 1;
-                    }
+                    writeString("zoom in");
+                    g_mag+= 1;
+                } else {
+                    writeString("no zoom");
+                    g_mag = 0;
                 }
 
-                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag);
+                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
 
             } else if ((char)ch == 'c') {
 
@@ -653,7 +709,7 @@ int main() {
                 dma_channel_wait_for_finish_blocking(dma_chan);
 
                 // print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
-                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag);
+                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
 
                         /* code */
             }
