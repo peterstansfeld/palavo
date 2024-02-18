@@ -163,6 +163,29 @@ void print_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint3
 }
 
 
+int inverse_mag_factor(int value) {
+    if (g_mag < 0) {
+        return value / (abs(g_mag) + 1);
+    } else {
+        return value * (g_mag + 1);
+    }
+}
+
+
+int mag_factor(int value) {
+    if (g_mag < 0) {
+        return value * (abs(g_mag) + 1);
+    } else {
+        return value / (g_mag + 1);
+    }
+}
+
+void uart_putcf(uart_inst_t *uart, const char *s, int c) {
+    char str[80];  
+    sprintf(str, s, c);
+    uart_puts(uart, str);
+}
+
 void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples, int magnification, int scrollx) {
     // Display the capture buffer in graphical form, like this:
     // 00: __--__--__--__--__--__--
@@ -181,15 +204,11 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
     
  //   fillRect(0, 51, 640, 30, BLACK); // colour boxes
     
-    int last_sample = 1;
-    int last_x = 0;
 
-    char line_col;
-
-    int trace_height = 20;
+    int trace_height = 40;
 
     int y = 51; 
-    int y_padding = 2;
+    int y_padding = 4;
 
 
     char str[80];
@@ -199,18 +218,23 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
     fillRect(0, y, 640, (trace_height * CAPTURE_PIN_COUNT) + CAPTURE_PIN_COUNT + 3, BLACK); // colour box
         
-    char font_width = 5;
-    char font_height = 7;
+    char font_width = 6;
+    char font_height = 8;
 
     // char colour = 0;
 
-    uint magIndex = 0;
+    
+
 
     for (int pin = 0; pin < pin_count; ++pin) {
         int x = 0;
 
-        line_col = colours[pin];
+        uint magIndex = 0;
 
+        char line_col = colours[pin];
+
+        int last_sample = 1;
+        int last_x = 0;
 
         // fillRect(0, y, 640, trace_height, BLACK); // colour boxes
         setTextColor(line_col);
@@ -223,7 +247,60 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
         
         // uart_puts(UART_ID, "%02d: ", pin + pin_base);
         // uart_puts(UART_ID, "todo");
-        for (int i = 0; i < n_samples; ++i) {
+        int i;
+        
+        for (i = scrollx; i >= 0; i--) {
+            uint bit_index = pin + i * pin_count;
+            uint word_index = bit_index / record_size_bits;
+            // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
+            uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
+            
+            uint sample = buf[word_index] & word_mask ? 1 :0;
+
+            if (i == scrollx) {
+                last_sample = sample;
+            }
+
+            if (last_sample != sample) {
+                last_i = i + 1;
+                if (last_i == scrollx) {
+                    // the sample at scrollx - 1 is the inverse of the scrollx 
+                    // so it needs inverting in order to display the transition
+
+                    // this seems to work for anything other than mag = 0
+                    last_sample = !last_sample;
+                }
+                break;
+            }
+             
+            if (magnification < 0) {
+                if (++magIndex >= abs(magnification) + 1) {
+                    x--;
+                    magIndex = 0;
+                } 
+            } else {
+                    x-= magnification + 1;
+            }
+        }
+
+        last_x = x + 1;
+
+        int last_pixel_x = -1;
+        int last_v_line_x = -1;
+
+        x = 0;
+
+        char debug1 = 0;
+
+        // for (int i = scrollx; i < n_samples; ++i) {
+
+        int max_screen_x = scrollx + mag_factor(640);
+        if (max_screen_x > n_samples) {
+            max_screen_x = n_samples;
+        }
+
+        for (int i = scrollx; i < max_screen_x; ++i) {
+    
             uint bit_index = pin + i * pin_count;
             uint word_index = bit_index / record_size_bits;
             // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
@@ -232,83 +309,45 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
             
             uint sample = buf[word_index] & word_mask ? 1 :0;
             
-
-
-
-            if (i == 0) {
-                last_sample = sample;
-            }
-
-            if (i >= scrollx) {
-            
-                if (x < 640) {
-                    if (sample) {
-                        drawPixel(x, y, line_col);
-                    } else {
-                        drawPixel(x, y + trace_height - 1, line_col);
-                    }
-                }
+            if (x != last_pixel_x) {
+                drawPixel(x, y + (sample ? 0 : trace_height - 1), line_col);
+                last_pixel_x = x;
             }
 
             if (last_sample != sample) {
-                if (i >= scrollx) {
-                    if (x < 640) {
+                if (x < 640) {
+                    if (x != last_v_line_x) {
                         drawVLine(x, y, trace_height, line_col);
-                    }
-                    if (x >= 0) {
-                        sprintf(str,"%d", i - last_i);
-                        int str_width = strlen(str) * font_width;
-                        cursor_x = (last_x + ((x - last_x) / 2)) - (str_width / 2);
-                        // cursor_x = (last_i + ((i - last_i) / 2)) - (str_width / 2) - scrollx;
-                        if ((cursor_x >= 0) && (cursor_x - str_width < 640)) {
-                            setCursor(cursor_x, y + (trace_height / 2) - (font_height / 2));
-                            writeString(str);
-                        }                    
+                        last_v_line_x = x;
+                    }                    
+                } else {
+                    uart_putc(UART_ID, '?');
+                }
+                sprintf(str,"%d", i - last_i);
+                int str_width = strlen(str) * font_width;
+                if (str_width < (x - last_x)) {
+                    cursor_x = (last_x + ((x - last_x) / 2)) - (str_width / 2);
+                    // cursor_x = (last_i + ((i - last_i) / 2)) - (str_width / 2) - scrollx;
+                    // if ((cursor_x >= 0) && (cursor_x - str_width < 640)) {
+                    if ((cursor_x - str_width < 640)) {
+                        setCursor(cursor_x, y + (trace_height / 2) - (font_height / 2));
+                        writeString(str);
                     }
                 }
                 last_sample = sample;
                 last_x = x;
                 last_i = i;
             }
-             
-            if (i >= scrollx) {
-                if (magnification < 0) {
-                    if (++magIndex >= abs(magnification) + 1) {
-                        x++;
-                        magIndex = 0;
-                    } 
-                } else {
-                        x+= magnification + 1;
-                }
+            if (magnification < 0) {
+                if (++magIndex >= abs(magnification) + 1) {
+                    x++;
+                    magIndex = 0;
+                } 
+            } else {
+                    x+= magnification + 1;
             }
-                    
-            // last_i++;
-            
-            // x++;
-            
-            
-            
-            /*
-            if (x >= 640) {
-                break;
-            }
-            */
         }
-
-        /*
-        if (last_sample) {
-            drawHLine(last_x, y, x - last_x, line_col);
-        } else {
-            drawHLine(last_x, y + trace_height - 1, x - last_x, line_col);
-        }
-        */
-
-        // line_col = ORANGE;
-
         y += trace_height + y_padding;
-        //trace_height += 10; // 
-
-        //uart_puts(UART_ID, "\n");
     }
 }
 
@@ -342,13 +381,6 @@ bool my_uart_is_readable_within_us(uart_inst_t * uart, uint32_t us) {
 
 */
 
-uint mag_factor(uint value) {
-    if (g_mag < 0) {
-        return value * (abs(g_mag) + 1);
-    } else {
-        return value / (g_mag + 1);
-    }
-}
 
 int main() {
 
@@ -614,13 +646,17 @@ int main() {
                                 break;
                             case 'C':
                                 writeString("right");
-                                g_scrollx += mag_factor(64); // 10% of the screen width                                
+                                // uart_putcf(UART_ID,"gs:%d ", g_scrollx)
+                                // g_scrollx += mag_factor(1); // 10% of the screen width
+                                g_scrollx += 1;
+                                // uart_putcf(UART_ID,"gs:%d ", g_scrollx);                              
                                 plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
                                 break;
                             case 'D':
                                 writeString("left");
                                 if (g_scrollx > 0) {
-                                    g_scrollx -= mag_factor(64); // 10% of the screen width                            
+                                    // g_scrollx -= mag_factor(1); // 10% of the screen width                            
+                                    g_scrollx -= 1;
                                     if (g_scrollx < 0) {
                                         g_scrollx = 0;
                                     }
