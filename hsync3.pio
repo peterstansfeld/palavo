@@ -35,7 +35,7 @@
 ; this should last for 41 cycles
 
 ;v_line_start:
-    mov y, isr          ; 479  
+;    mov y, isr          ; y and isr must be initialised to 479
 
 h_line_loop:
 ;    set x, 19              ; x = 19, giving 20 loops, with delay of 1 = 40 cycles + this cycle = 41
@@ -63,6 +63,8 @@ v_active_state:
     set x, v_frontporch_state [7]
     set y, 9 [2]
 
+.wrap_target            ; Program wraps to here
+
 set_state_and_jump:
     mov osr, x [5]
     set x, 15
@@ -71,31 +73,39 @@ set_state_and_jump:
 v_frontporch_state:
     set x, v_pulse_state side 0 [5]    ;set vsync low
 
-.wrap_target            ; Program wraps to here
+;.wrap_target            ; Program wraps to here
 
 set_loop_count_of_1:
     set y, 1 [2]
     jmp set_state_and_jump
     
+
+/*
 v_pulse_state:     
     set x, v_backporch_state side 1 ;set vsync high
     set y, 30 [7]
     jmp set_state_and_jump
-
 v_backporch_state:
     set x, v_backporch_state2 [5]
-
 .wrap
-
 v_backporch_state2:
     set x, 0 [7]
     mov y, isr
     jmp set_state_and_jump
+*/
 
+v_pulse_state:     
+    set x, v_backporch_state side 1 ;set vsync high
+    set y, 31 [7]
+    jmp set_state_and_jump
 
+v_backporch_state:
+    set x, 0 [7]
+    mov y, isr [1]
+;    jmp set_state_and_jump
+;    mov osr, x
 
-
-
+.wrap
 
 
 % c-sdk {

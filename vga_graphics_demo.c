@@ -58,11 +58,13 @@ bool repeating_timer_callback(struct repeating_timer *t) {
     return true;
 }
 
+#define SCREEN_WIDTH 640
+#define SCREEN_HEIGHT 480
 
 const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
 const uint CAPTURE_PIN_COUNT = 4;
 const uint CAPTURE_TRIGGER_PIN = VSYNC2; // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
-const uint CAPTURE_N_SAMPLES = CAPTURE_PIN_COUNT * 1280 * 4; // was 96
+const uint CAPTURE_N_SAMPLES = SCREEN_WIDTH * 32; // enough for 32 screen width's worth of data
 const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 5 * 4 * 1; /*271.267*/ // was 5 * 4
 
 static inline uint bits_packed_per_word(uint pin_count) {
@@ -121,21 +123,18 @@ void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
 
     // If edge detect we need to first wait for the opposite level
     // Warning! As it's blocking instruction it will... block
-    pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(!trigger_level, VSYNC2));
+    pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(!trigger_level, CAPTURE_PIN_BASE + 1));
     
     // level trigger
-    pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(trigger_level, VSYNC2));
+    pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(trigger_level, CAPTURE_PIN_BASE + 1));
     
     // level trigger
-    pio_sm_exec(pio, sm, pio_encode_wait_gpio(1, LO_GRN2));
+    pio_sm_exec(pio, sm, pio_encode_wait_gpio(1, LO_GRN));
 
-    for (int i = 0; i < (513 /*+ 45*/); i++) {
-        pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(!trigger_level, HSYNC2));
-        pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(trigger_level, HSYNC2));
+    for (int i = 0; i < (513 /*+ 10*/ /*+ 45*/); i++) {
+        pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(!trigger_level, CAPTURE_PIN_BASE));
+        pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(trigger_level, CAPTURE_PIN_BASE));
     }
-
-
-
 
     pio_sm_set_enabled(pio, sm, true);
 }
@@ -196,37 +195,24 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
     // whether pin_count is a factor of 32.
 
 
-    char colours[] = {YELLOW, ORANGE, RED, GREEN, BLUE};
+    // Plot colours:  HSYNC, VSYNC, LO_GREEN, HI_GREEN, BLUE & RED
+    char colours[] = {YELLOW, ORANGE, DARK_GREEN, GREEN, BLUE, RED};
 
- 
-
-    uint record_size_bits = bits_packed_per_word(pin_count);
-    
- //   fillRect(0, 51, 640, 30, BLACK); // colour boxes
-    
-
+    uint record_size_bits = bits_packed_per_word(pin_count); 
     int trace_height = 40;
-
     int y_padding = 4;
     int y = 51;
-    
 
     char str[80];
 
     setTextSize(1);
 
-
-    fillRect(0, y, 640, (((trace_height + y_padding) * CAPTURE_PIN_COUNT) + y_padding), BLACK); // colour box
+    fillRect(0, y, SCREEN_WIDTH, (((trace_height + y_padding) * CAPTURE_PIN_COUNT) + y_padding), BLACK); // clear plot area
         
     y += y_padding;
 
-
     char font_width = 6;
     char font_height = 8;
-
-    // char colour = 0;
-
-    
 
 
     for (int pin = 0; pin < pin_count; ++pin) {
@@ -306,7 +292,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
         // }
 
         // int max_screen_x = MIN(scrollx + mag_factor(640), n_samples);
-        int max_screen_x = MIN(scrollx + mag_factor(640), n_samples);
+        int max_screen_x = MIN(scrollx + mag_factor(SCREEN_WIDTH), n_samples);
         // if ((pin == 0)) {
         //     uart_putcf(UART_ID, "scrollx: %d", scrollx); // 
         //     uart_putcf(UART_ID, "max_screen_x: %d", max_screen_x); // 
@@ -359,7 +345,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                     }
                     // cursor_x = (last_i + ((i - last_i) / 2)) - (str_width / 2) - scrollx;
                     // if ((cursor_x >= 0) && (cursor_x - str_width < 640)) {
-                    if ((cursor_x - str_width < 640)) {
+                    if ((cursor_x - str_width < SCREEN_WIDTH)) {
                         setCursor(cursor_x, y + (trace_height / 2) - (font_height / 2));
                         writeString(str);
                     }
@@ -424,15 +410,15 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
                     // uart_putc(UART_ID, '$');
                     cursor_x = (last_x + ((x - last_x) / 2)) - (str_width / 2);
-                    if (cursor_x + str_width >= 640) {
+                    if (cursor_x + str_width >= SCREEN_WIDTH) {
                         // some of the string is off screen and to the right
                         // if (pin == 0) uart_putc(UART_ID, '$');
                         cursor_x = last_x + 3;
-                        if (cursor_x + str_width < 640) {
+                        if (cursor_x + str_width < SCREEN_WIDTH) {
                             // if (pin == 0) uart_putc(UART_ID, '%');
                         // if (pin == 0) uart_putc(UART_ID, '*');
                         // cursor_x = 640 - str_width - 1;
-                            cursor_x = 640 - str_width - 1;
+                            cursor_x = SCREEN_WIDTH - str_width - 1;
 
                         // if (cursor_x + str_width >= x) {
                             // uart_putc(UART_ID, '*');
@@ -548,7 +534,7 @@ int main() {
     // of the way. This should only be needed if you are pushing things up to
     // >16bits/clk here, i.e. if you need to saturate the bus completely.
     
-    // todo - uncomment this next line  64CAPTURE_PIN_BASE
+    // todo - uncomment this next line
     // bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
 
     PIO pio = pio0;
@@ -591,14 +577,14 @@ int main() {
 
  //   drawVLine(637, 0, 16, WHITE);
 
-    drawHLine(0, 479, 16, WHITE);
-    drawVLine(0, 480 - 16, 16, WHITE);
+    drawHLine(0, SCREEN_HEIGHT - 1, 16, WHITE);
+    drawVLine(0, SCREEN_HEIGHT - 16, 16, WHITE);
 
-    drawHLine(640 - 16, 0, 16, WHITE);
+    drawHLine(SCREEN_WIDTH - 16, 0, 16, WHITE);
     drawVLine(639, 0, 16, WHITE);
 
-    drawVLine(639, 480 - 16, 16, WHITE);
-    drawHLine(640 - 16, 479, 16, WHITE);
+    drawVLine(639, SCREEN_HEIGHT - 16, 16, WHITE);
+    drawHLine(SCREEN_WIDTH - 16, SCREEN_HEIGHT - 1, 16, WHITE);
 
     // drawHLine(630, 480 - 1, 1, WHITE);
 
@@ -606,6 +592,15 @@ int main() {
     for (int i = 0; i < 16; i++){
         drawPixel(i, 0, i); // test all colours in first horizontal line following sync
     }
+
+    drawPixel(0, 0, WHITE);
+/*
+    drawPixel(1, 0, WHITE);
+    drawPixel(2, 0, 1);
+    drawPixel(3, 0, 1);
+    drawPixel(4, 0, 2);
+    drawPixel(5, 0, 2);
+*/
 
 
     for (int i = 0; i < 16; i++){
@@ -643,6 +638,9 @@ int main() {
     // print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
     plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
 
+
+    // fillRect(0, 0, 640, 480, WHITE); // green box
+
     while(true) {
 
         if (!pause) {
@@ -653,7 +651,7 @@ int main() {
             // A row of filled circles
             fillCircle(disc_x, 100, 20, color_index);
             disc_x += 35 ;
-            if (disc_x > 640) disc_x = 0;
+            if (disc_x > SCREEN_WIDTH) disc_x = 0;
 
             // Concentric empty circles
             drawCircle(320, 200, circle_x, color_index);
@@ -710,8 +708,8 @@ int main() {
 
         if ((last_uart_char == 27) || uart_is_readable(UART_ID)) {
             
-            fillRect(1, 479 - 8, 640 - 2, 8, BLUE);
-            setCursor(2, 479 - 8);
+            fillRect(1, SCREEN_HEIGHT - 1 - 8, SCREEN_WIDTH - 2, 8, BLUE);
+            setCursor(2, SCREEN_HEIGHT - 1 - 8);
             setTextColor(WHITE);
             setTextSize(1);
 
@@ -813,7 +811,7 @@ int main() {
                             // it was crashing here for some reason
                             //writeString(" debug");
                             
-                            g_scrollx = CAPTURE_N_SAMPLES - (mag_factor(640));
+                            g_scrollx = CAPTURE_N_SAMPLES - (mag_factor(SCREEN_WIDTH));
                             if (g_scrollx < 0) {
                                 g_scrollx = 0;
                             }
@@ -839,7 +837,7 @@ int main() {
                     if (strcmp(escape_seq, "[1;5D") == 0) {
                             writeString("ctrl-left");
                             if (g_scrollx > 0) {
-                                g_scrollx -= mag_factor(640); // 100% of the screen width
+                                g_scrollx -= mag_factor(SCREEN_WIDTH); // 100% of the screen width
                                 if (g_scrollx < 0) {
                                     g_scrollx = 0;
                                 }
@@ -850,7 +848,7 @@ int main() {
 
                     } else if (strcmp(escape_seq, "[1;5C") == 0) {
                             writeString("ctrl-right");
-                            g_scrollx += mag_factor(640); // 100% of the screen width                                
+                            g_scrollx += mag_factor(SCREEN_WIDTH); // 100% of the screen width                                
                             plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
                     }
                 }
@@ -893,7 +891,22 @@ int main() {
                 // print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
                 plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
 
-                        /* code */
+            } else if ((char)ch == 'z') {
+                // zoom in or out to fill the screen
+                writeString("zoom to fill");
+
+                if (CAPTURE_N_SAMPLES >= SCREEN_WIDTH) {
+                    // we need to zoom out
+                    int factor = CAPTURE_N_SAMPLES / SCREEN_WIDTH;
+                    g_mag = -(factor - 1);
+
+                } else {
+                    // we need to zoom in
+                    int factor = SCREEN_WIDTH / CAPTURE_N_SAMPLES;
+                    g_mag = (factor - 1);
+                }
+                g_scrollx = 0;
+                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
             }
             
         }

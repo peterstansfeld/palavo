@@ -67,8 +67,8 @@ static inline void rgb2_program_init(PIO pio, uint sm, uint offset, uint pin /*,
 
     // Map the state machine's SET and OUT pin group to three pins, the `pin`
     // parameter to this function is the lowest one. These groups overlap.
-    sm_config_set_set_pins(&c, pin, 1);
-    sm_config_set_out_pins(&c, pin, 1);
+    sm_config_set_set_pins(&c, pin, 4);
+    sm_config_set_out_pins(&c, pin, 4);
 
     // sm_config_set_sideset_pins(&c, sidepin);
 
@@ -84,9 +84,9 @@ static inline void rgb2_program_init(PIO pio, uint sm, uint offset, uint pin /*,
 
     // Set this pin's GPIO function (connect PIO to the pad)
     pio_gpio_init(pio, pin);
-//    pio_gpio_init(pio, pin+1);
-//    pio_gpio_init(pio, pin+2);
-//    pio_gpio_init(pio, pin+3);
+    pio_gpio_init(pio, pin+1);
+    pio_gpio_init(pio, pin+2);
+    pio_gpio_init(pio, pin+3);
 
     // maybe this is required?  
     // pio_gpio_init(pio, sidepin);
@@ -95,10 +95,10 @@ static inline void rgb2_program_init(PIO pio, uint sm, uint offset, uint pin /*,
 
 
     // Set the pin direction to output at the PIO (3 pins)
-//    pio_sm_set_consecutive_pindirs(pio, sm, pin, 4, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 4, true);
 
     // Set the pin direction to output at the PIO (3 pins)
-    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+    // pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
