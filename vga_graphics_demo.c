@@ -27,7 +27,7 @@
 #include "hardware/dma.h"
 #include "hardware/uart.h"
 
-#include "hardware/timer.h"
+// #include "hardware/timer.h"
 // #include "hardware/structs/bus_ctrl.h"
 #include <string.h>
 
@@ -207,17 +207,20 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
     int trace_height = 40;
 
-    int y = 51; 
     int y_padding = 4;
-
+    int y = 51;
+    
 
     char str[80];
 
     setTextSize(1);
 
 
-    fillRect(0, y, 640, ((trace_height + y_padding) * CAPTURE_PIN_COUNT), BLACK); // colour box
+    fillRect(0, y, 640, (((trace_height + y_padding) * CAPTURE_PIN_COUNT) + y_padding), BLACK); // colour box
         
+    y += y_padding;
+
+
     char font_width = 6;
     char font_height = 8;
 
@@ -496,8 +499,8 @@ static uint64_t get_time(void) {
 bool my_uart_is_readable_within_us(uart_inst_t * uart, uint32_t us) {
     bool r = uart_is_readable(uart);
     if (!r) {
-        uint64_t start = get_time();
-        while (get_time() - start < us) {
+        uint32_t start = time_us_32();
+        while (time_us_32() - start < us) {
             r = uart_is_readable(uart);
             if (r) {
                 break;
@@ -676,15 +679,16 @@ int main() {
             Hline_y += 2 ;
             if (Hline_y > 400) Hline_y = 240;
 
-            // Timing text
-            if (time_accum != time_accum_old) {
-                time_accum_old = time_accum ;
-                fillRect(250, 20, 176, 30, RED); // red box
-                sprintf(timetext, "%d", time_accum) ;
-                setCursor(250, 20) ;
-                setTextSize(2) ;
-                writeString(timetext) ;
-            }
+        }
+        // Timing text
+        if (time_accum != time_accum_old) {
+            setTextColor(WHITE) ;
+            time_accum_old = time_accum ;
+            fillRect(250, 20, 176, 30, RED); // red box
+            sprintf(timetext, "%d", time_accum) ;
+            setCursor(250, 20) ;
+            setTextSize(2) ;
+            writeString(timetext) ;
         }
 
         /*
@@ -734,8 +738,11 @@ int main() {
                 ch = 0;
                 uint8_t noofchars = 0;
             
-                // wait up to 2 byte times, which is (2 * 10 * 1,000,000) / 115,200 = 1737 uS.
-
+                // Wait up to 2 byte times, which is (2 * 10 * 1,000,000) / 115,200 = 1737 uS.
+                // This had me confused for ages. It seemed to make no difference whether
+                // the "us" parameter was 1 or 1800. Turns out that pressing the Esc
+                // key in minicom (serial terminal) has a little delay before it is transmitted
+                // unlike any other key. Thank goodness for LEDs on the debug probe.
                 while (uart_is_readable_within_us(UART_ID, 1800)) {                    
                     ch = uart_getc(UART_ID);
                     last_uart_char = ch;
@@ -760,8 +767,14 @@ int main() {
                     }
                 }
                 
-                writeString(escape_seq);
-                writeString(" ");
+                if (strlen(escape_seq) == 0) {
+                    // Must have been caused by a single Esc key press
+                    writeString("esc");
+                    last_uart_char = 0;
+                } else {
+                    writeString(escape_seq);
+                    writeString(" ");
+                }
                 
                 if (strlen(escape_seq) == 2) {
                     if ((char)escape_seq[0] == '[') {
