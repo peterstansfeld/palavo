@@ -139,6 +139,21 @@ static inline void hsync3_program_init(PIO pio, uint sm, uint offset, uint pin, 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
 
+
+
+    // these instructions have been moved from vga_graphics.c
+
+    pio_sm_put_blocking(pio, sm, 479); // write V_ACTIVE to the TX FIFO
+
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // pull V_ACTIVE from the TX FIFO
+    // pio_sm_exec(pio_2, hsync3_sm, pio_encode_mov(pio_isr, pio_osr)); // this fails for some reason!!!
+    pio_sm_exec(pio, sm, pio_encode_mov(pio_y, pio_osr)); // y = V_ACTIVE
+    pio_sm_exec(pio, sm, pio_encode_mov(pio_isr, pio_y)); // isr = V_ACTIVE
+    pio_sm_exec(pio, sm, pio_encode_out(pio_null, 32)); // isr = 0
+
+    // end of moved instructions
+
+
     // Set the state machine running (commented out so can be synchronized w/ vsync)
     // pio_sm_set_enabled(pio, sm, true);
 }

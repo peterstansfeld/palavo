@@ -103,6 +103,22 @@ static inline void rgb2_program_init(PIO pio, uint sm, uint offset, uint pin /*,
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
 
+
+
+    // these instructions have been moved from vga_graphics.c
+
+    pio_sm_put_blocking(pio, sm, 319); // value to store RGB_ACTIVE in isr as a horizontal pixel pair counter
+    pio_sm_put_blocking(pio, sm, 480 - 1); // value to store in y as a line counter
+
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
+    pio_sm_exec(pio, sm, pio_encode_out(pio_isr, 32)); // trigger auto-pl
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
+    pio_sm_exec(pio, sm, pio_encode_out(pio_y, 32)); // trigger auto-pull
+
+    // end of moved instructions
+
+
+
     // Set the state machine running (commented out, I'll start this in the C)
     // pio_sm_set_enabled(pio, sm, true);
 }

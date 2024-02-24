@@ -90,6 +90,8 @@ void initVGA() {
     // uint rgb2_sm = 2;
     // uint hsync3_sm = 3;
 
+
+    // Manually select a couple of state machines from pio instance pio1.
     uint hsync3_sm = 0;
     uint rgb2_sm = 1;
     
@@ -157,7 +159,9 @@ void initVGA() {
     // that they retrieve in the first 'pull' instructions, before the .wrap_target directive
     // in the assembly. Each uses these values to initialize some counting registers.
     
-    // no longer need this as we've slowed the clock down to 1/16 of what it was before 
+    // no longer need this as we've slowed the clock down to 1/16 of what it was before, and
+    // we can achieve the required delays with 'set x (or y), (0..31)' instructions and instruction
+    // '[delays]'
     // pio_sm_put_blocking(pio, hsync_sm, H_ACTIVE);
     pio_sm_put_blocking(pio, vsync_sm, V_ACTIVE);
     pio_sm_put_blocking(pio, rgb_sm, RGB_ACTIVE);
@@ -166,20 +170,29 @@ void initVGA() {
 
     // pio_sm_put_blocking(pio_2, vsync2_sm, V_ACTIVE);
 
+    // tempted to move this lot to their respective .pio files in the initialisation function 
+    // try one at a time to see if that works... It does, now try all of them (for hsync3)...
+    
+    /*
     pio_sm_put_blocking(pio_2, hsync3_sm, V_ACTIVE);
+
     pio_sm_exec(pio_2, hsync3_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
     // pio_sm_exec(pio_2, hsync3_sm, pio_encode_mov(pio_isr, pio_osr)); // this fails for some reason!!!
     pio_sm_exec(pio_2, hsync3_sm, pio_encode_mov(pio_y, pio_osr)); // isr = V_ACTIVE
     pio_sm_exec(pio_2, hsync3_sm, pio_encode_mov(pio_isr, pio_y)); // isr = V_ACTIVE
     pio_sm_exec(pio_2, hsync3_sm, pio_encode_out(pio_null, 32)); // isr = V_ACTIVE
+  */
 
+  // great. that all worked, now try rgb2...
+   
 
-
-    
+   /*
     pio_sm_put_blocking(pio_2, rgb2_sm, RGB_ACTIVE); // value to store in isr as a horizontal pixel pair counter
     pio_sm_put_blocking(pio_2, rgb2_sm, 480 - 1); //value to store in y as line counter
-    
-    // this pio_sm_exec instruction save one pio instruction
+    */
+
+
+    // this pio_sm_exec instruction saves one pio instruction
     pio_sm_exec(pio, vsync_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
 
 
@@ -193,11 +206,15 @@ void initVGA() {
 
     // pio_sm_exec(pio_2, rgb2_sm, pio_encode_out(pio_isr, 32)); // store osr in isr a a loop counter
   
+   /*
     pio_sm_exec(pio_2, rgb2_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
     pio_sm_exec(pio_2, rgb2_sm, pio_encode_out(pio_isr, 32)); // trigger auto-pull
 
     pio_sm_exec(pio_2, rgb2_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
     pio_sm_exec(pio_2, rgb2_sm, pio_encode_out(pio_y, 32)); // trigger auto-pull
+    */
+
+     // great. that all worked too.
 
     //pio_sm_exec(pio, rgb_sm, pio_encode_mov(pio_y, pio_osr)); // (IfE = 0, Blk = 1)
     //pio_sm_exec(pio, rgb_sm, pio_encode_jmp(rgb_offset + 0)); // (jmp 0)
