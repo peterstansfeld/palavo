@@ -16,61 +16,26 @@
 ; Total period of 800 cycles (32us at 25MHz)
 ;
 
-; If we were to slow down the clock to 1/16, ie 1.5625 MHz we'd have:
 
-; frontporch: 1 clocks (0.64us)
-; sync pulse: 6 clocks (3.84us)
-; back porch: 3 clocks (1.92us)
-; active for: 40 clcks (25.6us)
-
-; High for 44 cycles (28.16us)
-; Low for 6 cycles (3.84us)
-; Total period of 50 cycles (32us)
-
-; This saves 4 instructions and preloading of osr.
-
-
-
-
-;pull block              ; Pull from FIFO to OSR (only happens once)
+pull block              ; Pull from FIFO to OSR (only happens once)
 .wrap_target            ; Program wraps to here
 
 ; ACTIVE + FRONTPORCH
-;mov x, osr              ; Copy value from OSR to x scratch register
-;activeporch:
-;   jmp x-- activeporch  ; Remain high in active mode and front porch
-
-; from vga_graphics.c  #define H_ACTIVE   655    // (active + frontporch - 1) - one cycle delay for mov
-; this should last for 41 cycles 
-
-    set x, 19              ; x = 19, giving 20 loops, with delay of 1 = 40 cycles + this cycle = 41
+mov x, osr              ; Copy value from OSR to x scratch register
 activeporch:
-   jmp x-- activeporch [1] ; Remain high in active mode and front porch
-
+   jmp x-- activeporch  ; Remain high in active mode and front porch
 
 ; SYNC PULSE
 pulse:
-;    set pins, 0 [31]    ; Low for hsync pulse (32 cycles)
-;    nop [31]
-;    nop [31]
-
-    set pins, 0 [5]    ; Low for hsync pulse (6 cycles)
-
+    set pins, 0 [31]    ; Low for hsync pulse (32 cycles)
+    set pins, 0 [31]    ; Low for hsync pulse (64 cycles)
+    set pins, 0 [31]    ; Low for hsync pulse (96 cycles)
 
 ; BACKPORCH
 backporch:
-;    set pins, 1 [31]    ; High for back porch (32 cycles)
-;    nop [12]
-;    irq 0       [1]     ; Set IRQ to signal end of line (47 cycles)
-
-    set pins, 1 [1]    ; High for back porch (2 cycles)
-    irq 0              ; Set IRQ to signal end of line (3 cycles)
-
-;this make it worse
-;    set pins, 1    ; High for back porch (2 cycles)
-;    irq 0     [1]         ; Set IRQ to signal end of line (3 cycles)
-
-
+    set pins, 1 [31]    ; High for back porch (32 cycles)
+    set pins, 1 [12]    ; High for back porch (45 cycles)
+    irq 0       [1]     ; Set IRQ to signal end of line (47 cycles)
 .wrap
 
 
@@ -90,7 +55,7 @@ static inline void hsync_program_init(PIO pio, uint sm, uint offset, uint pin) {
     sm_config_set_set_pins(&c, pin, 1);
 
     // Set clock division (div by 5 for 25 MHz state machine)
-    sm_config_set_clkdiv(&c, 5 * 16) ;
+    sm_config_set_clkdiv(&c, 5) ;
 
     // Set this pin's GPIO function (connect PIO to the pad)
     pio_gpio_init(pio, pin);

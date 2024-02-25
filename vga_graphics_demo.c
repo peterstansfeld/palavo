@@ -594,6 +594,9 @@ int main() {
     }
 
     drawPixel(0, 0, WHITE);
+
+    drawHLine(0, 0, 32, WHITE);
+
 /*
     drawPixel(1, 0, WHITE);
     drawPixel(2, 0, 1);

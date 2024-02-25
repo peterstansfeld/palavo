@@ -1,4 +1,4 @@
-#define VGA_TEST_PIO_PROG 3
+#define VGA_TEST_PIO_PROG 2
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -243,7 +243,7 @@ void initVGA() {
 
 
     // this pio_sm_exec instruction saves one pio instruction
-    pio_sm_exec(pio, vsync_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
+    // pio_sm_exec(pio, vsync_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
 
 
     // pio_sm_exec(pio, hsync2_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
@@ -252,7 +252,7 @@ void initVGA() {
    //pio_sm_exec(pio_2, vsync2_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
 
     // these pio_sm_exec instructions save three pio instructions
-    pio_sm_exec(pio, rgb_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
+    // pio_sm_exec(pio, rgb_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
 
     // pio_sm_exec(pio_2, rgb2_sm, pio_encode_out(pio_isr, 32)); // store osr in isr a a loop counter
   
