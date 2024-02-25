@@ -537,7 +537,7 @@ int main() {
     // todo - uncomment this next line
     // bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
 
-    PIO pio = pio0;
+    PIO pio = pio1;
     uint sm = 3;
     uint dma_chan = dma_claim_unused_channel(true);
 

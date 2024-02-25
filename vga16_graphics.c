@@ -1,3 +1,5 @@
+#define VGA_TEST_PIO_PROG 3
+
 #include <stdio.h>
 #include <stdlib.h>
 #include "pico/stdlib.h"
@@ -8,10 +10,20 @@
 #include "hsync.pio.h"
 #include "vsync.pio.h"
 #include "rgb.pio.h"
-// #include "hsync2.pio.h"
-#include "hsync3.pio.h"
-// #include "vsync2.pio.h"
+
+#if VGA_TEST_PIO_PROG == 2
+
+#include "hsync2.pio.h"
+#include "vsync2.pio.h"
 #include "rgb2.pio.h"
+
+#elif VGA_TEST_PIO_PROG == 3
+
+#include "hsync3.pio.h"
+#include "rgb3.pio.h"
+
+#endif
+
 // Header file
 #include "vga16_graphics.h"
 // Font file
@@ -77,8 +89,8 @@ void initVGA() {
 
     // uint hsync2_offset = pio_add_program(pio_2, &hsync2_program);
     // uint vsync2_offset = pio_add_program(pio_2, &vsync2_program);
-    uint rgb2_offset = pio_add_program(pio_2, &rgb2_program);
-    uint hsync3_offset = pio_add_program(pio_2, &hsync3_program);
+    // uint rgb3_offset = pio_add_program(pio_2, &rgb3_program);
+    // uint hsync3_offset = pio_add_program(pio_2, &hsync3_program);
 
     // Manually select a few state machines from pio instance pio0.
     uint hsync_sm = 0;
@@ -90,10 +102,27 @@ void initVGA() {
     // uint rgb2_sm = 2;
     // uint hsync3_sm = 3;
 
+    // Manually select a couple of state machines from pio instance pio1
 
-    // Manually select a couple of state machines from pio instance pio1.
+ #if VGA_TEST_PIO_PROG == 2
+
+    uint hsync2_offset = pio_add_program(pio_2, &hsync2_program);
+    uint vsync2_offset = pio_add_program(pio_2, &vsync2_program);
+    uint rgb2_offset = pio_add_program(pio_2, &rgb2_program);
+
+    uint hsync2_sm = 0;
+    uint vsync2_sm = 1;
+    uint rgb2_sm = 2;
+    
+#elif VGA_TEST_PIO_PROG == 3
+    
     uint hsync3_sm = 0;
-    uint rgb2_sm = 1;
+    uint rgb3_sm = 1;
+
+    uint rgb3_offset = pio_add_program(pio_2, &rgb3_program);
+    uint hsync3_offset = pio_add_program(pio_2, &hsync3_program);
+
+#endif
     
     // Call the initialization functions that are defined within each PIO file.
     // Why not create these programs here? By putting the initialization function in
@@ -103,10 +132,22 @@ void initVGA() {
     vsync_program_init(pio, vsync_sm, vsync_offset, VSYNC);
     rgb_program_init(pio, rgb_sm, rgb_offset, LO_GRN);
 
-    // hsync2_program_init(pio_2, hsync2_sm, hsync2_offset, HSYNC2);
-    // vsync2_program_init(pio_2, vsync2_sm, vsync2_offset, VSYNC2);
+    
+    // VGA test options
+
+    #if VGA_TEST_PIO_PROG == 2
+    
+    hsync2_program_init(pio_2, hsync2_sm, hsync2_offset, HSYNC2);
+    vsync2_program_init(pio_2, vsync2_sm, vsync2_offset, VSYNC2);
+    rgb2_program_init(pio_2, rgb2_sm, rgb2_offset, LO_GRN2 /*, HI_GRN2*/);     
+    
+    #elif VGA_TEST_PIO_PROG == 3
+    
     hsync3_program_init(pio_2, hsync3_sm, hsync3_offset, HSYNC2, VSYNC2); // this has to be the first (not true, it must have .org 0)
-    rgb2_program_init(pio_2, rgb2_sm, rgb2_offset, LO_GRN2 /*, HI_GRN2*/); // 
+    rgb3_program_init(pio_2, rgb3_sm, rgb3_offset, LO_GRN2 /*, HI_GRN2*/); // 
+
+    #endif
+
 
     // hsync3_program_init(pio_2, hsync3_sm, hsync3_offset, HI_GRN2);
 
@@ -162,7 +203,16 @@ void initVGA() {
     // no longer need this as we've slowed the clock down to 1/16 of what it was before, and
     // we can achieve the required delays with 'set x (or y), (0..31)' instructions and instruction
     // '[delays]'
-    // pio_sm_put_blocking(pio, hsync_sm, H_ACTIVE);
+    
+    
+    // don't need this for the current, optimised h_sync, but will do when restoring 
+    // Hunter's original driver. Let's try... yep, that still works. 
+    
+    pio_sm_put_blocking(pio, hsync_sm, H_ACTIVE);
+    
+    // shouldn't need these for the current, optimised  v_sync and rgb, but will do when restoring 
+    // Hunter's original driver. Let's try... oops, that's not true. 
+    
     pio_sm_put_blocking(pio, vsync_sm, V_ACTIVE);
     pio_sm_put_blocking(pio, rgb_sm, RGB_ACTIVE);
 
@@ -223,14 +273,34 @@ void initVGA() {
     // auto-pull once the dma is enabled. 
     pio_sm_exec(pio, rgb_sm, pio_encode_out(pio_y, 32)); // trigger auto-pull
 
-    
+#if VGA_TEST_PIO_PROG == 2
+    // pio_sm_put_blocking(pio_2, hsync2_sm, H_ACTIVE);  // don't think we need this    
+    pio_sm_put_blocking(pio_2, vsync2_sm, V_ACTIVE);
+    // pio_sm_put_blocking(pio_2, rgb2_sm, RGB_ACTIVE); // will need this. no, they've been moved in .pio
+
+
+    pio_sm_exec(pio_2, vsync2_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
+
+    // pio_sm_exec(pio_2, rgb2_sm, pio_encode_pull(false, true)); // will need this.  no, they've been moved in .pio
+    // pio_sm_exec(pio_2, rgb2_sm, pio_encode_out(pio_y, 32)); // // will need this. no, they've been moved in .pio
+#endif
+
     // Start the two pio machine IN SYNC
     // Note that the RGB state machine is running at full speed,
     // so synchronization doesn't matter for that one. But, we'll
     // start them all simultaneously anyway.
     pio_enable_sm_mask_in_sync(pio, ((1u << hsync_sm) | (1u << vsync_sm) | (1u << rgb_sm)));
 
-    pio_enable_sm_mask_in_sync(pio_2, (/*(1u << hsync2_sm) | (1u << vsync2_sm) |*/ (1u << rgb2_sm) | (1u << hsync3_sm)));
+
+#if VGA_TEST_PIO_PROG == 2
+
+    pio_enable_sm_mask_in_sync(pio_2, ((1u << hsync2_sm) | (1u << vsync2_sm) | (1u << rgb2_sm)));
+
+#elif VGA_TEST_PIO_PROG == 3
+
+    pio_enable_sm_mask_in_sync(pio_2, ((1u << hsync3_sm) | (1u << rgb3_sm)));
+
+#endif
 
     // Start DMA channel 0. Once started, the contents of the pixel color array
     // will be continously DMA's to the PIO machines that are driving the screen.
