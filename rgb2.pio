@@ -15,7 +15,10 @@
 ;set pins, 0x0       				; Zero RGB pins in blanking
 mov x, isr       					; Initialize counter variable
 
-wait 1 irq 5 [4]	      		; Wait for vsync active mode (starts 5 cycles after execution)
+; Below, 19 delay cycles gives us about the right amount of time between hsync and rgb
+; When 18 it seems too short.
+
+wait 1 irq 5 [3]	      		; Wait for vsync active mode (starts 5 cycles after execution)
 
 colorout:
 ;	out pins, 4	[4]			; Push out to pins (first pixel)

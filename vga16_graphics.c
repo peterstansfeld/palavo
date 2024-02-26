@@ -275,11 +275,11 @@ void initVGA() {
 
 #if VGA_TEST_PIO_PROG == 2
     // pio_sm_put_blocking(pio_2, hsync2_sm, H_ACTIVE);  // don't think we need this    
-    pio_sm_put_blocking(pio_2, vsync2_sm, V_ACTIVE);
+    // pio_sm_put_blocking(pio_2, vsync2_sm, V_ACTIVE);
     // pio_sm_put_blocking(pio_2, rgb2_sm, RGB_ACTIVE); // will need this. no, they've been moved in .pio
 
 
-    pio_sm_exec(pio_2, vsync2_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
+    // pio_sm_exec(pio_2, vsync2_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
 
     // pio_sm_exec(pio_2, rgb2_sm, pio_encode_pull(false, true)); // will need this.  no, they've been moved in .pio
     // pio_sm_exec(pio_2, rgb2_sm, pio_encode_out(pio_y, 32)); // // will need this. no, they've been moved in .pio

@@ -21,7 +21,19 @@
 ; frontporch: 1 clocks (0.64us)
 ; sync pulse: 6 clocks (3.84us)
 ; back porch: 3 clocks (1.92us)
-; active for: 40 clcks (25.6us)
+; active for: 40 clocks (25.6us)
+
+
+
+; If we were to slow down the clock to 1/8, ie 1.5625 MHz we'd have:
+
+; frontporch: 2 clocks (0.64us)
+; sync pulse: 12 clocks (3.84us)
+; back porch: 6 clocks (1.92us)
+; active for: 80 clocks (25.6us)
+
+
+
 
 ; High for 44 cycles (28.16us)
 ; Low for 6 cycles (3.84us)
@@ -43,9 +55,9 @@
 ; from vga_graphics.c  #define H_ACTIVE   655    // (active + frontporch - 1) - one cycle delay for mov
 ; this should last for 41 cycles 
 
-    set x, 19              ; x = 19, giving 20 loops, with delay of 1 = 40 cycles + this cycle = 41
+    set x, 19 [1]              ; x = 19, giving 20 loops, with delay of 1 = 40 cycles + this cycle = 41
 activeporch:
-   jmp x-- activeporch [1] ; Remain high in active mode and front porch
+   jmp x-- activeporch [3] ; Remain high in active mode and front porch
 
 
 ; SYNC PULSE
@@ -54,17 +66,19 @@ pulse:
 ;    nop [31]
 ;    nop [31]
 
-    set pins, 0 [5]    ; Low for hsync pulse (6 cycles)
+    set pins, 0 [11]    ; Low for hsync pulse (6 cycles)
 
 
 ; BACKPORCH
 backporch:
 ;    set pins, 1 [31]    ; High for back porch (32 cycles)
-;    nop [12]
+;    set pins, 1 [12]    ; High for back porch (45 cycles)
 ;    irq 0       [1]     ; Set IRQ to signal end of line (47 cycles)
 
-    set pins, 1 [1]    ; High for back porch (2 cycles)
+    set pins, 1 [4]    ; High for back porch (2 cycles)
+;    set x, 19          ; High for back porch (1 cycle) and x = 19, giving 20 loops, with delay of 1 = 40 cycles + this cycle = 41
     irq 4              ; Set IRQ to signal end of line (3 cycles)
+;    nop
 
 ;this make it worse
 ;    set pins, 1    ; High for back porch (2 cycles)
@@ -90,7 +104,7 @@ static inline void hsync2_program_init(PIO pio, uint sm, uint offset, uint pin) 
     sm_config_set_set_pins(&c, pin, 1);
 
     // Set clock division (div by 5 for 25 MHz state machine)
-    sm_config_set_clkdiv(&c, 5 * 16) ;
+    sm_config_set_clkdiv(&c, 5 * 8) ;
 
     // Set this pin's GPIO function (connect PIO to the pad)
     pio_gpio_init(pio, pin);
@@ -101,6 +115,8 @@ static inline void hsync2_program_init(PIO pio, uint sm, uint offset, uint pin) 
 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
+
+    // pio_sm_exec(pio, sm, pio_encode_set(pio_x, 19)); // 'set x, 19' as we have moved it
 
     // Set the state machine running (commented out so can be synchronized w/ vsync)
     // pio_sm_set_enabled(pio, sm, true);

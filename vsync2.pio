@@ -21,35 +21,37 @@
 ; ACTIVE
 mov x, osr                        ; Copy value from OSR to x scratch register
 activefront:
-    wait 1 irq 4                  ; Wait for hsync to go high
+    wait 1 irq 4 [5]                 ; Wait for hsync to go high
     irq 5                         ; Signal that we're in active mode
     jmp x-- activefront           ; Remain in active mode, decrementing counter
 
 ; FRONTPORCH
 set y, 9                          ;
 frontporch:
-    wait 1 irq 4 [7]                ;
-    jmp y-- frontporch [5]           ;
+    wait 1 irq 4                   ;
+    jmp y-- frontporch            ;
 
 ; SYNC PULSE
-set pins, 0                       ; Set pin low
+;set pins, 0                       ; Set pin low
 
 ;    set y, 31    side 0     ; First part of back porch into y scratch register (and delays a cycle) and clear vsync
 
-wait 1 irq 4                      ; Wait for one line
-wait 1 irq 4   [7]                   ; Wait for a second line
+wait 1 irq 4   side 0                   ; Wait for one line
+wait 1 irq 4                      ; Wait for a second line
 
 
 ;nop [5]                             ; extra delay
 
 ; BACKPORCH
-set y, 31     [5]                    ; First part of back porch into y scratch register (and delays a cycle)
+;set y, 31                         ; First part of back porch into y scratch register (and delays a cycle)
+
+    mov y, isr                      ; y = 32, for 33 loops
 ;set pins, 1                      ; Raise high for back porch (delaying a set cycle) - REPLACED WITH SIDESET
 backporch:
     wait 1 irq 4   side 1         ; Wait for hsync to go high - SIDESET REPLACEMENT HERE
     jmp y-- backporch             ; Remain in backporch, decrementing counter
 
-;wait 1 irq 0                      ; Wait for final (33rd) backporch line (eliminated)
+;wait 1 irq 4                      ; Wait for final (33rd) backporch line (eliminated)
 
 .wrap                             ; Program wraps from here
 
@@ -81,6 +83,15 @@ static inline void vsync2_program_init(PIO pio, uint sm, uint offset, uint pin) 
 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
+
+
+    pio_sm_put_blocking(pio, sm, 32); // for 33 backporch loops
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
+    pio_sm_exec(pio, sm, pio_encode_mov(pio_y, pio_osr)); //
+    pio_sm_exec(pio, sm, pio_encode_mov(pio_isr, pio_y)); // for 33 backporch loops
+
+    pio_sm_put_blocking(pio, sm, 479); // for 480 loops
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
 
     // Set the state machine running (commented out so can be synchronized with hsync)
     // pio_sm_set_enabled(pio, sm, true);

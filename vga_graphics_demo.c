@@ -132,6 +132,7 @@ void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     pio_sm_exec(pio, sm, pio_encode_wait_gpio(1, LO_GRN));
 
     for (int i = 0; i < (513 /*+ 10*/ /*+ 45*/); i++) {
+    // for (int i = 0; i < (513 + 45 /*+ 10*/ /*+ 45*/); i++) {
         pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(!trigger_level, CAPTURE_PIN_BASE));
         pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(trigger_level, CAPTURE_PIN_BASE));
     }
@@ -499,6 +500,64 @@ bool my_uart_is_readable_within_us(uart_inst_t * uart, uint32_t us) {
 */
 
 
+    // plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
+
+
+
+int measure(const uint32_t *buf) {
+    // currently measures the time between hsyng going high and rgb going high on the first line of the VGA frame
+    uart_puts(UART_ID, "\nMeasure something...\n");
+
+
+    char pin = 2;
+    uint record_size_bits = bits_packed_per_word(CAPTURE_PIN_COUNT);
+
+    int i;
+
+    int p2;
+    int p0;
+
+    for (i = 0; i < CAPTURE_N_SAMPLES; i++) {
+        uint bit_index = pin + i * CAPTURE_PIN_COUNT;
+        uint word_index = bit_index / record_size_bits;
+        // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
+        uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
+        
+        uint sample = buf[word_index] & word_mask ? 1 :0;
+        
+        if (sample) {
+            p2 = i;
+            uart_putcf(UART_ID, "first pin 2 high: %d\n", p2);
+            break;
+        }
+        
+    }
+
+    pin = 0;
+
+    for (i = i; i >= 0; i--) {
+        uint bit_index = pin + i * CAPTURE_PIN_COUNT;
+        uint word_index = bit_index / record_size_bits;
+        // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
+        uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
+        
+        uint sample = buf[word_index] & word_mask ? 1 :0;
+        
+        if (!sample) {
+            p0 = i; // this sample is still high (we're going backwards)
+            uart_putcf(UART_ID, "previous pin 0 low: %d\n", p0);
+            break;
+        }
+        
+    }
+
+    uart_putcf(UART_ID, "p0..p2: %d\n", p2 - (p0 + 1));
+
+    return p0 + 1;
+
+}
+
+
 int main() {
 
     // Initialize stdio
@@ -590,12 +649,12 @@ int main() {
 
 
     for (int i = 0; i < 16; i++){
-        drawPixel(i, 0, i); // test all colours in first horizontal line following sync
+        drawPixel(15 - i, 0, i); // test all colours in first horizontal line following sync
     }
 
-    drawPixel(0, 0, WHITE);
+    // drawPixel(0, 0, WHITE);
 
-    drawHLine(0, 0, 32, WHITE);
+    // drawHLine(0, 0, 32, WHITE);
 
 /*
     drawPixel(1, 0, WHITE);
@@ -909,6 +968,14 @@ int main() {
                     g_mag = (factor - 1);
                 }
                 g_scrollx = 0;
+                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
+            
+            } else if ((char)ch == 'm') {
+                // measure
+                writeString("measure ");
+                g_scrollx = measure(capture_buf);
+                // g_scrollx = 900;
+                g_mag = 0;
                 plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
             }
             
