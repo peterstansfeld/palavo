@@ -208,13 +208,13 @@ void initVGA() {
     // don't need this for the current, optimised h_sync, but will do when restoring 
     // Hunter's original driver. Let's try... yep, that still works. 
     
-    pio_sm_put_blocking(pio, hsync_sm, H_ACTIVE);
+    // pio_sm_put_blocking(pio, hsync_sm, H_ACTIVE);
     
     // shouldn't need these for the current, optimised  v_sync and rgb, but will do when restoring 
     // Hunter's original driver. Let's try... oops, that's not true. 
     
-    pio_sm_put_blocking(pio, vsync_sm, V_ACTIVE);
-    pio_sm_put_blocking(pio, rgb_sm, RGB_ACTIVE);
+    // pio_sm_put_blocking(pio, vsync_sm, V_ACTIVE);
+    // pio_sm_put_blocking(pio, rgb_sm, RGB_ACTIVE);
 
     // pio_sm_put_blocking(pio_2, hsync2_sm, H_ACTIVE);
 
@@ -271,7 +271,7 @@ void initVGA() {
 
     // Shift 32 bits of the osr (RGB_ACTIVE) into y, which also triggers
     // auto-pull once the dma is enabled. 
-    pio_sm_exec(pio, rgb_sm, pio_encode_out(pio_y, 32)); // trigger auto-pull
+    // pio_sm_exec(pio, rgb_sm, pio_encode_out(pio_y, 32)); // trigger auto-pull
 
 #if VGA_TEST_PIO_PROG == 2
     // pio_sm_put_blocking(pio_2, hsync2_sm, H_ACTIVE);  // don't think we need this    

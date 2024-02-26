@@ -76,6 +76,8 @@ static inline void vsync_program_init(PIO pio, uint sm, uint offset, uint pin) {
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
 
+    pio_sm_put_blocking(pio, sm, 479); // V_ACTIVE
+
     // Set the state machine running (commented out so can be synchronized with hsync)
     // pio_sm_set_enabled(pio, sm, true);
 }

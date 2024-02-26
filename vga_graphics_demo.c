@@ -514,8 +514,8 @@ int measure(const uint32_t *buf) {
 
     int i;
 
-    int p2;
-    int p0;
+    int green_start;
+    int vsync_end;
 
     for (i = 0; i < CAPTURE_N_SAMPLES; i++) {
         uint bit_index = pin + i * CAPTURE_PIN_COUNT;
@@ -526,8 +526,8 @@ int measure(const uint32_t *buf) {
         uint sample = buf[word_index] & word_mask ? 1 :0;
         
         if (sample) {
-            p2 = i;
-            uart_putcf(UART_ID, "first pin 2 high: %d\n", p2);
+            green_start = i;
+            uart_putcf(UART_ID, "green_start: %d\n", green_start);
             break;
         }
         
@@ -535,6 +535,96 @@ int measure(const uint32_t *buf) {
 
     pin = 0;
 
+    for (i = green_start; i >= 0; i--) {
+        uint bit_index = pin + i * CAPTURE_PIN_COUNT;
+        uint word_index = bit_index / record_size_bits;
+        // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
+        uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
+        
+        uint sample = buf[word_index] & word_mask ? 1 :0;
+        
+        if (!sample) {
+            vsync_end = i + 1; // this sample is still high (we're going backwards)
+            uart_putcf(UART_ID, "vsync_end: %d\n", vsync_end);
+            break;
+        }
+        
+    }
+
+    uart_putcf(UART_ID, "vsync_end..green_start: %d\n", green_start - (vsync_end + 0));
+
+    pin = 1; // vsync
+    // uint record_size_bits = bits_packed_per_word(CAPTURE_PIN_COUNT);
+
+    // int i;
+
+    // int p2;
+    int vsync_start;
+
+    for (i = 0; i < CAPTURE_N_SAMPLES; i++) {
+        uint bit_index = pin + i * CAPTURE_PIN_COUNT;
+        uint word_index = bit_index / record_size_bits;
+        // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
+        uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
+        
+        uint sample = buf[word_index] & word_mask ? 1 :0;
+        
+        if (!sample) {
+            vsync_start = i;
+            uart_putcf(UART_ID, "vsync_start: %d\n", vsync_start);
+            break;
+        }
+        
+    }
+
+
+    // int vsync_end;
+
+    for (i = vsync_start; i < CAPTURE_N_SAMPLES; i++) {
+        uint bit_index = pin + i * CAPTURE_PIN_COUNT;
+        uint word_index = bit_index / record_size_bits;
+        // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
+        uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
+        
+        uint sample = buf[word_index] & word_mask ? 1 :0;
+        
+        if (sample) {
+            vsync_end = i;
+            uart_putcf(UART_ID, "vsync_end: %d\n", vsync_end);
+            break;
+        }
+        
+    }
+
+    uart_putcf(UART_ID, "vsync_start..vsync_end: %d\n", vsync_end - (vsync_start + 0));
+
+    pin = 0; // hsync
+
+    int hsync_end;
+
+    for (i = vsync_end; i >= 0; i--) {
+        uint bit_index = pin + i * CAPTURE_PIN_COUNT;
+        uint word_index = bit_index / record_size_bits;
+        // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
+        uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
+        
+        uint sample = buf[word_index] & word_mask ? 1 :0;
+        
+        if (!sample) {
+            hsync_end = i + 1;
+            uart_putcf(UART_ID, "hsync_end: %d\n", hsync_end);
+            break;
+        }
+        
+    }
+
+
+    uart_putcf(UART_ID, "hsync_end..vsync_start: %d\n", vsync_end - (hsync_end + 0));
+
+
+    pin = 0;
+
+/*
     for (i = i; i >= 0; i--) {
         uint bit_index = pin + i * CAPTURE_PIN_COUNT;
         uint word_index = bit_index / record_size_bits;
@@ -550,10 +640,31 @@ int measure(const uint32_t *buf) {
         }
         
     }
+*/
 
-    uart_putcf(UART_ID, "p0..p2: %d\n", p2 - (p0 + 1));
+    // uart_putcf(UART_ID, "p0..p2: %d\n", p2 - (p0 + 1));
 
-    return p0 + 1;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    return 0;
 
 }
 
