@@ -25,13 +25,13 @@ activefront:
 ; FRONTPORCH
     set y, 9                      ;
 frontporch:
-    wait 1 irq 4                  ;
+    wait 1 irq 4 [5]              ;
     jmp y-- frontporch            ;
 
 
 ; SYNC PULSE
     wait 1 irq 4   side 0         ; Wait for one line
-    wait 1 irq 4                  ; Wait for a second line
+    wait 1 irq 4 [5]                 ; Wait for a second line
 
 
 ; BACKPORCH
