@@ -14,80 +14,39 @@
 ; High for 704 cycles (28.16us at 25MHz)
 ; Low  for 96  cycles (3.84us at 25MHz)
 ; Total period of 800 cycles (32us at 25MHz)
-;
-
-; If we were to slow down the clock to 1/16, ie 1.5625 MHz we'd have:
-
-; frontporch: 1 clocks (0.64us)
-; sync pulse: 6 clocks (3.84us)
-; back porch: 3 clocks (1.92us)
-; active for: 40 clocks (25.6us)
 
 
-
-; If we were to slow down the clock to 1/8, ie 1.5625 MHz we'd have:
+; If we were to slow down the clock to 1/8, ie 3.125 MHz we'd have:
 
 ; frontporch: 2 clocks (0.64us)
 ; sync pulse: 12 clocks (3.84us)
 ; back porch: 6 clocks (1.92us)
 ; active for: 80 clocks (25.6us)
 
+; High for 88 cycles (28.16us at 25MHz)
+; Low  for 12 cycles (3.84us at 25MHz)
+; Total period of 100 cycles (32us at 25MHz)
 
 
-
-; High for 44 cycles (28.16us)
-; Low for 6 cycles (3.84us)
-; Total period of 50 cycles (32us)
-
-; This saves 4 instructions and preloading of osr.
-
-
-
-
-;pull block              ; Pull from FIFO to OSR (only happens once)
-.wrap_target            ; Program wraps to here
+.wrap_target                    ; Program wraps to here
 
 ; ACTIVE + FRONTPORCH
-;mov x, osr              ; Copy value from OSR to x scratch register
-;activeporch:
-;   jmp x-- activeporch  ; Remain high in active mode and front porch
-
-; from vga_graphics.c  #define H_ACTIVE   655    // (active + frontporch - 1) - one cycle delay for mov
-; this should last for 41 cycles 
-
-    set x, 19 [1]              ; x = 19, giving 20 loops, with delay of 1 = 40 cycles + this cycle = 41
+    set x, 19 [1]               ; x = 19, giving 20 loops of 4 cycles = 80 cycles + this instruction = 82
 activeporch:
-   jmp x-- activeporch [3] ; Remain high in active mode and front porch
+   jmp x-- activeporch [3]      ; Remain high in active mode and front porch
 
 
 ; SYNC PULSE
 pulse:
-;    set pins, 0 [31]    ; Low for hsync pulse (32 cycles)
-;    nop [31]
-;    nop [31]
-
-    set pins, 0 [11]    ; Low for hsync pulse (6 cycles)
+    set pins, 0 [11]            ; Low for hsync pulse (12 cycles)
 
 
 ; BACKPORCH
 backporch:
-;    set pins, 1 [31]    ; High for back porch (32 cycles)
-;    set pins, 1 [12]    ; High for back porch (45 cycles)
-;    irq 0       [1]     ; Set IRQ to signal end of line (47 cycles)
-
-    set pins, 1 [4]    ; High for back porch (2 cycles)
-;    set x, 19          ; High for back porch (1 cycle) and x = 19, giving 20 loops, with delay of 1 = 40 cycles + this cycle = 41
-    irq 4              ; Set IRQ to signal end of line (3 cycles)
-;    nop
-
-;this make it worse
-;    set pins, 1    ; High for back porch (2 cycles)
-;    irq 0     [1]         ; Set IRQ to signal end of line (3 cycles)
-
+    set pins, 1 [4]             ; High for back porch (5 cycles)
+    irq 4                       ; Set IRQ to signal end of line (1 cycle)
 
 .wrap
-
-
 
 
 % c-sdk {
