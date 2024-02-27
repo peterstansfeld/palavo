@@ -3,7 +3,7 @@
 // #define VGA_USE_PIO_PROG 1 // uses original driver which uses hsync.pio, vsync.pio and rgb.pio
 // #define VGA_USE_PIO_PROG 2 // uses new driver which uses hsync2.pio, vsync2.pio and rgb2.pio
 
-#define VGA_USE_PIO_PROG 1
+#define VGA_USE_PIO_PROG 2
 
 #define VGA_TEST_PIO_PROG 2
 

@@ -61,11 +61,11 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
 
-const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
+const uint CAPTURE_PIN_BASE = HSYNC; // 16 = hsync, 17 = vsync // 22 = hsync2
 const uint CAPTURE_PIN_COUNT = 4;
 const uint CAPTURE_TRIGGER_PIN = VSYNC2; // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
-const uint CAPTURE_N_SAMPLES = SCREEN_WIDTH * 32; // enough for 32 screen width's worth of data
-const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 5 * 4 * 1; /*271.267*/ // was 5 * 4
+const uint CAPTURE_N_SAMPLES = SCREEN_WIDTH * 48; // enough for 48 screen width's worth of data
+const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 5 * 1 * 1; /*271.267*/ // was 5 * 4
 
 static inline uint bits_packed_per_word(uint pin_count) {
     // If the number of pins to be sampled divides the shift register size, we
@@ -131,8 +131,9 @@ void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     // level trigger
     pio_sm_exec(pio, sm, pio_encode_wait_gpio(1, LO_GRN));
 
-    for (int i = 0; i < (513 /*+ 10*/ /*+ 45*/); i++) {
-    // for (int i = 0; i < (513 + 45 /*+ 10*/ /*+ 45*/); i++) {
+    // for (int i = 0; i < (513 /*+ 10*/ /*+ 45*/); i++) {
+    for (int i = 0; i < (513 + 12 /*+ 10*/ /*+ 45*/); i++) {
+    // for (int i = 0; i < (513 + 50 /*+ 10*/ /*+ 45*/); i++) {
         pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(!trigger_level, CAPTURE_PIN_BASE));
         pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(trigger_level, CAPTURE_PIN_BASE));
     }
