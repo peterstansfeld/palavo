@@ -1,3 +1,10 @@
+
+// VGA_USE_PIO_PROG defines which VGA driver should be used to drive the VGA port
+// #define VGA_USE_PIO_PROG 1 // uses original driver which uses hsync.pio, vsync.pio and rgb.pio
+// #define VGA_USE_PIO_PROG 2 // uses new driver which uses hsync2.pio, vsync2.pio and rgb2.pio
+
+#define VGA_USE_PIO_PROG 1
+
 #define VGA_TEST_PIO_PROG 2
 
 #include <stdio.h>
@@ -128,19 +135,40 @@ void initVGA() {
     // Why not create these programs here? By putting the initialization function in
     // the pio file, then all information about how to use/setup that state machine
     // is consolidated in one place. Here in the C, we then just import and use it.
+    
+#if VGA_USE_PIO_PROG == 1
+    
     hsync_program_init(pio, hsync_sm, hsync_offset, HSYNC);
     vsync_program_init(pio, vsync_sm, vsync_offset, VSYNC);
     rgb_program_init(pio, rgb_sm, rgb_offset, LO_GRN);
 
+#elif VGA_USE_PIO_PROG == 2
+
+    hsync_program_init(pio, hsync_sm, hsync_offset, HSYNC2);
+    vsync_program_init(pio, vsync_sm, vsync_offset, VSYNC2);
+    rgb_program_init(pio, rgb_sm, rgb_offset, LO_GRN2);
+
+#endif
     
     // VGA test options
 
     #if VGA_TEST_PIO_PROG == 2
     
+#if VGA_USE_PIO_PROG == 1
+
     hsync2_program_init(pio_2, hsync2_sm, hsync2_offset, HSYNC2);
     vsync2_program_init(pio_2, vsync2_sm, vsync2_offset, VSYNC2);
     rgb2_program_init(pio_2, rgb2_sm, rgb2_offset, LO_GRN2 /*, HI_GRN2*/);     
-    
+
+#elif VGA_USE_PIO_PROG == 2
+
+    hsync2_program_init(pio_2, hsync2_sm, hsync2_offset, HSYNC);
+    vsync2_program_init(pio_2, vsync2_sm, vsync2_offset, VSYNC);
+    rgb2_program_init(pio_2, rgb2_sm, rgb2_offset, LO_GRN /*, HI_GRN2*/);     
+
+#endif
+
+
     #elif VGA_TEST_PIO_PROG == 3
     
     hsync3_program_init(pio_2, hsync3_sm, hsync3_offset, HSYNC2, VSYNC2); // this has to be the first (not true, it must have .org 0)
@@ -165,13 +193,21 @@ void initVGA() {
     channel_config_set_transfer_data_size(&c0, DMA_SIZE_8);              // 8-bit txfers
     channel_config_set_read_increment(&c0, true);                        // yes read incrementing
     channel_config_set_write_increment(&c0, false);                      // no write incrementing
+#if VGA_USE_PIO_PROG == 1
     channel_config_set_dreq(&c0, DREQ_PIO0_TX2) ;                        // DREQ_PIO0_TX2 pacing (FIFO)
+#elif VGA_USE_PIO_PROG == 2
+    channel_config_set_dreq(&c0, DREQ_PIO1_TX2) ;                        // DREQ_PIO1_TX2 pacing (FIFO)
+#endif
     channel_config_set_chain_to(&c0, rgb_chan_1);                        // chain to other channel
 
-    dma_channel_configure(
+     dma_channel_configure(
         rgb_chan_0,                 // Channel to be configured
         &c0,                        // The configuration we just created
+#if VGA_USE_PIO_PROG == 1
         &pio->txf[rgb_sm],          // write address (RGB PIO TX FIFO)
+#elif VGA_USE_PIO_PROG == 2
+        &pio_2->txf[rgb2_sm],          // write address (RGB PIO TX FIFO)
+#endif
         &vga_data_array,            // The initial read address (pixel color array)
         TXCOUNT,                    // Number of transfers; in this case each is 1 byte.
         false                       // Don't start immediately.

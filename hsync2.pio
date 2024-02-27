@@ -36,7 +36,9 @@
 ; This line below is no longer used. It has been moved to the sync pulse where it takes
 ; advantage of the sideset pin. Keep the line commented out and here as a reminder.
 ; Also, x must be initialised in the program_init c macro. Actually it shouldn't matter
-; unless x gets set to a massive number. 
+; if it's initialised to 0, as it would be after a reset, because 'jmp x--' test x for
+; for zero before decrementing.
+ 
 ;    set x, 19 [1]          side 1    ; x = 19, giving 20 loops of 4 cycles = 80 cycles + this instruction = 82
 activeporch:
    jmp x-- activeporch [3]  side 1    ; Remain high in active mode and front porch
@@ -49,7 +51,7 @@ pulse:
 
 ; BACKPORCH
 backporch:
-    nop [4]                 side 1    ; High for back porch (5 cycles). Shame can't make more use of this instruction.
+    nop [4]                 side 1    ; High for back porch (5 cycles). Shame we can't make more use of this instruction.
     irq 4 [2]               side 1    ; Set IRQ to signal end of line (1 cycle, + 2 more for having moved the 'set x, 19 [1]')
 
 .wrap
@@ -68,7 +70,7 @@ static inline void hsync2_program_init(PIO pio, uint sm, uint offset, uint pin) 
     // parameter to this function.
     sm_config_set_sideset_pins(&c, pin);
 
-    // Set clock division (div by 5 for 25 MHz state machine)
+    // Set clock division (div by 40 for 3.125 MHz state machine)
     sm_config_set_clkdiv(&c, 5 * 8) ;
 
     // Set this pin's GPIO function (connect PIO to the pad)
@@ -81,7 +83,7 @@ static inline void hsync2_program_init(PIO pio, uint sm, uint offset, uint pin) 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
 
-    // Initialise x
+    // Initialise x. See above comment before the 'activeporch' label
     pio_sm_exec(pio, sm, pio_encode_set(pio_x, 19)); // 'set x, 19' as we've moved it
 
     // Set the state machine running (commented out so can be synchronized w/ vsync)
