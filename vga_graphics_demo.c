@@ -50,6 +50,10 @@ char timetext[40];
 
 int g_mag = 0;
 int g_scrollx = 0;
+uint8_t channel;
+
+
+
 
 // Timer interrupt
 bool repeating_timer_callback(struct repeating_timer *t) {
@@ -65,7 +69,7 @@ const uint CAPTURE_PIN_BASE = HSYNC; // 16 = hsync, 17 = vsync // 22 = hsync2
 const uint CAPTURE_PIN_COUNT = 4;
 const uint CAPTURE_TRIGGER_PIN = VSYNC2; // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
 const uint CAPTURE_N_SAMPLES = SCREEN_WIDTH * 48; // enough for 48 screen width's worth of data
-const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 5 * 1 * 1; /*271.267*/ // was 5 * 4
+const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 5 * 4 * 1; /*271.267*/ // was 5 * 4
 
 static inline uint bits_packed_per_word(uint pin_count) {
     // If the number of pins to be sampled divides the shift register size, we
@@ -187,7 +191,19 @@ void uart_putcf(uart_inst_t *uart, const char *s, int c) {
     uart_puts(uart, str);
 }
 
-void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples, int magnification, int scrollx) {
+
+// writes a formatted integer to the VGA framebuffer
+void write_intf(const char *s, int c) {
+    char str[80];  
+    sprintf(str, s, c);
+    writeString(str);
+}
+
+#define MINIMAP_TOP 420
+
+
+void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples, int magnification, 
+                        int scrollx, bool show_numbers) {
     // Display the capture buffer in graphical form, like this:
     // 00: __--__--__--__--__--__--
     // 01: ____----____----____----
@@ -198,12 +214,39 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
 
     // Plot colours:  HSYNC, VSYNC, LO_GREEN, HI_GREEN, BLUE & RED
-    char colours[] = {YELLOW, ORANGE, DARK_GREEN, GREEN, BLUE, RED};
+    char colours[] = {YELLOW, ORANGE, MED_GREEN, GREEN, BLUE, RED};
 
     uint record_size_bits = bits_packed_per_word(pin_count); 
+
     int trace_height = 40;
     int y_padding = 4;
     int y = 51;
+
+    int max_screen_x = MIN(scrollx + mag_factor(SCREEN_WIDTH), n_samples);
+
+
+    if (!show_numbers) {
+        trace_height = 6;
+        y_padding = 1;
+        y = MINIMAP_TOP;
+
+        if (CAPTURE_N_SAMPLES >= SCREEN_WIDTH) {
+            // we need to zoom out
+            int factor = CAPTURE_N_SAMPLES / SCREEN_WIDTH;
+            magnification = -(factor - 1);
+        } else {
+            // we need to zoom in
+            int factor = SCREEN_WIDTH / CAPTURE_N_SAMPLES;
+            magnification = (factor - 1);
+        }
+
+        scrollx = 0;
+        max_screen_x = n_samples;
+    }
+
+
+
+
 
     char str[80];
 
@@ -294,7 +337,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
         // }
 
         // int max_screen_x = MIN(scrollx + mag_factor(640), n_samples);
-        int max_screen_x = MIN(scrollx + mag_factor(SCREEN_WIDTH), n_samples);
+        // int max_screen_x = MIN(scrollx + mag_factor(SCREEN_WIDTH), n_samples);
         // if ((pin == 0)) {
         //     uart_putcf(UART_ID, "scrollx: %d", scrollx); // 
         //     uart_putcf(UART_ID, "max_screen_x: %d", max_screen_x); // 
@@ -329,27 +372,29 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                     //     uart_putcf(UART_ID, "x: %d ", x);
                     // } 
                 // }
-                sprintf(str,"%d", i - last_i);
-                int str_width = strlen(str) * font_width;
+                if (show_numbers) {
+                    sprintf(str,"%d", i - last_i);
+                    int str_width = strlen(str) * font_width;
 
 
-                // if ((pin == 0) && (i - last_i == 25)) uart_putc(UART_ID, '~');
+                    // if ((pin == 0) && (i - last_i == 25)) uart_putc(UART_ID, '~');
 
 
-                if (str_width < (x - last_x)) { // todo - undo this line - don't delet
-                
-                    cursor_x = (last_x + ((x - last_x) / 2)) - (str_width / 2);
-                    if (cursor_x < 0) {
-                        cursor_x = 0;
-                        if (cursor_x + str_width >= x) {
-                            cursor_x = x - str_width - 1;
+                    if (str_width < (x - last_x)) { // todo - undo this line - don't delet
+                    
+                        cursor_x = (last_x + ((x - last_x) / 2)) - (str_width / 2);
+                        if (cursor_x < 0) {
+                            cursor_x = 0;
+                            if (cursor_x + str_width >= x) {
+                                cursor_x = x - str_width - 1;
+                            }
                         }
-                    }
-                    // cursor_x = (last_i + ((i - last_i) / 2)) - (str_width / 2) - scrollx;
-                    // if ((cursor_x >= 0) && (cursor_x - str_width < 640)) {
-                    if ((cursor_x - str_width < SCREEN_WIDTH)) {
-                        setCursor(cursor_x, y + (trace_height / 2) - (font_height / 2));
-                        writeString(str);
+                        // cursor_x = (last_i + ((i - last_i) / 2)) - (str_width / 2) - scrollx;
+                        // if ((cursor_x >= 0) && (cursor_x - str_width < 640)) {
+                        if (cursor_x - str_width < SCREEN_WIDTH) {
+                            setCursor(cursor_x, y + (trace_height / 2) - (font_height / 2));
+                            writeString(str);
+                        }
                     }
                 }
                 last_sample = sample;
@@ -381,7 +426,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                 // last_pixel_x = x;
             // }
 
-            if (last_sample != sample) {
+            if (show_numbers && (last_sample != sample)) {
 
 
                 // uart_putc(UART_ID, '$');
@@ -516,7 +561,6 @@ int measure(const uint32_t *buf) {
     int i;
 
     int green_start;
-    int vsync_end;
 
     for (i = 0; i < CAPTURE_N_SAMPLES; i++) {
         uint bit_index = pin + i * CAPTURE_PIN_COUNT;
@@ -534,6 +578,8 @@ int measure(const uint32_t *buf) {
         
     }
 
+    int hsync_end;
+
     pin = 0;
 
     for (i = green_start; i >= 0; i--) {
@@ -545,14 +591,14 @@ int measure(const uint32_t *buf) {
         uint sample = buf[word_index] & word_mask ? 1 :0;
         
         if (!sample) {
-            vsync_end = i + 1; // this sample is still high (we're going backwards)
-            uart_putcf(UART_ID, "vsync_end: %d\n", vsync_end);
+            hsync_end = i + 1; // this sample is still high (we're going backwards)
+            uart_putcf(UART_ID, "hsync_end: %d\n", hsync_end);
             break;
         }
         
     }
 
-    uart_putcf(UART_ID, "vsync_end..green_start: %d\n", green_start - (vsync_end + 0));
+    uart_putcf(UART_ID, "hsync_end..green_start: %d\n", green_start - (hsync_end + 0));
 
     pin = 1; // vsync
     // uint record_size_bits = bits_packed_per_word(CAPTURE_PIN_COUNT);
@@ -579,7 +625,7 @@ int measure(const uint32_t *buf) {
     }
 
 
-    // int vsync_end;
+    int vsync_end;
 
     for (i = vsync_start; i < CAPTURE_N_SAMPLES; i++) {
         uint bit_index = pin + i * CAPTURE_PIN_COUNT;
@@ -601,7 +647,7 @@ int measure(const uint32_t *buf) {
 
     pin = 0; // hsync
 
-    int hsync_end;
+    // int hsync_end;
 
     for (i = vsync_end; i >= 0; i--) {
         uint bit_index = pin + i * CAPTURE_PIN_COUNT;
@@ -644,29 +690,394 @@ int measure(const uint32_t *buf) {
 */
 
     // uart_putcf(UART_ID, "p0..p2: %d\n", p2 - (p0 + 1));
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     return 0;
+}
 
+
+
+int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next) {
+    // currently measures the time between hsyng going high and rgb going high on the first line of the VGA frame
+    uart_puts(UART_ID, "\nFinding transition...\n");
+
+
+    uint record_size_bits = bits_packed_per_word(CAPTURE_PIN_COUNT);
+
+    int i;
+
+    int green_start;
+
+    uint first_sample;
+
+    int next_sample = from_sample;
+
+    
+    if (next) {
+    
+        for (i = from_sample; i < CAPTURE_N_SAMPLES; i++) {
+            uint bit_index = pin + i * CAPTURE_PIN_COUNT;
+            uint word_index = bit_index / record_size_bits;
+            // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
+            uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
+
+
+            uint sample = buf[word_index] & word_mask ? 1 :0;
+            
+            if (i == from_sample) {
+                first_sample = sample;
+            }
+
+            if (sample != first_sample) {
+                next_sample = i;
+                uart_putcf(UART_ID, "next_sample: %d\n", next_sample);
+                break;
+            }
+            
+        }
+
+    } else {
+
+        for (i = from_sample - 1; i >= 0; i--) {
+            uint bit_index = pin + i * CAPTURE_PIN_COUNT;
+            uint word_index = bit_index / record_size_bits;
+            // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
+            uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
+
+
+            uint sample = buf[word_index] & word_mask ? 1 :0;
+            
+            if (i == from_sample - 1) {
+                first_sample = sample;
+            }
+
+            if (sample != first_sample) {
+                next_sample = i + 1;
+                uart_putcf(UART_ID, "next_sample: %d\n", next_sample);
+                break;
+            }
+            
+        }
+
+    }
+
+
+
+
+    return next_sample;
+}
+
+
+
+
+// Demonstrates the graphics primitives.
+void demo() {
+    // color chooser
+    static char color_index = 0 ;
+   // position of the disc primitive
+    static short disc_x = 0 ;
+    // position of the box primitive
+    static short box_x = 0 ;
+    // position of vertical line primitive
+    static short Vline_x = 350;
+    // position of horizontal line primitive
+    static short Hline_y = 250;
+    // circle radii:
+    static short circle_x = 0 ;
+
+    // Modify the color chooser
+    if (color_index ++ == 15) color_index = 0 ;
+
+    // A row of filled circles
+    fillCircle(disc_x, 100, 20, color_index);
+    disc_x += 35 ;
+    if (disc_x > SCREEN_WIDTH) disc_x = 0;
+
+    // Concentric empty circles
+    drawCircle(320, 200, circle_x, color_index);
+    circle_x += 1 ;        
+    if (circle_x > 130) circle_x = 0;
+
+    // A series of rectangles
+    drawRect(10, 300, box_x, box_x, color_index);
+    box_x += 5 ;
+    if (box_x > 195) box_x = 10;
+
+    // Random lines
+    drawLine(210+(rand()&0x7f), 350+(rand()&0x7f), 210+(rand()&0x7f), 
+            350+(rand()&0x7f), color_index);
+
+    // Vertical lines
+    drawVLine(Vline_x, 300, (Vline_x>>2), color_index);
+    Vline_x += 2 ;
+    if (Vline_x > 620) Vline_x = 350;
+    
+    // Horizontal lines
+    drawHLine(400, Hline_y, 150, color_index);
+    Hline_y += 2 ;
+    if (Hline_y > 400) Hline_y = 240;
+}
+
+ enum UI_COMMANDS {
+    UIC_NONE,
+    UIC_LEFT,
+    UIC_RIGHT,
+    UIC_CTRL_LEFT,
+    UIC_CTRL_RIGHT,
+    UIC_HOME,
+    UIC_END,
+    UIC_EQUALS,
+    UIC_PLUS,
+    UIC_MINUS,
+    UIC_Z,
+    UIC_M,
+    UIC_C,
+    UIC_SPACEBAR,
+    UIC_UP,
+    UIC_DOWN,
+    UIC_PAGE_UP,
+    UIC_PAGE_DOWN
+ };
+
+
+#define TOOLBAR_LEFT 1
+#define TOOLBAR_WIDTH SCREEN_WIDTH - (2 * TOOLBAR_LEFT)
+#define TOOLBAR_TOP SCREEN_HEIGHT - 1 - 8
+#define TOOLBAR_HEIGHT 8
+#define TOOL_BAR_TEXT_PADDING 1
+
+
+#define TOOLBAR_COLOR BLUE
+
+#define TOOLBAR_ITEM_PADDING 2
+#define CHANNEL_NO_LEFT (SCREEN_WIDTH / 2)
+#define CHANNEL_NO_WIDTH 30 + TOOLBAR_ITEM_PADDING
+
+void draw_channel_no() {
+    fillRect(CHANNEL_NO_LEFT, TOOLBAR_TOP, CHANNEL_NO_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    setCursor(CHANNEL_NO_LEFT + 1, TOOLBAR_TOP);
+    setTextColor(WHITE);
+    setTextSize(1);
+    write_intf("ch %d", channel);
+}
+
+
+#define MAG_LEFT CHANNEL_NO_LEFT + CHANNEL_NO_WIDTH + TOOLBAR_ITEM_PADDING
+#define MAG_WIDTH 60 + TOOLBAR_ITEM_PADDING
+
+void draw_magnification() {
+    fillRect(MAG_LEFT, TOOLBAR_TOP, MAG_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    setCursor(MAG_LEFT + 1, TOOLBAR_TOP);
+    setTextColor(WHITE);
+    setTextSize(1);
+
+    writeString("zoom ");
+    if (g_mag < 0) {
+        write_intf("1:%d", abs(g_mag - 1));
+    } else {
+        write_intf("%d:1", g_mag + 1);
+    }
+}
+
+
+void draw_toolbar() {
+    fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    draw_channel_no();
+    draw_magnification();
+}
+
+
+void set_toolbar_text() {
+    setCursor(TOOLBAR_LEFT + TOOL_BAR_TEXT_PADDING, TOOLBAR_TOP);
+    setTextColor(WHITE);
+    setTextSize(1);
+}
+
+
+//#define TOOLBAR_HINT_LEFT (SCREEN_WIDTH -2) / 2 
+
+#define TOOLBAR_HINT_WIDTH (TOOLBAR_WIDTH) / 2 
+
+void clear_tool_bar_hint() {
+    set_toolbar_text();
+    fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_HINT_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    setCursor(2, SCREEN_HEIGHT - 1 - 8);
+    setTextColor(WHITE);
+    setTextSize(1);
+}
+
+
+uint check_keyboard() {
+
+    uint ui_command = UIC_NONE;
+
+    if ((last_uart_char == 27) || uart_is_readable(UART_ID)) {
+
+        
+        clear_tool_bar_hint();
+        set_toolbar_text();
+        // fillRect(1, SCREEN_HEIGHT - 1 - 8, SCREEN_WIDTH - 2, 8, BLUE);
+        // setCursor(2, SCREEN_HEIGHT - 1 - 8);
+        // setTextColor(WHITE);
+        // setTextSize(1);
+
+        uint8_t ch = last_uart_char;
+
+        if (ch != 27) {
+            ch = uart_getc(UART_ID);
+            last_uart_char = ch;
+        }
+        
+        #define ESCAPE_SEQ_LEN 80
+        uint8_t escape_seq[ESCAPE_SEQ_LEN + 1];
+        escape_seq[0] = 0;
+
+        char str[80];
+        sprintf(str,"%d ", ch);
+        writeString(str);
+        if (uart_is_writable(UART_ID)) {
+            uart_putc(UART_ID, ch);
+        }
+
+
+        if (ch == 27 /* ESC */) {
+            ch = 0;
+            uint8_t noofchars = 0;
+        
+            // Wait up to 2 byte times, which is (2 * 10 * 1,000,000) / 115,200 = 1737 uS.
+            // This had me confused for ages. It seemed to make no difference whether
+            // the "us" parameter was 1 or 1800. Turns out that pressing the Esc
+            // key in minicom (serial terminal) has a little delay before it is transmitted
+            // unlike any other key. Thank goodness for LEDs on the debug probe.
+            while (uart_is_readable_within_us(UART_ID, 1800)) {                    
+                ch = uart_getc(UART_ID);
+                last_uart_char = ch;
+
+                if (ch == 27 /* ESC */) {
+                    break;
+                
+                } else {   
+            
+                    // possibly build up string here for testing later?
+                    if (noofchars < ESCAPE_SEQ_LEN){
+                        escape_seq[noofchars] = ch;
+                        escape_seq[noofchars + 1] = 0;
+                    }
+                    noofchars += 1;
+                    
+                    sprintf(str,"%d ", ch);
+                    writeString(str);
+                    if (uart_is_writable(UART_ID)) {
+                        uart_putc(UART_ID, ch);
+                    }
+                }
+            }
+            
+            if (strlen(escape_seq) == 0) {
+                // Must have been caused by a single Esc key press
+                writeString("esc");
+                last_uart_char = 0;
+            } else {
+                writeString(escape_seq);
+                writeString(" ");
+            }
+            
+            if (strlen(escape_seq) == 2) {
+                if ((char)escape_seq[0] == '[') {
+                    switch ((char)escape_seq[1]) {
+                        case 'A':
+                            writeString("up");
+                            ui_command = UIC_DOWN;
+                            break;
+                        case 'B':
+                            writeString("down");
+                            ui_command = UIC_UP;
+                            break;
+                        case 'C':
+                            ui_command = UIC_RIGHT;
+                            break;
+                        case 'D':
+                            ui_command = UIC_LEFT;
+                            break;
+                        default:
+                            break;
+                    }
+                } else if ((char)escape_seq[0] == 'O') {
+                    if ((char)escape_seq[1] == 'F') {
+                        ui_command = UIC_END;
+                    }
+                }
+            } else if (strlen(escape_seq) == 3) {
+                if ((char)escape_seq[2] == '~') {
+                    if ((char)escape_seq[1] == '1') {
+                        ui_command = UIC_HOME;
+                    
+                    } else if ((char)escape_seq[1] == '5') {
+                        writeString("page up");
+                        ui_command = UIC_PAGE_UP;
+
+                    } else if ((char)escape_seq[1] == '6') {
+                        writeString("page down");
+                        ui_command = UIC_PAGE_DOWN;
+                    }
+                }
+            } else if (strlen(escape_seq) == 5) {
+                if (strcmp(escape_seq, "[1;5D") == 0) {
+                        ui_command = UIC_CTRL_LEFT;
+
+                } else if (strcmp(escape_seq, "[1;5C") == 0) {
+                    ui_command = UIC_CTRL_RIGHT;
+                }
+            }
+
+        } else if ((char)ch == ' ') {
+//            pause = !pause; // toggle pause
+            ui_command = UIC_SPACEBAR;
+        } else if ((char)ch == '-') {
+            ui_command = UIC_MINUS;
+        } else if ((char)ch == '+' ) {
+            ui_command = UIC_PLUS;
+        } else if ((char)ch == '=') {
+            ui_command = UIC_EQUALS;
+        } else if ((char)ch == 'c') {
+            ui_command = UIC_C;
+        } else if ((char)ch == 'z') {
+            ui_command = UIC_Z;
+        } else if ((char)ch == 'm') {
+            ui_command = UIC_M;
+        /*    
+        } else if ((char)ch == 'n') {
+            ui_command = UIC_NEXT_TRANSITION;
+        } else if ((char)ch == 'p') {
+            ui_command = UIC_PREV_TRANSITION;
+        */
+        }
+
+    }
+    return ui_command;
+}
+
+
+void draw_minimap_indicator() {
+    int mini_x = (g_scrollx * SCREEN_WIDTH) / CAPTURE_N_SAMPLES; 
+    int mini_w = (mag_factor(SCREEN_WIDTH * SCREEN_WIDTH) / CAPTURE_N_SAMPLES) + 1; // add one to round up and/or ensure a visible indicator 
+
+    drawHLine(0, MINIMAP_TOP - 2, SCREEN_WIDTH, BLACK);
+    drawHLine(mini_x, MINIMAP_TOP - 2, mini_w, WHITE);
+    
+    // uart_putcf(UART_ID, "mini_x: %d; ", mini_x);
+    // uart_putcf(UART_ID, "mini_w: %d\n", mini_w);
+}
+
+
+void set_scroll_x(int x) {
+    g_scrollx = x;
+    draw_minimap_indicator();
+}
+
+
+void set_mag(int mag) {
+    g_mag = mag;
+    draw_magnification();
+    draw_minimap_indicator();
 }
 
 
@@ -717,22 +1128,8 @@ int main() {
 
     // animation pause
     bool pause = true;
-
-    // circle radii:
-    short circle_x = 0 ;
-
-    // color chooser
-    char color_index = 0 ;
-
-    // position of the disc primitive
-    short disc_x = 0 ;
-    // position of the box primitive
-    short box_x = 0 ;
-    // position of vertical line primitive
-    short Vline_x = 350;
-    // position of horizontal line primitive
-    short Hline_y = 250;
-
+ 
+ 
     // Draw some filled rectangles
     fillRect(64, 0, 176, 50, BLUE); // blue box
     fillRect(250, 0, 176, 50, RED); // red box:
@@ -740,6 +1137,7 @@ int main() {
     
 //    drawVLine(Vline_x, 300, (Vline_x>>2), color_index);
 
+    drawHLine(0, 0, 16, WHITE);
     drawVLine(0, 0, 16, WHITE);
 //    drawVLine(2, 0, 16, WHITE);
 
@@ -757,11 +1155,13 @@ int main() {
     drawVLine(639, SCREEN_HEIGHT - 16, 16, WHITE);
     drawHLine(SCREEN_WIDTH - 16, SCREEN_HEIGHT - 1, 16, WHITE);
 
+    draw_toolbar();
+
     // drawHLine(630, 480 - 1, 1, WHITE);
 
 
     for (int i = 0; i < 16; i++){
-        drawPixel(15 - i, 0, i); // test all colours in first horizontal line following sync
+        drawPixel(16 + i , 0, i); // test all colours in first horizontal line following sync
     }
 
     // drawPixel(0, 0, WHITE);
@@ -810,48 +1210,19 @@ int main() {
     dma_channel_wait_for_finish_blocking(dma_chan);
 
     // print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
-    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
+    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx, 1);
 
+    // plot a fixed minimap of the 
+    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx, 0);
 
     // fillRect(0, 0, 640, 480, WHITE); // green box
 
     while(true) {
 
         if (!pause) {
-
-            // Modify the color chooser
-            if (color_index ++ == 15) color_index = 0 ;
-
-            // A row of filled circles
-            fillCircle(disc_x, 100, 20, color_index);
-            disc_x += 35 ;
-            if (disc_x > SCREEN_WIDTH) disc_x = 0;
-
-            // Concentric empty circles
-            drawCircle(320, 200, circle_x, color_index);
-            circle_x += 1 ;        
-            if (circle_x > 130) circle_x = 0;
-
-            // A series of rectangles
-            drawRect(10, 300, box_x, box_x, color_index);
-            box_x += 5 ;
-            if (box_x > 195) box_x = 10;
-
-            // Random lines
-            drawLine(210+(rand()&0x7f), 350+(rand()&0x7f), 210+(rand()&0x7f), 
-                    350+(rand()&0x7f), color_index);
-
-            // Vertical lines
-            drawVLine(Vline_x, 300, (Vline_x>>2), color_index);
-            Vline_x += 2 ;
-            if (Vline_x > 620) Vline_x = 350;
-            
-            // Horizontal lines
-            drawHLine(400, Hline_y, 150, color_index);
-            Hline_y += 2 ;
-            if (Hline_y > 400) Hline_y = 240;
-
+            demo();
         }
+
         // Timing text
         if (time_accum != time_accum_old) {
             setTextColor(WHITE) ;
@@ -863,239 +1234,168 @@ int main() {
             writeString(timetext) ;
         }
 
-        /*
+        uint ui_command = check_keyboard();
+
+        if (ui_command) {
+            bool plot_required = false;
+            switch (ui_command) {
+
+                case UIC_SPACEBAR:
+                    pause = !pause;
+                    break;
+
+                case UIC_CTRL_RIGHT:
+                case UIC_CTRL_LEFT:
+                    writeString(" next transition");
+                    set_scroll_x(find_transition(capture_buf, channel, g_scrollx, ui_command == UIC_CTRL_RIGHT));
+                    plot_required = 1;
+                    break;
+
+                case UIC_HOME:
+                    writeString("home");
+                    set_scroll_x(0);
+                    plot_required = 1;
+                    break;
+
+                case UIC_END:
+                    writeString("end");
+                    // it was crashing here for some reason
+                    //writeString(" debug");
+                    set_scroll_x(MAX(CAPTURE_N_SAMPLES - (mag_factor(SCREEN_WIDTH)), 0));
+                    // if (g_scrollx < 0) {
+                    //     g_scrollx = 0;
+                    // }
+                    plot_required = 1;
+                    break;
+
+                case UIC_RIGHT:
+                    writeString("right");
+                    set_scroll_x(g_scrollx + 1);
+                    plot_required = 1;
+                    break;
         
-        // cant do this getchar() is a blocking function
-        int uart_char = getchar();
-        if (uart_char != EOF) {
-            // a char has been received
-            if ((char)uart_char == ' ') {
-                pause = !pause; // toggle pause
-                printf(" SPACE ");
-            } else {
-                putchar(uart_char);
-            }
-        }
-        */
+                case UIC_LEFT:
+                    writeString("left");
 
-// cant do this getchar() is a blocking function
-
-        if ((last_uart_char == 27) || uart_is_readable(UART_ID)) {
-            
-            fillRect(1, SCREEN_HEIGHT - 1 - 8, SCREEN_WIDTH - 2, 8, BLUE);
-            setCursor(2, SCREEN_HEIGHT - 1 - 8);
-            setTextColor(WHITE);
-            setTextSize(1);
-
-            uint8_t ch = last_uart_char;
-
-            if (ch != 27) {
-                ch = uart_getc(UART_ID);
-                last_uart_char = ch;
-            }
-            
-            #define ESCAPE_SEQ_LEN 80
-            uint8_t escape_seq[ESCAPE_SEQ_LEN + 1];
-            escape_seq[0] = 0;
-
-            char str[80];
-            sprintf(str,"%d ", ch);
-            writeString(str);
-            if (uart_is_writable(UART_ID)) {
-                uart_putc(UART_ID, ch);
-            }
-
-
-            if (ch == 27 /* ESC */) {
-                ch = 0;
-                uint8_t noofchars = 0;
-            
-                // Wait up to 2 byte times, which is (2 * 10 * 1,000,000) / 115,200 = 1737 uS.
-                // This had me confused for ages. It seemed to make no difference whether
-                // the "us" parameter was 1 or 1800. Turns out that pressing the Esc
-                // key in minicom (serial terminal) has a little delay before it is transmitted
-                // unlike any other key. Thank goodness for LEDs on the debug probe.
-                while (uart_is_readable_within_us(UART_ID, 1800)) {                    
-                    ch = uart_getc(UART_ID);
-                    last_uart_char = ch;
-
-                    if (ch == 27 /* ESC */) {
-                        break;
-                    
-                    } else {   
-                
-                        // possibly build up string here for testing later?
-                        if (noofchars < ESCAPE_SEQ_LEN){
-                            escape_seq[noofchars] = ch;
-                            escape_seq[noofchars + 1] = 0;
-                        }
-                        noofchars += 1;
-                        
-                        sprintf(str,"%d ", ch);
-                        writeString(str);
-                        if (uart_is_writable(UART_ID)) {
-                            uart_putc(UART_ID, ch);
-                        }
+                    if (g_scrollx > 0) {
+                        set_scroll_x(MAX(g_scrollx - 1, 0));
+                        plot_required = 1;
                     }
-                }
-                
-                if (strlen(escape_seq) == 0) {
-                    // Must have been caused by a single Esc key press
-                    writeString("esc");
-                    last_uart_char = 0;
-                } else {
-                    writeString(escape_seq);
-                    writeString(" ");
-                }
-                
-                if (strlen(escape_seq) == 2) {
-                    if ((char)escape_seq[0] == '[') {
-                        switch ((char)escape_seq[1]) {
-                            case 'A':
-                                writeString("up");
-                                break;
-                            case 'B':
-                                writeString("down");
-                                break;
-                            case 'C':
-                                writeString("right");
-                                // uart_putcf(UART_ID,"gs:%d ", g_scrollx)
-                                // g_scrollx += mag_factor(1); // 10% of the screen width
-                                g_scrollx += 1;
-                                // uart_putcf(UART_ID,"gs:%d ", g_scrollx);                              
-                                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
-                                break;
-                            case 'D':
-                                writeString("left");
-                                if (g_scrollx > 0) {
-                                    // g_scrollx -= mag_factor(1); // 10% of the screen width                            
-                                    g_scrollx -= 1;
-                                    if (g_scrollx < 0) {
-                                        g_scrollx = 0;
-                                    }
-                                    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
-                                }
-                                break;
-                            default:
-                                break;
-                        }
-                    } else if ((char)escape_seq[0] == 'O') {
-                        if ((char)escape_seq[1] == 'F') {
-                            writeString("end");
-                            // it was crashing here for some reason
-                            //writeString(" debug");
-                            
-                            g_scrollx = CAPTURE_N_SAMPLES - (mag_factor(SCREEN_WIDTH));
-                            if (g_scrollx < 0) {
-                                g_scrollx = 0;
-                            }
+                    break;
 
-                            plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
-                            
-                        }
+                case UIC_PAGE_UP:
+                    if (g_scrollx > 0) {
+                        set_scroll_x(MAX(g_scrollx - mag_factor(SCREEN_WIDTH), 0));
+                        plot_required = 1;
                     }
-                } else if (strlen(escape_seq) == 3) {
-                    if ((char)escape_seq[2] == '~') {
-                        if ((char)escape_seq[1] == '1') {
-                            writeString("home");
-                            g_scrollx = 0;
-                            plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
-                        
-                        } else if ((char)escape_seq[1] == '5') {
-                            writeString("page up");
-                        } else if ((char)escape_seq[1] == '6') {
-                            writeString("page down");
-                        }
-                    }
-                } else if (strlen(escape_seq) == 5) {
-                    if (strcmp(escape_seq, "[1;5D") == 0) {
-                            writeString("ctrl-left");
-                            if (g_scrollx > 0) {
-                                g_scrollx -= mag_factor(SCREEN_WIDTH); // 100% of the screen width
-                                if (g_scrollx < 0) {
-                                    g_scrollx = 0;
-                                }
-                                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
-                            }
+                    break;
 
+                case UIC_PAGE_DOWN:
+                    set_scroll_x(g_scrollx + mag_factor(SCREEN_WIDTH)); // 100% of the screen width
+                    plot_required = 1;
+                    break;
 
-
-                    } else if (strcmp(escape_seq, "[1;5C") == 0) {
-                            writeString("ctrl-right");
-                            g_scrollx += mag_factor(SCREEN_WIDTH); // 100% of the screen width                                
-                            plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
-                    }
-                }
-
-            } else if ((char)ch == ' ') {
-                pause = !pause; // toggle pause
-
-            } else if (((char)ch == '-') || ((char)ch == '+') || ((char)ch == '=')) {
-                if ((char)ch == '-') {
+                case UIC_MINUS:
                     writeString("zoom out");
-                    g_mag-= 1;
-                } else if ((char)ch == '+' ) {
+                    // g_mag-= 1;
+                    set_mag(g_mag - 1);
+                    plot_required = 1;
+                    // draw_magnification();
+                    break;
+
+                case UIC_PLUS:
                     writeString("zoom in");
-                    g_mag+= 1;
-                } else {
-                    writeString("no zoom");
-                    g_mag = 0;
-                }
+                    // g_mag+= 1;
+                    set_mag(g_mag + 1);
+                    plot_required = 1;
+                    // draw_magnification();
+                    break;
 
-                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
+                case UIC_EQUALS:
+                    writeString("zoom in");
+                    // g_mag = 0;
+                    set_mag(0);
+                    
+                    plot_required = 1;
+                    // draw_magnification();
+                    break;
 
-            } else if ((char)ch == 'c') {
+                case UIC_M:
+                    // measure
+                    writeString("measure ");
+                    g_scrollx = measure(capture_buf);
+                    // g_scrollx = 900;
+                    // g_mag = 0;
+                    set_mag(0);
+                    plot_required = 1;
+                    break;
+
+                case UIC_Z:
+                    writeString("zoom to fill");
+                    if (CAPTURE_N_SAMPLES >= SCREEN_WIDTH) {
+                        // we need to zoom out
+                        int factor = CAPTURE_N_SAMPLES / SCREEN_WIDTH;
+                        set_mag(-(factor - 1));
+                    } else {
+                        // we need to zoom in
+                        int factor = SCREEN_WIDTH / CAPTURE_N_SAMPLES;
+                        // g_mag = (factor - 1);
+                        set_mag(factor - 1);
+                    }
+                    set_scroll_x(0);
+                    plot_required = 1;
+                    // draw_magnification();
+                    break;
+
+                case UIC_C:
+                    // printf("Arming trigger (Ctrl-C to exit)\n");
+
+                    uart_puts(UART_ID, "Arming trigger...\n");
+                    logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, CAPTURE_TRIGGER_PIN, false);
+
+                    // each bit on a uart travels at 115200 bits per second
+                    // the clock goes at 125,000,000 hz (I think)
+
+                    // so if we want to take, say, 4 samples per bit then we need to sample at  4 * 115200 = 460800 bps
+                    // 125,000,000 / 460,800 = 271.267
+
+                    // The logic analyser should have started capturing as soon as it saw the
+                    // first transition. Wait until the last sample comes in from the DMA.
+                    dma_channel_wait_for_finish_blocking(dma_chan);
 
 
-                // printf("Arming trigger (Ctrl-C to exit)\n");
+                    plot_required = 1;
+                    break;
 
-                uart_puts(UART_ID, "Arming trigger...\n");
-                logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, CAPTURE_TRIGGER_PIN, false);
+                case UIC_DOWN:
+                    if (channel > 0) {
+                        channel-= 1;
+                        // show the channel number somewhere - todo
+                        // writeString(" channel down");
+                        draw_channel_no();
+                    }
+                    break;
 
-                // each bit on a uart travels at 115200 bits per second
-                // the clock goes at 125,000,000 hz (I think)
+                case UIC_UP:
+                    if (channel < CAPTURE_PIN_COUNT - 1) {
+                        channel+= 1;
+                        // show the channel number somewhere - todo
+                        // writeString(" channel up");
+                        draw_channel_no();                    }
+                    break;
 
-                // so if we want to take, say, 4 samples per bit then we need to sample at  4 * 115200 = 460800 bps
-                // 125,000,000 / 460,800 = 271.267
 
-                // The logic analyser should have started capturing as soon as it saw the
-                // first transition. Wait until the last sample comes in from the DMA.
-                dma_channel_wait_for_finish_blocking(dma_chan);
-
-                // print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
-                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
-
-            } else if ((char)ch == 'z') {
-                // zoom in or out to fill the screen
-                writeString("zoom to fill");
-
-                if (CAPTURE_N_SAMPLES >= SCREEN_WIDTH) {
-                    // we need to zoom out
-                    int factor = CAPTURE_N_SAMPLES / SCREEN_WIDTH;
-                    g_mag = -(factor - 1);
-
-                } else {
-                    // we need to zoom in
-                    int factor = SCREEN_WIDTH / CAPTURE_N_SAMPLES;
-                    g_mag = (factor - 1);
-                }
-                g_scrollx = 0;
-                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
-            
-            } else if ((char)ch == 'm') {
-                // measure
-                writeString("measure ");
-                g_scrollx = measure(capture_buf);
-                // g_scrollx = 900;
-                g_mag = 0;
-                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
             }
-            
-        }
-        
 
-        // A brief nap
-        sleep_ms(10) ;
+            if (plot_required) {
+                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx, 1);
+            }
+
+        } else {
+            // A brief nap
+            sleep_ms(10) ;
+        }
+
 
         // uart_putc(UART_ID, 'B');
 

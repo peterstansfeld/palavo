@@ -14,11 +14,11 @@
     wait 1 irq 5 [3]	      	; Wait for vsync active mode (starts 5 cycles after execution)
 
 colorout:
-	out pins, 4	[4]			    ; Push out to pins (first pixel)
-	out pins, 4	[3]			    ; Push out to pins (next pixel)
+    out pins, 4	[4]			    ; Push out to pins (first pixel)
+    out pins, 4	[3]			    ; Push out to pins (next pixel)
 ;    set pins, 0xf [4]           ; test with white
 ;    set pins, 0xd [3]           ; test with pink
-	jmp x-- colorout       		; Stay here thru horizontal active mode
+    jmp x-- colorout       		; Stay here thru horizontal active mode
 
     set pins, 0x0       		; Zero RGB pins in blanking
 
