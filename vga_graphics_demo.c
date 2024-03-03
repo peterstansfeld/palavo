@@ -83,13 +83,27 @@ static inline uint bits_packed_per_word(uint pin_count) {
 void logic_analyser_init(PIO pio, uint sm, uint pin_base, uint pin_count, float div) {
     // Load a program to capture n pins. This is just a single `in pins, n`
     // instruction with a wrap.
-    uint16_t capture_prog_instr = pio_encode_in(pio_pins, pin_count);
-    struct pio_program capture_prog = {
-            .instructions = &capture_prog_instr,
-            .length = 1,
-            .origin = -1
-    };
-    uint offset = pio_add_program(pio, &capture_prog);
+    static uint16_t capture_prog_instr;
+    static struct pio_program capture_prog;
+    static uint offset;
+
+    if (capture_prog_instr) {
+        // We need to re-initialise, presumably to change the pin base, the pin count,
+        // or the frequency divisor, so I believ we need to remove the old program first.
+        pio_remove_program(pio, &capture_prog, offset);
+    // } else {
+        // This should be the first time we've called this, as capture_prog_instr is
+        // a static variable, and static variables are zeroed on reset, which means
+        // we don't need to do anything here, so let's comment it out.
+    }
+
+    capture_prog_instr = pio_encode_in(pio_pins, pin_count);
+
+    capture_prog.instructions = &capture_prog_instr;
+    capture_prog.length = 1;
+    capture_prog.origin = -1;
+
+    offset = pio_add_program(pio, &capture_prog);
 
     // Configure state machine to loop over this `in` instruction forever,
     // with autopush enabled.
@@ -200,7 +214,8 @@ void write_intf(const char *s, int c) {
 }
 
 #define MINIMAP_TOP 420
-
+#define MINIMAP_HEIGHT 6
+#define MINIMAP_PADDING 1
 
 void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples, int magnification, 
                         int scrollx, bool show_numbers) {
@@ -226,8 +241,8 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
 
     if (!show_numbers) {
-        trace_height = 6;
-        y_padding = 1;
+        trace_height = MINIMAP_HEIGHT;
+        y_padding = MINIMAP_PADDING;
         y = MINIMAP_TOP;
 
         if (CAPTURE_N_SAMPLES >= SCREEN_WIDTH) {
@@ -834,7 +849,8 @@ void demo() {
     UIC_UP,
     UIC_DOWN,
     UIC_PAGE_UP,
-    UIC_PAGE_DOWN
+    UIC_PAGE_DOWN,
+    UIC_0
  };
 
 
@@ -1043,7 +1059,9 @@ uint check_keyboard() {
             ui_command = UIC_Z;
         } else if ((char)ch == 'm') {
             ui_command = UIC_M;
-        /*    
+        } else if ((char)ch == '0') {
+            ui_command = UIC_0;
+        /*
         } else if ((char)ch == 'n') {
             ui_command = UIC_NEXT_TRANSITION;
         } else if ((char)ch == 'p') {
@@ -1126,10 +1144,12 @@ int main() {
     // logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, 125000000 / (115200 * 4) /*271.267*/);
     logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_SAMPLE_FREQ_DIVISOR);
 
+    // logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, 5); // this works
+
     // animation pause
     bool pause = true;
- 
- 
+
+
     // Draw some filled rectangles
     fillRect(64, 0, 176, 50, BLUE); // blue box
     fillRect(250, 0, 176, 50, RED); // red box:
@@ -1210,10 +1230,12 @@ int main() {
     dma_channel_wait_for_finish_blocking(dma_chan);
 
     // print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
-    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx, 1);
+    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx, true);
 
-    // plot a fixed minimap of the 
-    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx, 0);
+    // plot a fixed minimap of the above capture 
+    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx, false);
+
+    draw_minimap_indicator();
 
     // fillRect(0, 0, 640, 480, WHITE); // green box
 
@@ -1384,11 +1406,27 @@ int main() {
                         draw_channel_no();                    }
                     break;
 
+                case UIC_0:
+                    logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, 5 * 4 * 16);
+                    
+                    logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, CAPTURE_TRIGGER_PIN, false);
 
+                    // each bit on a uart travels at 115200 bits per second
+                    // the clock goes at 125,000,000 hz (I think)
+
+                    // so if we want to take, say, 4 samples per bit then we need to sample at  4 * 115200 = 460800 bps
+                    // 125,000,000 / 460,800 = 271.267
+
+                    // The logic analyser should have started capturing as soon as it saw the
+                    // first transition. Wait until the last sample comes in from the DMA.
+                    dma_channel_wait_for_finish_blocking(dma_chan);
+
+                    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx, false);
+                    plot_required = true;
             }
 
             if (plot_required) {
-                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx, 1);
+                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx, true);
             }
 
         } else {
