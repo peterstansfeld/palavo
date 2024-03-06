@@ -53,7 +53,9 @@ int g_scrollx = 0;
 uint8_t channel;
 
 
+enum SETTINGS_STATE {SS_CHANNEL, SS_ZOOM, SS_FREQ, SS_NO_OF_PINS, SS_PINS_BASE, SS_COUNT} ;
 
+uint8_t settings_state = SS_CHANNEL;
 
 // Timer interrupt
 bool repeating_timer_callback(struct repeating_timer *t) {
@@ -70,6 +72,11 @@ const uint CAPTURE_PIN_COUNT = 4;
 const uint CAPTURE_TRIGGER_PIN = VSYNC2; // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
 const uint CAPTURE_N_SAMPLES = SCREEN_WIDTH * 48; // enough for 48 screen width's worth of data
 const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 5 * 4 * 1; /*271.267*/ // was 5 * 4
+
+uint g_sample_frequency = CAPTURE_SAMPLE_FREQ_DIVISOR;
+uint8_t g_no_of_pins = CAPTURE_PIN_COUNT;
+uint8_t g_pins_base = CAPTURE_PIN_BASE;
+
 
 static inline uint bits_packed_per_word(uint pin_count) {
     // If the number of pins to be sampled divides the shift register size, we
@@ -119,6 +126,7 @@ void logic_analyser_init(PIO pio, uint sm, uint pin_base, uint pin_count, float 
     pio_sm_init(pio, sm, offset, &c);
 }
 
+
 void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, size_t capture_size_words,
                         uint trigger_pin, bool trigger_level) {
     pio_sm_set_enabled(pio, sm, false);
@@ -139,25 +147,23 @@ void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
         true                // Start immediately
     );
 
-    // If edge detect we need to first wait for the opposite level
-    // Warning! As it's blocking instruction it will... block
-    pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(!trigger_level, CAPTURE_PIN_BASE + 1));
-    
-    // level trigger
-    pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(trigger_level, CAPTURE_PIN_BASE + 1));
-    
-    // level trigger
-    pio_sm_exec(pio, sm, pio_encode_wait_gpio(1, LO_GRN));
+    // Wait for a rising edge on VSYNC
+    // Wait until it's the opposite level of the trigger.
+    // Warning! As it's blocking instruction it will... block.
+    pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(!trigger_level, g_pins_base + 1));
+    // Wait until VSYNC is the same level as the trigger.
+    pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(trigger_level, g_pins_base + 1));
 
-    // for (int i = 0; i < (513 /*+ 10*/ /*+ 45*/); i++) {
-    for (int i = 0; i < (513 + 12 /*+ 10*/ /*+ 45*/); i++) {
-    // for (int i = 0; i < (513 + 50 /*+ 10*/ /*+ 45*/); i++) {
-        pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(!trigger_level, CAPTURE_PIN_BASE));
-        pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(trigger_level, CAPTURE_PIN_BASE));
+    // Wait for 524 HSYNC pulses in order to start capturing from just before the next VSYNC pulse
+    for (int i = 0; i < 524; i++) {
+        pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(!trigger_level, g_pins_base));
+        pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(trigger_level, g_pins_base));
     }
 
+    // Let the PIO take over from here.
     pio_sm_set_enabled(pio, sm, true);
 }
+
 
 void print_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples) {
     // Display the capture buffer in text form, like this:
@@ -267,7 +273,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
     setTextSize(1);
 
-    fillRect(0, y, SCREEN_WIDTH, (((trace_height + y_padding) * CAPTURE_PIN_COUNT) + y_padding), BLACK); // clear plot area
+    fillRect(0, y, SCREEN_WIDTH, (((trace_height + y_padding) * g_no_of_pins) + y_padding), BLACK); // clear plot area
         
     y += y_padding;
 
@@ -571,14 +577,14 @@ int measure(const uint32_t *buf) {
 
 
     char pin = 2;
-    uint record_size_bits = bits_packed_per_word(CAPTURE_PIN_COUNT);
+    uint record_size_bits = bits_packed_per_word(g_no_of_pins);
 
     int i;
 
     int green_start;
 
     for (i = 0; i < CAPTURE_N_SAMPLES; i++) {
-        uint bit_index = pin + i * CAPTURE_PIN_COUNT;
+        uint bit_index = pin + i * g_no_of_pins;
         uint word_index = bit_index / record_size_bits;
         // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
         uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
@@ -598,7 +604,7 @@ int measure(const uint32_t *buf) {
     pin = 0;
 
     for (i = green_start; i >= 0; i--) {
-        uint bit_index = pin + i * CAPTURE_PIN_COUNT;
+        uint bit_index = pin + i * g_no_of_pins;
         uint word_index = bit_index / record_size_bits;
         // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
         uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
@@ -624,7 +630,7 @@ int measure(const uint32_t *buf) {
     int vsync_start;
 
     for (i = 0; i < CAPTURE_N_SAMPLES; i++) {
-        uint bit_index = pin + i * CAPTURE_PIN_COUNT;
+        uint bit_index = pin + i * g_no_of_pins;
         uint word_index = bit_index / record_size_bits;
         // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
         uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
@@ -643,7 +649,7 @@ int measure(const uint32_t *buf) {
     int vsync_end;
 
     for (i = vsync_start; i < CAPTURE_N_SAMPLES; i++) {
-        uint bit_index = pin + i * CAPTURE_PIN_COUNT;
+        uint bit_index = pin + i * g_no_of_pins;
         uint word_index = bit_index / record_size_bits;
         // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
         uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
@@ -665,7 +671,7 @@ int measure(const uint32_t *buf) {
     // int hsync_end;
 
     for (i = vsync_end; i >= 0; i--) {
-        uint bit_index = pin + i * CAPTURE_PIN_COUNT;
+        uint bit_index = pin + i * g_no_of_pins;
         uint word_index = bit_index / record_size_bits;
         // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
         uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
@@ -715,7 +721,7 @@ int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next
     uart_puts(UART_ID, "\nFinding transition...\n");
 
 
-    uint record_size_bits = bits_packed_per_word(CAPTURE_PIN_COUNT);
+    uint record_size_bits = bits_packed_per_word(g_no_of_pins);
 
     int i;
 
@@ -729,7 +735,7 @@ int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next
     if (next) {
     
         for (i = from_sample; i < CAPTURE_N_SAMPLES; i++) {
-            uint bit_index = pin + i * CAPTURE_PIN_COUNT;
+            uint bit_index = pin + i * g_no_of_pins;
             uint word_index = bit_index / record_size_bits;
             // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
             uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
@@ -752,7 +758,7 @@ int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next
     } else {
 
         for (i = from_sample - 1; i >= 0; i--) {
-            uint bit_index = pin + i * CAPTURE_PIN_COUNT;
+            uint bit_index = pin + i * g_no_of_pins;
             uint word_index = bit_index / record_size_bits;
             // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
             uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
@@ -850,42 +856,60 @@ void demo() {
     UIC_DOWN,
     UIC_PAGE_UP,
     UIC_PAGE_DOWN,
-    UIC_0
+    UIC_0,
+    UIC_TAB,
+    UIC_SHIFT_TAB
  };
 
 
 #define TOOLBAR_LEFT 1
 #define TOOLBAR_WIDTH SCREEN_WIDTH - (2 * TOOLBAR_LEFT)
-#define TOOLBAR_TOP SCREEN_HEIGHT - 1 - 8
-#define TOOLBAR_HEIGHT 8
+#define TOOLBAR_HEIGHT 10
+#define TOOLBAR_TOP SCREEN_HEIGHT - TOOLBAR_HEIGHT - 1
 #define TOOL_BAR_TEXT_PADDING 1
 
 
-#define TOOLBAR_COLOR BLUE
+#define TOOLBAR_COLOR DARK_BLUE
 
 #define TOOLBAR_ITEM_PADDING 2
 #define CHANNEL_NO_LEFT (SCREEN_WIDTH / 2)
 #define CHANNEL_NO_WIDTH 30 + TOOLBAR_ITEM_PADDING
 
-void draw_channel_no() {
-    fillRect(CHANNEL_NO_LEFT, TOOLBAR_TOP, CHANNEL_NO_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
-    setCursor(CHANNEL_NO_LEFT + 1, TOOLBAR_TOP);
-    setTextColor(WHITE);
-    setTextSize(1);
-    write_intf("ch %d", channel);
-}
-
-
 #define MAG_LEFT CHANNEL_NO_LEFT + CHANNEL_NO_WIDTH + TOOLBAR_ITEM_PADDING
 #define MAG_WIDTH 60 + TOOLBAR_ITEM_PADDING
 
-void draw_magnification() {
-    fillRect(MAG_LEFT, TOOLBAR_TOP, MAG_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
-    setCursor(MAG_LEFT + 1, TOOLBAR_TOP);
+
+#define FREQ_LEFT MAG_LEFT + MAG_WIDTH + TOOLBAR_ITEM_PADDING
+#define FREQ_WIDTH 60 + TOOLBAR_ITEM_PADDING
+
+#define NO_OF_PINS_LEFT FREQ_LEFT + FREQ_WIDTH + TOOLBAR_ITEM_PADDING
+#define NO_OF_PINS_WIDTH 60 + TOOLBAR_ITEM_PADDING
+
+#define PINS_BASE_LEFT NO_OF_PINS_LEFT + NO_OF_PINS_WIDTH + TOOLBAR_ITEM_PADDING
+#define PINS_BASE_WIDTH 80 + TOOLBAR_ITEM_PADDING
+
+void draw_channel_no() {
+    fillRect(CHANNEL_NO_LEFT, TOOLBAR_TOP, CHANNEL_NO_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    setCursor(CHANNEL_NO_LEFT + 1, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
     setTextColor(WHITE);
     setTextSize(1);
+    writeString("ch ");
+    if (settings_state == SS_CHANNEL) {
+        setTextColor2(TOOLBAR_COLOR, WHITE);
+    }
+    write_intf("%d", channel);
+}
 
+
+void draw_magnification() {
+    fillRect(MAG_LEFT, TOOLBAR_TOP, MAG_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    setCursor(MAG_LEFT + 1, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
+    setTextColor(WHITE);
+    setTextSize(1);
     writeString("zoom ");
+    if (settings_state == SS_ZOOM) {
+        setTextColor2(TOOLBAR_COLOR, WHITE);
+    }
     if (g_mag < 0) {
         write_intf("1:%d", abs(g_mag - 1));
     } else {
@@ -894,15 +918,62 @@ void draw_magnification() {
 }
 
 
-void draw_toolbar() {
-    fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+void draw_no_of_pins() {
+    fillRect(NO_OF_PINS_LEFT, TOOLBAR_TOP, NO_OF_PINS_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    setCursor(NO_OF_PINS_LEFT + 1, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
+    setTextColor(WHITE);
+    setTextSize(1);
+    writeString("pins ");
+    if (settings_state == SS_NO_OF_PINS) {
+        setTextColor2(TOOLBAR_COLOR, WHITE);
+    }
+    write_intf("%d", g_no_of_pins);
+}
+
+
+void draw_pins_base() {
+    fillRect(PINS_BASE_LEFT, TOOLBAR_TOP, PINS_BASE_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    setCursor(PINS_BASE_LEFT + 1, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
+    setTextColor(WHITE);
+    setTextSize(1);
+    writeString("base ");
+    if (settings_state == SS_PINS_BASE) {
+        setTextColor2(TOOLBAR_COLOR, WHITE);
+    }
+    write_intf("GPIO%d", g_pins_base);
+}
+
+
+void draw_sample_frequency() {
+    fillRect(FREQ_LEFT, TOOLBAR_TOP, FREQ_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    setCursor(FREQ_LEFT + 1, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
+    setTextColor(WHITE);
+    setTextSize(1);
+    writeString("fdiv ");
+    if (settings_state == SS_FREQ) {
+        setTextColor2(TOOLBAR_COLOR, WHITE);
+    }
+    write_intf("%d", g_sample_frequency);
+}
+
+
+void draw_settings() {
     draw_channel_no();
     draw_magnification();
+    draw_sample_frequency();
+    draw_no_of_pins();
+    draw_pins_base();
+}
+
+
+void draw_toolbar() {
+    fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    draw_settings();
 }
 
 
 void set_toolbar_text() {
-    setCursor(TOOLBAR_LEFT + TOOL_BAR_TEXT_PADDING, TOOLBAR_TOP);
+    setCursor(TOOLBAR_LEFT + TOOL_BAR_TEXT_PADDING, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
     setTextColor(WHITE);
     setTextSize(1);
 }
@@ -1001,11 +1072,11 @@ uint check_keyboard() {
                     switch ((char)escape_seq[1]) {
                         case 'A':
                             writeString("up");
-                            ui_command = UIC_DOWN;
+                            ui_command = UIC_UP;
                             break;
                         case 'B':
                             writeString("down");
-                            ui_command = UIC_UP;
+                            ui_command = UIC_DOWN;
                             break;
                         case 'C':
                             ui_command = UIC_RIGHT;
@@ -1013,6 +1084,10 @@ uint check_keyboard() {
                         case 'D':
                             ui_command = UIC_LEFT;
                             break;
+                        case 'Z':
+                            ui_command = UIC_SHIFT_TAB;
+                            break;
+
                         default:
                             break;
                     }
@@ -1061,6 +1136,10 @@ uint check_keyboard() {
             ui_command = UIC_M;
         } else if ((char)ch == '0') {
             ui_command = UIC_0;
+        } else if (ch == 9) {
+            ui_command = UIC_TAB;
+            // uart_puts(UART_ID, "TAB\n");
+            
         /*
         } else if ((char)ch == 'n') {
             ui_command = UIC_NEXT_TRANSITION;
@@ -1099,6 +1178,34 @@ void set_mag(int mag) {
 }
 
 
+void set_channel (uint8_t ch) {
+    channel = ch;
+}
+
+
+void set_sample_frequency(uint f) {
+    g_sample_frequency = f;
+}
+
+
+void set_no_of_pins(uint8_t no_of_pins) {
+    g_no_of_pins = no_of_pins;
+}
+
+
+void set_pins_base(uint8_t pins_base) {
+    g_pins_base = pins_base;
+}
+
+
+void set_settings_state(uint8_t state) {
+    settings_state = state;
+    draw_settings();
+    // draw a line under, or something under the appropriate item in the toolbar
+    // the one that now will respond to the up and down keys
+    // uart_putcf(UART_ID, "State: %d\n", settings_state);
+}
+
 int main() {
 
     // Initialize stdio
@@ -1124,9 +1231,10 @@ int main() {
     // We're going to capture into a u32 buffer, for best DMA efficiency. Need
     // to be careful of rounding in case the number of pins being sampled
     // isn't a power of 2.
-    uint total_sample_bits = CAPTURE_N_SAMPLES * CAPTURE_PIN_COUNT;
-    total_sample_bits += bits_packed_per_word(CAPTURE_PIN_COUNT) - 1;
-    uint buf_size_words = total_sample_bits / bits_packed_per_word(CAPTURE_PIN_COUNT);
+    uint total_sample_bits = CAPTURE_N_SAMPLES * g_no_of_pins;
+    total_sample_bits += bits_packed_per_word(g_no_of_pins) - 1;
+
+    uint buf_size_words = total_sample_bits / bits_packed_per_word(g_no_of_pins);
     uint32_t *capture_buf = malloc(buf_size_words * sizeof(uint32_t));
     hard_assert(capture_buf);
 
@@ -1142,7 +1250,7 @@ int main() {
     uint dma_chan = dma_claim_unused_channel(true);
 
     // logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, 125000000 / (115200 * 4) /*271.267*/);
-    logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_SAMPLE_FREQ_DIVISOR);
+    logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins, g_sample_frequency);
 
     // logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, 5); // this works
 
@@ -1230,10 +1338,10 @@ int main() {
     dma_channel_wait_for_finish_blocking(dma_chan);
 
     // print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
-    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx, true);
+    plot_capture_buf(capture_buf, g_pins_base, g_no_of_pins, CAPTURE_N_SAMPLES, g_mag, g_scrollx, true);
 
     // plot a fixed minimap of the above capture 
-    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx, false);
+    plot_capture_buf(capture_buf, g_pins_base, g_no_of_pins, CAPTURE_N_SAMPLES, g_mag, g_scrollx, false);
 
     draw_minimap_indicator();
 
@@ -1348,7 +1456,7 @@ int main() {
                     g_scrollx = measure(capture_buf);
                     // g_scrollx = 900;
                     // g_mag = 0;
-                    set_mag(0);
+                    // set_mag(0);
                     plot_required = 1;
                     break;
 
@@ -1364,7 +1472,7 @@ int main() {
                         // g_mag = (factor - 1);
                         set_mag(factor - 1);
                     }
-                    set_scroll_x(0);
+                    // set_scroll_x(0);
                     plot_required = 1;
                     // draw_magnification();
                     break;
@@ -1373,41 +1481,8 @@ int main() {
                     // printf("Arming trigger (Ctrl-C to exit)\n");
 
                     uart_puts(UART_ID, "Arming trigger...\n");
-                    logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, CAPTURE_TRIGGER_PIN, false);
-
-                    // each bit on a uart travels at 115200 bits per second
-                    // the clock goes at 125,000,000 hz (I think)
-
-                    // so if we want to take, say, 4 samples per bit then we need to sample at  4 * 115200 = 460800 bps
-                    // 125,000,000 / 460,800 = 271.267
-
-                    // The logic analyser should have started capturing as soon as it saw the
-                    // first transition. Wait until the last sample comes in from the DMA.
-                    dma_channel_wait_for_finish_blocking(dma_chan);
-
-
-                    plot_required = 1;
-                    break;
-
-                case UIC_DOWN:
-                    if (channel > 0) {
-                        channel-= 1;
-                        // show the channel number somewhere - todo
-                        // writeString(" channel down");
-                        draw_channel_no();
-                    }
-                    break;
-
-                case UIC_UP:
-                    if (channel < CAPTURE_PIN_COUNT - 1) {
-                        channel+= 1;
-                        // show the channel number somewhere - todo
-                        // writeString(" channel up");
-                        draw_channel_no();                    }
-                    break;
-
-                case UIC_0:
-                    logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, 5 * 4 * 16);
+                    
+                    logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins, g_sample_frequency);
                     
                     logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, CAPTURE_TRIGGER_PIN, false);
 
@@ -1421,12 +1496,123 @@ int main() {
                     // first transition. Wait until the last sample comes in from the DMA.
                     dma_channel_wait_for_finish_blocking(dma_chan);
 
-                    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx, false);
+                    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_pins, CAPTURE_N_SAMPLES, g_mag, g_scrollx, false);
                     plot_required = true;
+                    
+                    break;
+
+                case UIC_DOWN:
+                    switch (settings_state) {
+                        case SS_CHANNEL:
+
+                            set_channel(MAX(channel - 1, 0));
+
+
+                            // if (channel > 0) {
+                                // channel-= 1;
+                                // show the channel number somewhere - todo
+                                // writeString(" channel down");
+                                draw_channel_no();
+                            // }
+                            break;
+
+                        case SS_FREQ:
+                            if (g_sample_frequency > 0) {
+                                set_sample_frequency(MAX(g_sample_frequency - 1, 1));
+                                draw_sample_frequency();
+                            }
+                            break;
+
+                        case SS_NO_OF_PINS:
+                            if (g_no_of_pins > 1) {
+                                set_no_of_pins(MAX(g_no_of_pins - 1, 1));
+                                draw_no_of_pins();
+                            }
+                            break;
+
+                        case SS_PINS_BASE:
+                            set_pins_base(MAX(g_pins_base - 1, 0));
+                            draw_pins_base();
+                            break;
+
+                    }
+                    break;
+
+                case UIC_UP:
+
+                    switch (settings_state) {
+                        case SS_CHANNEL:
+
+                            set_channel(MIN(channel + 1, g_no_of_pins - 1));
+
+
+                            // if (channel < g_no_of_pins - 1) {
+                                // channel+= 1;
+                                // show the channel number somewhere - todo
+                                // writeString(" channel up");
+                                draw_channel_no();
+                            // }
+                            break;
+                        
+                        case SS_FREQ:
+                            set_sample_frequency(g_sample_frequency + 1);
+                            draw_sample_frequency();
+                            break;
+
+                        case SS_NO_OF_PINS:
+                            set_no_of_pins(MIN(g_no_of_pins + 1, 8));
+                            draw_no_of_pins();
+                            break;
+
+                        case SS_PINS_BASE:
+                            set_pins_base(MIN(g_pins_base + 1, 29));
+                            draw_pins_base();
+                            break;
+
+                        default:
+                            uart_puts(UART_ID, "Another state\n");
+
+                    }
+                    break;
+
+                case UIC_0:
+                    logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, g_no_of_pins, 5 * 4 * 16);
+                    
+                    logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, CAPTURE_TRIGGER_PIN, false);
+
+                    // each bit on a uart travels at 115200 bits per second
+                    // the clock goes at 125,000,000 hz (I think)
+
+                    // so if we want to take, say, 4 samples per bit then we need to sample at  4 * 115200 = 460800 bps
+                    // 125,000,000 / 460,800 = 271.267
+
+                    // The logic analyser should have started capturing as soon as it saw the
+                    // first transition. Wait until the last sample comes in from the DMA.
+                    dma_channel_wait_for_finish_blocking(dma_chan);
+
+                    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_pins, CAPTURE_N_SAMPLES, g_mag, g_scrollx, false);
+                    plot_required = true;
+                    break;
+
+                case UIC_TAB:
+                    set_settings_state((settings_state + 1) % SS_COUNT);
+                    // draw a line under, or something under the appropriate item in the toolbar
+                    // the one that now will respond to the up and down keys
+                    uart_putcf(UART_ID, "State: %d\n", settings_state);
+                    break;
+
+                case UIC_SHIFT_TAB:
+                    if (settings_state == 0) {
+                        set_settings_state(SS_COUNT - 1);
+                    } else {
+                        set_settings_state(settings_state - 1);
+                    }
+                    uart_putcf(UART_ID, "State: %d\n", settings_state);
+                    break;    
             }
 
             if (plot_required) {
-                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx, true);
+                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_pins, CAPTURE_N_SAMPLES, g_mag, g_scrollx, true);
             }
 
         } else {
