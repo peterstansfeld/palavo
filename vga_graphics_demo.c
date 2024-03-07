@@ -70,12 +70,13 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 const uint CAPTURE_PIN_BASE = HSYNC; // 16 = hsync, 17 = vsync // 22 = hsync2
 const uint CAPTURE_PIN_COUNT = 4;
 const uint CAPTURE_TRIGGER_PIN = VSYNC2; // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
-const uint CAPTURE_N_SAMPLES = SCREEN_WIDTH * 48; // enough for 48 screen width's worth of data
+const uint CAPTURE_N_SAMPLES = SCREEN_WIDTH * 96; // enough for 48 screen width's worth of data
 const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 5 * 4 * 1; /*271.267*/ // was 5 * 4
 
 uint g_sample_frequency = CAPTURE_SAMPLE_FREQ_DIVISOR;
 uint8_t g_no_of_pins = CAPTURE_PIN_COUNT;
 uint8_t g_pins_base = CAPTURE_PIN_BASE;
+uint g_capture_n_samples = CAPTURE_N_SAMPLES;
 
 
 static inline uint bits_packed_per_word(uint pin_count) {
@@ -235,7 +236,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
 
     // Plot colours:  HSYNC, VSYNC, LO_GREEN, HI_GREEN, BLUE & RED
-    char colours[] = {YELLOW, ORANGE, MED_GREEN, GREEN, BLUE, RED};
+    char colours[] = {YELLOW, ORANGE, DARK_GREEN, MED_GREEN, DARK_BLUE, RED, CYAN, MAGENTA};
 
     uint record_size_bits = bits_packed_per_word(pin_count); 
 
@@ -251,13 +252,13 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
         y_padding = MINIMAP_PADDING;
         y = MINIMAP_TOP;
 
-        if (CAPTURE_N_SAMPLES >= SCREEN_WIDTH) {
+        if (g_capture_n_samples >= SCREEN_WIDTH) {
             // we need to zoom out
-            int factor = CAPTURE_N_SAMPLES / SCREEN_WIDTH;
+            int factor = g_capture_n_samples / SCREEN_WIDTH;
             magnification = -(factor - 1);
         } else {
             // we need to zoom in
-            int factor = SCREEN_WIDTH / CAPTURE_N_SAMPLES;
+            int factor = SCREEN_WIDTH / g_capture_n_samples;
             magnification = (factor - 1);
         }
 
@@ -583,7 +584,7 @@ int measure(const uint32_t *buf) {
 
     int green_start;
 
-    for (i = 0; i < CAPTURE_N_SAMPLES; i++) {
+    for (i = 0; i < g_capture_n_samples; i++) {
         uint bit_index = pin + i * g_no_of_pins;
         uint word_index = bit_index / record_size_bits;
         // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
@@ -629,7 +630,7 @@ int measure(const uint32_t *buf) {
     // int p2;
     int vsync_start;
 
-    for (i = 0; i < CAPTURE_N_SAMPLES; i++) {
+    for (i = 0; i < g_capture_n_samples; i++) {
         uint bit_index = pin + i * g_no_of_pins;
         uint word_index = bit_index / record_size_bits;
         // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
@@ -648,7 +649,7 @@ int measure(const uint32_t *buf) {
 
     int vsync_end;
 
-    for (i = vsync_start; i < CAPTURE_N_SAMPLES; i++) {
+    for (i = vsync_start; i < g_capture_n_samples; i++) {
         uint bit_index = pin + i * g_no_of_pins;
         uint word_index = bit_index / record_size_bits;
         // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
@@ -734,7 +735,7 @@ int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next
     
     if (next) {
     
-        for (i = from_sample; i < CAPTURE_N_SAMPLES; i++) {
+        for (i = from_sample; i < g_capture_n_samples; i++) {
             uint bit_index = pin + i * g_no_of_pins;
             uint word_index = bit_index / record_size_bits;
             // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
@@ -1154,8 +1155,8 @@ uint check_keyboard() {
 
 
 void draw_minimap_indicator() {
-    int mini_x = (g_scrollx * SCREEN_WIDTH) / CAPTURE_N_SAMPLES; 
-    int mini_w = (mag_factor(SCREEN_WIDTH * SCREEN_WIDTH) / CAPTURE_N_SAMPLES) + 1; // add one to round up and/or ensure a visible indicator 
+    int mini_x = (g_scrollx * SCREEN_WIDTH) / g_capture_n_samples; 
+    int mini_w = (mag_factor(SCREEN_WIDTH * SCREEN_WIDTH) / g_capture_n_samples) + 1; // add one to round up and/or ensure a visible indicator 
 
     drawHLine(0, MINIMAP_TOP - 2, SCREEN_WIDTH, BLACK);
     drawHLine(mini_x, MINIMAP_TOP - 2, mini_w, WHITE);
@@ -1231,18 +1232,27 @@ int main() {
     // We're going to capture into a u32 buffer, for best DMA efficiency. Need
     // to be careful of rounding in case the number of pins being sampled
     // isn't a power of 2.
-    uint total_sample_bits = CAPTURE_N_SAMPLES * g_no_of_pins;
+    uint total_sample_bits = g_capture_n_samples * g_no_of_pins;
     total_sample_bits += bits_packed_per_word(g_no_of_pins) - 1;
 
     uint buf_size_words = total_sample_bits / bits_packed_per_word(g_no_of_pins);
     uint32_t *capture_buf = malloc(buf_size_words * sizeof(uint32_t));
     hard_assert(capture_buf);
 
+    // if we change the no of pins during the program then our CAPTURE_N_SAMPLES will possibly be wrong
+    // so let's try and reverse the maths to give us CAPTURE_N_SAMPLES given buf_size_words and g_no_of_pins...
+
+    // total_sample_bits = buf_size_words * bits_packed_per_word(g_no_of_pins);
+    // total_sample_bits -= bits_packed_per_word(g_no_of_pins) - 1;
+    // CAPTURE_N_SAMPLES = total_sample_bits / g_no_of_pins;
+
+    // now to test it... at the start of the plotting function, perhaps...
+
     // Grant high bus priority to the DMA, so it can shove the processors out
     // of the way. This should only be needed if you are pushing things up to
     // >16bits/clk here, i.e. if you need to saturate the bus completely.
     
-    // todo - uncomment this next line
+    // todo - uncomment this next line if we need to
     // bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
 
     PIO pio = pio1;
@@ -1338,10 +1348,10 @@ int main() {
     dma_channel_wait_for_finish_blocking(dma_chan);
 
     // print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
-    plot_capture_buf(capture_buf, g_pins_base, g_no_of_pins, CAPTURE_N_SAMPLES, g_mag, g_scrollx, true);
+    plot_capture_buf(capture_buf, g_pins_base, g_no_of_pins, g_capture_n_samples, g_mag, g_scrollx, true);
 
     // plot a fixed minimap of the above capture 
-    plot_capture_buf(capture_buf, g_pins_base, g_no_of_pins, CAPTURE_N_SAMPLES, g_mag, g_scrollx, false);
+    plot_capture_buf(capture_buf, g_pins_base, g_no_of_pins, g_capture_n_samples, g_mag, g_scrollx, false);
 
     draw_minimap_indicator();
 
@@ -1391,7 +1401,7 @@ int main() {
                     writeString("end");
                     // it was crashing here for some reason
                     //writeString(" debug");
-                    set_scroll_x(MAX(CAPTURE_N_SAMPLES - (mag_factor(SCREEN_WIDTH)), 0));
+                    set_scroll_x(MAX(g_capture_n_samples - (mag_factor(SCREEN_WIDTH)), 0));
                     // if (g_scrollx < 0) {
                     //     g_scrollx = 0;
                     // }
@@ -1462,13 +1472,13 @@ int main() {
 
                 case UIC_Z:
                     writeString("zoom to fill");
-                    if (CAPTURE_N_SAMPLES >= SCREEN_WIDTH) {
+                    if (g_capture_n_samples >= SCREEN_WIDTH) {
                         // we need to zoom out
-                        int factor = CAPTURE_N_SAMPLES / SCREEN_WIDTH;
+                        int factor = g_capture_n_samples / SCREEN_WIDTH;
                         set_mag(-(factor - 1));
                     } else {
                         // we need to zoom in
-                        int factor = SCREEN_WIDTH / CAPTURE_N_SAMPLES;
+                        int factor = SCREEN_WIDTH / g_capture_n_samples;
                         // g_mag = (factor - 1);
                         set_mag(factor - 1);
                     }
@@ -1486,6 +1496,13 @@ int main() {
                     
                     logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, CAPTURE_TRIGGER_PIN, false);
 
+
+
+
+
+
+
+
                     // each bit on a uart travels at 115200 bits per second
                     // the clock goes at 125,000,000 hz (I think)
 
@@ -1496,7 +1513,35 @@ int main() {
                     // first transition. Wait until the last sample comes in from the DMA.
                     dma_channel_wait_for_finish_blocking(dma_chan);
 
-                    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_pins, CAPTURE_N_SAMPLES, g_mag, g_scrollx, false);
+                    // before we plot, let's recalculate g_capture_n_samples as we may have changed the number of pins
+                    // to capture...
+
+                    // heres the code to reverse
+
+                    // uint total_sample_bits = g_capture_n_samples * g_no_of_pins;
+                    // total_sample_bits += bits_packed_per_word(g_no_of_pins) - 1;
+                    // uint buf_size_words = total_sample_bits / bits_packed_per_word(g_no_of_pins);
+
+                    // end of code to reverse
+
+                    uart_putcf(UART_ID, "g_capture_n_samples before calc: %d\n", g_capture_n_samples);
+                    
+                    total_sample_bits = buf_size_words * bits_packed_per_word(g_no_of_pins);
+                    uart_putcf(UART_ID, "total_sample_bits: %d\n", total_sample_bits);
+
+                    // total_sample_bits -= bits_packed_per_word(g_no_of_pins) - 1; ***
+                    // uart_putcf(UART_ID, "total_sample_bits: %d\n", total_sample_bits);
+
+                    g_capture_n_samples = total_sample_bits / g_no_of_pins;
+                    uart_putcf(UART_ID, "g_capture_n_samples after calc: %d\n", g_capture_n_samples);
+
+                    // it seems to work, but when not 4 - it throws the scaling out. for example the zoom to fill screen no
+                    // longer calculates correctly - pressing 'END' crashes the program. think I know why, but not now 
+                    // actually it can't be quite right as the 
+                    // strangely removing the line with the *** aove seems to have fixed it. Hmm...
+
+
+                    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_pins, g_capture_n_samples, g_mag, g_scrollx, false);
                     plot_required = true;
                     
                     break;
@@ -1590,7 +1635,7 @@ int main() {
                     // first transition. Wait until the last sample comes in from the DMA.
                     dma_channel_wait_for_finish_blocking(dma_chan);
 
-                    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_pins, CAPTURE_N_SAMPLES, g_mag, g_scrollx, false);
+                    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_pins, g_capture_n_samples, g_mag, g_scrollx, false);
                     plot_required = true;
                     break;
 
@@ -1612,7 +1657,7 @@ int main() {
             }
 
             if (plot_required) {
-                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_pins, CAPTURE_N_SAMPLES, g_mag, g_scrollx, true);
+                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_pins, g_capture_n_samples, g_mag, g_scrollx, true);
             }
 
         } else {
