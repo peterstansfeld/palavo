@@ -128,6 +128,19 @@ void logic_analyser_init(PIO pio, uint sm, uint pin_base, uint pin_count, float 
 }
 
 
+bool pio_sm_exec_timeout_us(PIO pio, uint sm, uint instr, uint32_t timeout_us) {
+    // Immediately execute an instruction on a state machine and wait for upto a number of microseconds for it to complete
+    pio_sm_exec(pio, sm, instr);
+    uint32_t start_time = time_us_32();
+    while (time_us_32() - start_time < timeout_us) {
+        if (!pio_sm_is_exec_stalled(pio, sm)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
 void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, size_t capture_size_words,
                         uint trigger_pin, bool trigger_level) {
     pio_sm_set_enabled(pio, sm, false);
@@ -148,21 +161,48 @@ void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
         true                // Start immediately
     );
 
-    // Wait for a rising edge on VSYNC
-    // Wait until it's the opposite level of the trigger.
-    // Warning! As it's blocking instruction it will... block.
-    pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(!trigger_level, g_pins_base + 1));
-    // Wait until VSYNC is the same level as the trigger.
-    pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(trigger_level, g_pins_base + 1));
+    #define TRIGGER_TIMEOUT_US 2000000 // 2 seconds
 
-    // Wait for 524 HSYNC pulses in order to start capturing from just before the next VSYNC pulse
-    for (int i = 0; i < 524; i++) {
-        pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(!trigger_level, g_pins_base));
-        pio_sm_exec_wait_blocking(pio, sm, pio_encode_wait_gpio(trigger_level, g_pins_base));
+    // Wait for a rising edge on VSYNC, which involves:
+    // 1. Waiting until VSYNC is at the opposite level of the trigger level.
+
+    bool triggered = false; // assume fail
+    if (pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(!trigger_level, g_pins_base + 1), TRIGGER_TIMEOUT_US)) {
+        // 2. Waiting until VSYNC VSYNC is at the same level as the trigger level.
+        if (pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(trigger_level, g_pins_base + 1), TRIGGER_TIMEOUT_US)) {
+            // 
+            triggered = true; // assume pass
+            // Wait for 524 HSYNC pulses in order to start capturing from just before the next VSYNC pulse
+            for (int i = 0; i < 524; i++) {
+                if (pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(!trigger_level, g_pins_base), TRIGGER_TIMEOUT_US)) {
+                    if (!pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(trigger_level, g_pins_base), TRIGGER_TIMEOUT_US)) {
+                        triggered = false;
+                        break;
+                    }
+                } else {
+                    triggered = false;
+                    break;
+                }
+            }
+        } else {
+            // uart_puts(UART_ID, "trigger 2 failed\n");
+        }
+    } else {
+        // uart_puts(UART_ID, "trigger 1 failed\n");
     }
 
-    // Let the PIO take over from here.
+    if (!triggered) {
+        // failed to trigger, so
+        // restart the pio otherwise it'll be stuck in a latched EXEC instruction, and we won't fill up the sample
+        // buffer, and then we're all doomed.
+        uart_puts(UART_ID, "failed to trigger, restarting the state machine...\n");
+        pio_sm_restart(pio, sm);
+    }
+
+    // Let the PIO take over from here
     pio_sm_set_enabled(pio, sm, true);
+    dma_channel_wait_for_finish_blocking(dma_chan);
+    pio_sm_set_enabled(pio, sm, false); // disable the state machine, which might save a bit of power? (todo - find out)
 }
 
 
@@ -236,7 +276,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
 
     // Plot colours:  HSYNC, VSYNC, LO_GREEN, HI_GREEN, BLUE & RED
-    char colours[] = {YELLOW, ORANGE, DARK_GREEN, MED_GREEN, DARK_BLUE, RED, CYAN, MAGENTA};
+    char colours[] = {YELLOW, ORANGE, MED_GREEN, GREEN, BLUE, RED, CYAN, MAGENTA};
 
     uint record_size_bits = bits_packed_per_word(pin_count); 
 
@@ -1345,7 +1385,6 @@ int main() {
 
     uart_puts(UART_ID, "Arming trigger...\n");
     logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, CAPTURE_TRIGGER_PIN, false);
-    dma_channel_wait_for_finish_blocking(dma_chan);
 
     // print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
     plot_capture_buf(capture_buf, g_pins_base, g_no_of_pins, g_capture_n_samples, g_mag, g_scrollx, true);
@@ -1462,12 +1501,8 @@ int main() {
 
                 case UIC_M:
                     // measure
-                    writeString("measure ");
-                    g_scrollx = measure(capture_buf);
-                    // g_scrollx = 900;
-                    // g_mag = 0;
-                    // set_mag(0);
-                    plot_required = 1;
+                    writeString("measure");
+                    measure(capture_buf);
                     break;
 
                 case UIC_Z:
@@ -1496,13 +1531,6 @@ int main() {
                     
                     logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, CAPTURE_TRIGGER_PIN, false);
 
-
-
-
-
-
-
-
                     // each bit on a uart travels at 115200 bits per second
                     // the clock goes at 125,000,000 hz (I think)
 
@@ -1511,7 +1539,6 @@ int main() {
 
                     // The logic analyser should have started capturing as soon as it saw the
                     // first transition. Wait until the last sample comes in from the DMA.
-                    dma_channel_wait_for_finish_blocking(dma_chan);
 
                     // before we plot, let's recalculate g_capture_n_samples as we may have changed the number of pins
                     // to capture...
@@ -1580,6 +1607,11 @@ int main() {
                             draw_pins_base();
                             break;
 
+                        case SS_ZOOM:
+                            set_mag(g_mag - 1);
+                            plot_required = 1;
+                            break;
+
                     }
                     break;
 
@@ -1614,6 +1646,11 @@ int main() {
                             draw_pins_base();
                             break;
 
+                        case SS_ZOOM:
+                            set_mag(g_mag + 1);
+                            plot_required = 1;
+                            break;
+
                         default:
                             uart_puts(UART_ID, "Another state\n");
 
@@ -1633,7 +1670,6 @@ int main() {
 
                     // The logic analyser should have started capturing as soon as it saw the
                     // first transition. Wait until the last sample comes in from the DMA.
-                    dma_channel_wait_for_finish_blocking(dma_chan);
 
                     plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_pins, g_capture_n_samples, g_mag, g_scrollx, false);
                     plot_required = true;
