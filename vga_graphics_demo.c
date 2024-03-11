@@ -264,9 +264,30 @@ void write_intf(const char *s, int c) {
     writeString(str);
 }
 
-#define MINIMAP_TOP 420
+
+
+#define TOOLBAR_LEFT 1
+#define TOOLBAR_WIDTH SCREEN_WIDTH - (2 * TOOLBAR_LEFT)
+#define TOOLBAR_HEIGHT 10
+#define TOOLBAR_TOP SCREEN_HEIGHT - TOOLBAR_HEIGHT - 1
+#define TOOL_BAR_TEXT_PADDING 1
+
+
+#define TOOLBAR_COLOR DARK_BLUE
+
+#define TOOLBAR_ITEM_PADDING 2
+
+
+
+#define PLOT_PADDING 4
+#define PLOT_HEIGHT 40
+#define PLOT_TOP 55
+
+// #define MINIMAP_TOP 420
 #define MINIMAP_HEIGHT 6
 #define MINIMAP_PADDING 1
+
+#define MINIMAP_BOTTOM TOOLBAR_TOP - 4
 
 void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples, int magnification, 
                         int scrollx, bool show_numbers) {
@@ -280,13 +301,13 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
 
     // Plot colours:  HSYNC, VSYNC, LO_GREEN, HI_GREEN, BLUE & RED
-    char colours[] = {YELLOW, ORANGE, MED_GREEN, GREEN, BLUE, RED, CYAN, MAGENTA};
+    char colours[] = {YELLOW, ORANGE, MED_GREEN, GREEN, BLUE, RED, MAGENTA, CYAN};
 
     uint record_size_bits = bits_packed_per_word(pin_count); 
 
-    int trace_height = 40;
-    int y_padding = 4;
-    int y = 51;
+    int trace_height = PLOT_HEIGHT;
+    int y_padding = PLOT_PADDING;
+    int y = PLOT_TOP;
 
     int max_screen_x = MIN(scrollx + mag_factor(SCREEN_WIDTH), n_samples);
 
@@ -294,7 +315,8 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
     if (!show_numbers) {
         trace_height = MINIMAP_HEIGHT;
         y_padding = MINIMAP_PADDING;
-        y = MINIMAP_TOP;
+        // y = MINIMAP_TOP;
+        y = MINIMAP_BOTTOM - ((MINIMAP_HEIGHT + MINIMAP_PADDING) * pin_count);
 
         if (g_capture_n_samples >= SCREEN_WIDTH) {
             // we need to zoom out
@@ -318,15 +340,19 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
     setTextSize(1);
 
-    fillRect(0, y, SCREEN_WIDTH, (((trace_height + y_padding) * g_no_of_captured_pins) + y_padding), BLACK); // clear plot area
+    // fillRect(0, y, SCREEN_WIDTH, (((trace_height + y_padding) * g_no_of_captured_pins) + y_padding), BLACK); // clear plot area
         
-    y += y_padding;
+    // y += y_padding;
 
     char font_width = 6;
     char font_height = 8;
 
 
     for (int pin = 0; pin < pin_count; ++pin) {
+
+        fillRect(0, y, SCREEN_WIDTH, (trace_height), BLACK); // clear plot area
+
+
         int x = 0;
 
         uint magIndex = 0;
@@ -907,16 +933,6 @@ void demo() {
  };
 
 
-#define TOOLBAR_LEFT 1
-#define TOOLBAR_WIDTH SCREEN_WIDTH - (2 * TOOLBAR_LEFT)
-#define TOOLBAR_HEIGHT 10
-#define TOOLBAR_TOP SCREEN_HEIGHT - TOOLBAR_HEIGHT - 1
-#define TOOL_BAR_TEXT_PADDING 1
-
-
-#define TOOLBAR_COLOR DARK_BLUE
-
-#define TOOLBAR_ITEM_PADDING 2
 #define CHANNEL_NO_LEFT (SCREEN_WIDTH / 2)
 #define CHANNEL_NO_WIDTH 30 + TOOLBAR_ITEM_PADDING
 
@@ -1202,8 +1218,12 @@ void draw_minimap_indicator() {
     int mini_x = (g_scrollx * SCREEN_WIDTH) / g_capture_n_samples; 
     int mini_w = (mag_factor(SCREEN_WIDTH * SCREEN_WIDTH) / g_capture_n_samples) + 1; // add one to round up and/or ensure a visible indicator 
 
-    drawHLine(0, MINIMAP_TOP - 2, SCREEN_WIDTH, BLACK);
-    drawHLine(mini_x, MINIMAP_TOP - 2, mini_w, WHITE);
+
+    uint y = MINIMAP_BOTTOM - ((MINIMAP_HEIGHT + MINIMAP_PADDING) * g_no_of_captured_pins) - 2;
+
+
+    drawHLine(0, y, SCREEN_WIDTH, BLACK);
+    drawHLine(mini_x, y, mini_w, WHITE);
     
     // uart_putcf(UART_ID, "mini_x: %d; ", mini_x);
     // uart_putcf(UART_ID, "mini_w: %d\n", mini_w);
@@ -1359,9 +1379,9 @@ int main() {
 */
 
 
-    for (int i = 0; i < 16; i++){
-        fillRect(i * 40, 51, 40, 40, i); // colour boxes
-    }
+    // for (int i = 0; i < 16; i++){
+    //     fillRect(i * 40, 51, 40, 40, i); // colour boxes
+    // }
 
     // Write some text
     setTextColor(WHITE) ;
@@ -1573,6 +1593,9 @@ int main() {
 
 
                     plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
+
+                    set_scroll_x(0);
+
                     plot_required = true;
                     
                     break;
