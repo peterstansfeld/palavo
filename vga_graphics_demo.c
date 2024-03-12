@@ -1,14 +1,14 @@
 /**
  * Hunter Adams (vha3@cornell.edu)
- * 
+ *
  *
  * HARDWARE CONNECTIONS
-   - GPIO 16 ---> VGA Hsync 
-   - GPIO 17 ---> VGA Vsync 
+   - GPIO 16 ---> VGA Hsync
+   - GPIO 17 ---> VGA Vsync
    - GPIO 18 ---> VGA Green lo-bit --> 470 ohm resistor --> VGA_Green
    - GPIO 19 ---> VGA Green hi_bit --> 330 ohm resistor --> VGA_Green
-   - GPIO 20 ---> 330 ohm resistor ---> VGA-Blue 
-   - GPIO 21 ---> 330 ohm resistor ---> VGA-Red 
+   - GPIO 20 ---> 330 ohm resistor ---> VGA-Blue
+   - GPIO 21 ---> 330 ohm resistor ---> VGA-Red
    - RP2040 GND ---> VGA-GND
  *
  * RESOURCES USED
@@ -172,7 +172,7 @@ void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     if (pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(!trigger_level, g_pins_base + 1), TRIGGER_TIMEOUT_US)) {
         // 2. Waiting until VSYNC VSYNC is at the same level as the trigger level.
         if (pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(trigger_level, g_pins_base + 1), TRIGGER_TIMEOUT_US)) {
-            // 
+            //
             triggered = true; // assume pass
             // Wait for 524 HSYNC pulses in order to start capturing from just before the next VSYNC pulse
             for (int i = 0; i < 524; i++) {
@@ -251,7 +251,7 @@ int mag_factor(int value) {
 }
 
 void uart_putcf(uart_inst_t *uart, const char *s, int c) {
-    char str[80];  
+    char str[80];
     sprintf(str, s, c);
     uart_puts(uart, str);
 }
@@ -259,7 +259,7 @@ void uart_putcf(uart_inst_t *uart, const char *s, int c) {
 
 // writes a formatted integer to the VGA framebuffer
 void write_intf(const char *s, int c) {
-    char str[80];  
+    char str[80];
     sprintf(str, s, c);
     writeString(str);
 }
@@ -289,7 +289,7 @@ void write_intf(const char *s, int c) {
 
 #define MINIMAP_BOTTOM TOOLBAR_TOP - 4
 
-void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples, int magnification, 
+void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples, int magnification,
                         int scrollx, bool show_numbers) {
     // Display the capture buffer in graphical form, like this:
     // 00: __--__--__--__--__--__--
@@ -303,7 +303,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
     // Plot colours:  HSYNC, VSYNC, LO_GREEN, HI_GREEN, BLUE & RED
     char colours[] = {YELLOW, ORANGE, MED_GREEN, GREEN, BLUE, RED, MAGENTA, CYAN};
 
-    uint record_size_bits = bits_packed_per_word(pin_count); 
+    uint record_size_bits = bits_packed_per_word(pin_count);
 
     int trace_height = PLOT_HEIGHT;
     int y_padding = PLOT_PADDING;
@@ -341,7 +341,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
     setTextSize(1);
 
     // fillRect(0, y, SCREEN_WIDTH, (((trace_height + y_padding) * g_no_of_captured_pins) + y_padding), BLACK); // clear plot area
-        
+
     // y += y_padding;
 
     char font_width = 6;
@@ -364,17 +364,17 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
         // fillRect(0, y, 640, trace_height, BLACK); // colour boxes
         setTextColor(line_col);
-        
+
         last_sample = 1; // fix at high for now
         last_x = 0;
 
         int last_i = 0;
         int cursor_x = 0;
-        
+
         // uart_puts(UART_ID, "%02d: ", pin + pin_base);
         // uart_puts(UART_ID, "todo");
         int i;
-        
+
         for (i = scrollx; i >= 0; i--) {
             // Go back from the current scroll position and find the first
             // sample that's different from the sample at the scroll position.
@@ -382,7 +382,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
             uint word_index = bit_index / record_size_bits;
             // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
             uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-            
+
             uint sample = buf[word_index] & word_mask ? 1 :0;
 
             if (i == scrollx) {
@@ -392,7 +392,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
             if (last_sample != sample) {
                 last_i = i + 1;
                 if (last_i == scrollx) {
-                    // the sample at scrollx - 1 is the inverse of the scrollx 
+                    // the sample at scrollx - 1 is the inverse of the scrollx
                     // so it needs inverting in order to display the transition
 
                     // this seems to work for anything other than mag = 0
@@ -400,12 +400,12 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                 }
                 break;
             }
-             
+
             if (magnification < 0) {
                 if (++magIndex >= abs(magnification) + 1) {
                     x--;
                     magIndex = 0;
-                } 
+                }
             } else {
                 x-= magnification + 1;
             }
@@ -431,8 +431,8 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
         // int max_screen_x = MIN(scrollx + mag_factor(640), n_samples);
         // int max_screen_x = MIN(scrollx + mag_factor(SCREEN_WIDTH), n_samples);
         // if ((pin == 0)) {
-        //     uart_putcf(UART_ID, "scrollx: %d", scrollx); // 
-        //     uart_putcf(UART_ID, "max_screen_x: %d", max_screen_x); // 
+        //     uart_putcf(UART_ID, "scrollx: %d", scrollx); //
+        //     uart_putcf(UART_ID, "max_screen_x: %d", max_screen_x); //
         // }
 
         for (int i = scrollx; i < max_screen_x; i++) {
@@ -444,14 +444,14 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
             // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
             uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
             // uart_puts(UART_ID, buf[word_index] & word_mask ? "-" : "_");
-            
+
             uint sample = buf[word_index] & word_mask ? 1 :0;
-            
+
             // Check to see whether we've drawn a pixel at this x location, which only
             // happens when we're zoomed out (zoom < 0). If not draw it.
 
             if (x != last_pixel_x) {
-                // 
+                //
                 drawPixel(x, y + (sample ? 0 : trace_height - 1), line_col);
                 last_pixel_x = x;
             }
@@ -464,12 +464,12 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                     if (x != last_v_line_x) {
                         drawVLine(x, y, trace_height, line_col);
                         last_v_line_x = x;
-                    }                    
+                    }
                 // } else {
                     // not quite sure why we get here, but we do just twice when the mag is < 0 - todo
                     // if (pin == 0) {
                     //     uart_putcf(UART_ID, "x: %d ", x);
-                    // } 
+                    // }
                 // }
                 if (show_numbers) {
                     sprintf(str,"%d", i - last_i);
@@ -480,7 +480,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
 
                     if (str_width < (x - last_x)) { // todo - undo this line - don't delet
-                    
+
                         cursor_x = (last_x + ((x - last_x) / 2)) - (str_width / 2);
                         if (cursor_x < 0) {
                             cursor_x = 0;
@@ -504,7 +504,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                 if (++magIndex >= abs(magnification) + 1) {
                     x++;
                     magIndex = 0;
-                } 
+                }
             } else {
                 x+= magnification + 1;
             }
@@ -517,9 +517,9 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
             // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
             uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
             //uart_puts(UART_ID, buf[word_index] & word_mask ? "-" : "_");
-            
+
             uint sample = buf[word_index] & word_mask ? 1 :0;
-            
+
             // if (x != last_pixel_x) {
                 // drawPixel(x, y + (sample ? 0 : trace_height - 1), line_col);
                 // last_pixel_x = x;
@@ -535,7 +535,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                     // if (x != last_v_line_x) {
                         // drawVLine(x, y, trace_height, line_col);
                         // last_v_line_x = x;
-                    // }                    
+                    // }
                 // } else {
                     // uart_putc(UART_ID, '?');
                 // }
@@ -545,7 +545,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
                     // if ((pin == 0) && (i - last_i == 25)) {
                     //     // uart_putc(UART_ID, '=');
-                    //     uart_putcf(UART_ID, "last_i: %d", last_i); // last_i: 1394 
+                    //     uart_putcf(UART_ID, "last_i: %d", last_i); // last_i: 1394
                     //     uart_putcf(UART_ID, " i: %d", i); // i: 1419 - it does indeed == 25
 
                     // }
@@ -602,7 +602,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                 if (++magIndex >= abs(magnification) + 1) {
                     x++;
                     magIndex = 0;
-                } 
+                }
             } else {
                 x+= magnification + 1;
             }
@@ -666,15 +666,15 @@ int measure(const uint32_t *buf) {
         uint word_index = bit_index / record_size_bits;
         // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
         uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-        
+
         uint sample = buf[word_index] & word_mask ? 1 :0;
-        
+
         if (sample) {
             green_start = i;
             uart_putcf(UART_ID, "green_start: %d\n", green_start);
             break;
         }
-        
+
     }
 
     int hsync_end;
@@ -686,15 +686,15 @@ int measure(const uint32_t *buf) {
         uint word_index = bit_index / record_size_bits;
         // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
         uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-        
+
         uint sample = buf[word_index] & word_mask ? 1 :0;
-        
+
         if (!sample) {
             hsync_end = i + 1; // this sample is still high (we're going backwards)
             uart_putcf(UART_ID, "hsync_end: %d\n", hsync_end);
             break;
         }
-        
+
     }
 
     uart_putcf(UART_ID, "hsync_end..green_start: %d\n", green_start - (hsync_end + 0));
@@ -712,15 +712,15 @@ int measure(const uint32_t *buf) {
         uint word_index = bit_index / record_size_bits;
         // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
         uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-        
+
         uint sample = buf[word_index] & word_mask ? 1 :0;
-        
+
         if (!sample) {
             vsync_start = i;
             uart_putcf(UART_ID, "vsync_start: %d\n", vsync_start);
             break;
         }
-        
+
     }
 
 
@@ -731,15 +731,15 @@ int measure(const uint32_t *buf) {
         uint word_index = bit_index / record_size_bits;
         // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
         uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-        
+
         uint sample = buf[word_index] & word_mask ? 1 :0;
-        
+
         if (sample) {
             vsync_end = i;
             uart_putcf(UART_ID, "vsync_end: %d\n", vsync_end);
             break;
         }
-        
+
     }
 
     uart_putcf(UART_ID, "vsync_start..vsync_end: %d\n", vsync_end - (vsync_start + 0));
@@ -753,15 +753,15 @@ int measure(const uint32_t *buf) {
         uint word_index = bit_index / record_size_bits;
         // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
         uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-        
+
         uint sample = buf[word_index] & word_mask ? 1 :0;
-        
+
         if (!sample) {
             hsync_end = i + 1;
             uart_putcf(UART_ID, "hsync_end: %d\n", hsync_end);
             break;
         }
-        
+
     }
 
 
@@ -776,15 +776,15 @@ int measure(const uint32_t *buf) {
         uint word_index = bit_index / record_size_bits;
         // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
         uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-        
+
         uint sample = buf[word_index] & word_mask ? 1 :0;
-        
+
         if (!sample) {
             p0 = i; // this sample is still high (we're going backwards)
             uart_putcf(UART_ID, "previous pin 0 low: %d\n", p0);
             break;
         }
-        
+
     }
 */
 
@@ -809,9 +809,9 @@ int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next
 
     int next_sample = from_sample;
 
-    
+
     if (next) {
-    
+
         for (i = from_sample; i < g_capture_n_samples; i++) {
             uint bit_index = pin + i * g_no_of_captured_pins;
             uint word_index = bit_index / record_size_bits;
@@ -820,7 +820,7 @@ int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next
 
 
             uint sample = buf[word_index] & word_mask ? 1 :0;
-            
+
             if (i == from_sample) {
                 first_sample = sample;
             }
@@ -830,7 +830,7 @@ int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next
                 uart_putcf(UART_ID, "next_sample: %d\n", next_sample);
                 break;
             }
-            
+
         }
 
     } else {
@@ -843,7 +843,7 @@ int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next
 
 
             uint sample = buf[word_index] & word_mask ? 1 :0;
-            
+
             if (i == from_sample - 1) {
                 first_sample = sample;
             }
@@ -853,7 +853,7 @@ int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next
                 uart_putcf(UART_ID, "next_sample: %d\n", next_sample);
                 break;
             }
-            
+
         }
 
     }
@@ -892,7 +892,7 @@ void demo() {
 
     // Concentric empty circles
     drawCircle(320, 200, circle_x, color_index);
-    circle_x += 1 ;        
+    circle_x += 1 ;
     if (circle_x > 130) circle_x = 0;
 
     // A series of rectangles
@@ -901,14 +901,14 @@ void demo() {
     if (box_x > 195) box_x = 10;
 
     // Random lines
-    drawLine(210+(rand()&0x7f), 350+(rand()&0x7f), 210+(rand()&0x7f), 
+    drawLine(210+(rand()&0x7f), 350+(rand()&0x7f), 210+(rand()&0x7f),
             350+(rand()&0x7f), color_index);
 
     // Vertical lines
     drawVLine(Vline_x, 300, (Vline_x>>2), color_index);
     Vline_x += 2 ;
     if (Vline_x > 620) Vline_x = 350;
-    
+
     // Horizontal lines
     drawHLine(400, Hline_y, 150, color_index);
     Hline_y += 2 ;
@@ -1047,9 +1047,9 @@ void set_toolbar_text() {
 }
 
 
-//#define TOOLBAR_HINT_LEFT (SCREEN_WIDTH -2) / 2 
+//#define TOOLBAR_HINT_LEFT (SCREEN_WIDTH -2) / 2
 
-#define TOOLBAR_HINT_WIDTH (TOOLBAR_WIDTH) / 2 
+#define TOOLBAR_HINT_WIDTH (TOOLBAR_WIDTH) / 2
 
 void clear_tool_bar_hint() {
     set_toolbar_text();
@@ -1066,7 +1066,7 @@ uint check_keyboard() {
 
     if ((last_uart_char == 27) || uart_is_readable(UART_ID)) {
 
-        
+
         clear_tool_bar_hint();
         set_toolbar_text();
         // fillRect(1, SCREEN_HEIGHT - 1 - 8, SCREEN_WIDTH - 2, 8, BLUE);
@@ -1080,7 +1080,7 @@ uint check_keyboard() {
             ch = uart_getc(UART_ID);
             last_uart_char = ch;
         }
-        
+
         #define ESCAPE_SEQ_LEN 80
         uint8_t escape_seq[ESCAPE_SEQ_LEN + 1];
         escape_seq[0] = 0;
@@ -1096,7 +1096,7 @@ uint check_keyboard() {
         if (ch == 27 /* ESC */) {
             ch = 0;
             uint8_t noofchars = 0;
-        
+
             // Wait up to 2 byte times, which is (2 * 10 * 1,000,000) / 115,200 = 1737 uS.
             // This had me confused for ages. It seemed to make no difference whether
             // the "us" parameter was 1 or 1800. Turns out that pressing the Esc
@@ -1117,7 +1117,7 @@ uint check_keyboard() {
                         escape_seq[noofchars + 1] = 0;
                     }
                     noofchars += 1;
-                    
+
                     sprintf(str,"%d ", ch);
                     writeString(str);
                     if (uart_is_writable(UART_ID)) {
@@ -1168,7 +1168,7 @@ uint check_keyboard() {
                 if ((char)escape_seq[2] == '~') {
                     if ((char)escape_seq[1] == '1') {
                         ui_command = UIC_HOME;
-                    
+
                     } else if ((char)escape_seq[1] == '5') {
                         writeString("page up");
                         ui_command = UIC_PAGE_UP;
@@ -1222,8 +1222,8 @@ uint check_keyboard() {
 
 
 void draw_minimap_indicator() {
-    int mini_x = (g_scrollx * SCREEN_WIDTH) / g_capture_n_samples; 
-    int mini_w = (mag_factor(SCREEN_WIDTH * SCREEN_WIDTH) / g_capture_n_samples) + 1; // add one to round up and/or ensure a visible indicator 
+    int mini_x = (g_scrollx * SCREEN_WIDTH) / g_capture_n_samples;
+    int mini_w = (mag_factor(SCREEN_WIDTH * SCREEN_WIDTH) / g_capture_n_samples) + 1; // add one to round up and/or ensure a visible indicator
 
 
     uint y = MINIMAP_BOTTOM - ((MINIMAP_HEIGHT + MINIMAP_PADDING) * g_no_of_captured_pins) - 2;
@@ -1231,7 +1231,7 @@ void draw_minimap_indicator() {
 
     drawHLine(0, y, SCREEN_WIDTH, BLACK);
     drawHLine(mini_x, y, mini_w, WHITE);
-    
+
     // uart_putcf(UART_ID, "mini_x: %d; ", mini_x);
     // uart_putcf(UART_ID, "mini_w: %d\n", mini_w);
 }
@@ -1241,7 +1241,7 @@ bool set_scroll_x(int x) {
     bool changed = x != g_scrollx;
     if (changed) {
         g_scrollx = x;
-    } 
+    }
     draw_minimap_indicator();
     return changed;
 }
@@ -1334,7 +1334,7 @@ int main() {
     // Grant high bus priority to the DMA, so it can shove the processors out
     // of the way. This should only be needed if you are pushing things up to
     // >16bits/clk here, i.e. if you need to saturate the bus completely.
-    
+
     // todo - uncomment this next line if we need to
     // bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
 
@@ -1355,7 +1355,7 @@ int main() {
     fillRect(64, 0, 176, 50, BLUE); // blue box
     fillRect(250, 0, 176, 50, RED); // red box:
     fillRect(435, 0, 176, 50, GREEN); // green box
-    
+
 //    drawVLine(Vline_x, 300, (Vline_x>>2), color_index);
 
     drawHLine(0, 0, 16, WHITE);
@@ -1432,7 +1432,7 @@ int main() {
     // print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
     plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, true);
 
-    // plot a fixed minimap of the above capture 
+    // plot a fixed minimap of the above capture
     plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
 
     draw_minimap_indicator();
@@ -1486,7 +1486,7 @@ int main() {
                     writeString("right");
                     plot_required = set_scroll_x(g_scrollx + 1);
                     break;
-        
+
                 case UIC_LEFT:
                     writeString("left");
                     plot_required = set_scroll_x(MAX(g_scrollx - 1, 0));
@@ -1569,7 +1569,7 @@ int main() {
                     // end of code to reverse
 
                     uart_putcf(UART_ID, "g_capture_n_samples before calc: %d\n", g_capture_n_samples);
-                    
+
                     total_sample_bits = buf_size_words * bits_packed_per_word(g_no_of_captured_pins);
                     uart_putcf(UART_ID, "total_sample_bits: %d\n", total_sample_bits);
 
@@ -1580,8 +1580,8 @@ int main() {
                     uart_putcf(UART_ID, "g_capture_n_samples after calc: %d\n", g_capture_n_samples);
 
                     // it seems to work, but when not 4 - it throws the scaling out. for example the zoom to fill screen no
-                    // longer calculates correctly - pressing 'END' crashes the program. think I know why, but not now 
-                    // actually it can't be quite right as the 
+                    // longer calculates correctly - pressing 'END' crashes the program. think I know why, but not now
+                    // actually it can't be quite right as the
                     // strangely removing the line with the *** aove seems to have fixed it. Hmm...
 
 
@@ -1590,7 +1590,7 @@ int main() {
                     set_scroll_x(0);
 
                     plot_required = true;
-                    
+
                     break;
 
                 case UIC_DOWN:
@@ -1624,7 +1624,7 @@ int main() {
                         case SS_CHANNEL:
                             set_channel(MIN(g_channel + 1, g_no_of_captured_pins - 1));
                             break;
-                        
+
                         case SS_FREQ:
                             set_sample_frequency(g_sample_frequency + 1);
                             break;
@@ -1651,7 +1651,7 @@ int main() {
 
 
                     logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, g_no_of_captured_pins, 5 * 4 * 16);
-                    
+
                     logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, CAPTURE_TRIGGER_PIN, false);
 
                     // each bit on a uart travels at 115200 bits per second
