@@ -50,7 +50,7 @@ char timetext[40];
 
 int g_mag = 0;
 int g_scrollx = 0;
-uint8_t channel;
+uint8_t g_channel;
 
 
 enum SETTINGS_STATE {SS_CHANNEL, SS_ZOOM, SS_FREQ, SS_NO_OF_PINS, SS_PINS_BASE, SS_COUNT} ;
@@ -443,14 +443,21 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
             uint word_index = bit_index / record_size_bits;
             // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
             uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-            //uart_puts(UART_ID, buf[word_index] & word_mask ? "-" : "_");
+            // uart_puts(UART_ID, buf[word_index] & word_mask ? "-" : "_");
             
             uint sample = buf[word_index] & word_mask ? 1 :0;
             
+            // Check to see whether we've drawn a pixel at this x location, which only
+            // happens when we're zoomed out (zoom < 0). If not draw it.
+
             if (x != last_pixel_x) {
+                // 
                 drawPixel(x, y + (sample ? 0 : trace_height - 1), line_col);
                 last_pixel_x = x;
             }
+
+            // Check to see whether we've vertical line a pixel at this x location, which only
+            // happens when we're zoomed out (zoom < 0). If not draw it.
 
             if (last_sample != sample) {
                 // if (x < 640) {
@@ -958,7 +965,7 @@ void draw_channel_no() {
     if (settings_state == SS_CHANNEL) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
     }
-    write_intf("%d", channel);
+    write_intf("%d", g_channel);
 }
 
 
@@ -1095,15 +1102,15 @@ uint check_keyboard() {
             // the "us" parameter was 1 or 1800. Turns out that pressing the Esc
             // key in minicom (serial terminal) has a little delay before it is transmitted
             // unlike any other key. Thank goodness for LEDs on the debug probe.
-            while (uart_is_readable_within_us(UART_ID, 1800)) {                    
+            while (uart_is_readable_within_us(UART_ID, 1800)) {
                 ch = uart_getc(UART_ID);
                 last_uart_char = ch;
 
                 if (ch == 27 /* ESC */) {
                     break;
-                
-                } else {   
-            
+
+                } else {
+
                     // possibly build up string here for testing later?
                     if (noofchars < ESCAPE_SEQ_LEN){
                         escape_seq[noofchars] = ch;
@@ -1118,7 +1125,7 @@ uint check_keyboard() {
                     }
                 }
             }
-            
+
             if (strlen(escape_seq) == 0) {
                 // Must have been caused by a single Esc key press
                 writeString("esc");
@@ -1127,7 +1134,7 @@ uint check_keyboard() {
                 writeString(escape_seq);
                 writeString(" ");
             }
-            
+
             if (strlen(escape_seq) == 2) {
                 if ((char)escape_seq[0] == '[') {
                     switch ((char)escape_seq[1]) {
@@ -1200,7 +1207,7 @@ uint check_keyboard() {
         } else if (ch == 9) {
             ui_command = UIC_TAB;
             // uart_puts(UART_ID, "TAB\n");
-            
+
         /*
         } else if ((char)ch == 'n') {
             ui_command = UIC_NEXT_TRANSITION;
@@ -1230,43 +1237,55 @@ void draw_minimap_indicator() {
 }
 
 
-void set_scroll_x(int x) {
-    g_scrollx = x;
+bool set_scroll_x(int x) {
+    bool changed = x != g_scrollx;
+    if (changed) {
+        g_scrollx = x;
+    } 
     draw_minimap_indicator();
+    return changed;
 }
 
 
-void set_mag(int mag) {
-    g_mag = mag;
+bool set_mag(int mag) {
+    bool changed = mag != g_mag;
+    if (changed) {
+        g_mag = mag;
+    }
     draw_magnification();
     draw_minimap_indicator();
+    return changed;
 }
 
 
 void set_channel (uint8_t ch) {
-    channel = ch;
+    g_channel = ch;
+    draw_channel_no();
 }
 
 
 void set_sample_frequency(uint f) {
     g_sample_frequency = f;
+    draw_sample_frequency();
 }
 
 
 void set_no_of_pins(uint8_t no_of_pins) {
     g_no_of_pins_to_capture = no_of_pins;
+    draw_no_of_pins();
 }
 
 
 void set_pins_base(uint8_t pins_base) {
     g_pins_base = pins_base;
+    draw_pins_base();
 }
 
 
 void set_settings_state(uint8_t state) {
     settings_state = state;
     draw_settings();
-    // draw a line under, or something under the appropriate item in the toolbar
+    // draw a line under, or something, under the appropriate item in the toolbar
     // the one that now will respond to the up and down keys
     // uart_putcf(UART_ID, "State: %d\n", settings_state);
 }
@@ -1449,82 +1468,56 @@ int main() {
 
                 case UIC_CTRL_RIGHT:
                 case UIC_CTRL_LEFT:
-                    writeString(" next transition");
-                    set_scroll_x(find_transition(capture_buf, channel, g_scrollx, ui_command == UIC_CTRL_RIGHT));
-                    plot_required = 1;
+                    writeString("next transition");
+                    plot_required = set_scroll_x(find_transition(capture_buf, g_channel, g_scrollx, ui_command == UIC_CTRL_RIGHT));
                     break;
 
                 case UIC_HOME:
                     writeString("home");
-                    set_scroll_x(0);
-                    plot_required = 1;
+                    plot_required = set_scroll_x(0);
                     break;
 
                 case UIC_END:
                     writeString("end");
-                    // it was crashing here for some reason
-                    //writeString(" debug");
-                    set_scroll_x(MAX(g_capture_n_samples - (mag_factor(SCREEN_WIDTH)), 0));
-                    // if (g_scrollx < 0) {
-                    //     g_scrollx = 0;
-                    // }
-                    plot_required = 1;
+                    plot_required = set_scroll_x(MAX(g_capture_n_samples - (mag_factor(SCREEN_WIDTH)), 0));
                     break;
 
                 case UIC_RIGHT:
                     writeString("right");
-                    set_scroll_x(g_scrollx + 1);
-                    plot_required = 1;
+                    plot_required = set_scroll_x(g_scrollx + 1);
                     break;
         
                 case UIC_LEFT:
                     writeString("left");
-
-                    if (g_scrollx > 0) {
-                        set_scroll_x(MAX(g_scrollx - 1, 0));
-                        plot_required = 1;
-                    }
+                    plot_required = set_scroll_x(MAX(g_scrollx - 1, 0));
                     break;
 
                 case UIC_PAGE_UP:
-                    if (g_scrollx > 0) {
-                        set_scroll_x(MAX(g_scrollx - mag_factor(SCREEN_WIDTH), 0));
-                        plot_required = 1;
-                    }
+                    writeString("page up");
+                    plot_required = set_scroll_x(MAX(g_scrollx - mag_factor(SCREEN_WIDTH), 0));
                     break;
 
                 case UIC_PAGE_DOWN:
-                    set_scroll_x(g_scrollx + mag_factor(SCREEN_WIDTH)); // 100% of the screen width
-                    plot_required = 1;
+                    writeString("page down");
+                    plot_required = set_scroll_x(g_scrollx + mag_factor(SCREEN_WIDTH)); // 100% of the screen width
                     break;
 
                 case UIC_MINUS:
                     writeString("zoom out");
-                    // g_mag-= 1;
-                    set_mag(g_mag - 1);
-                    plot_required = 1;
-                    // draw_magnification();
+                    plot_required = set_mag(g_mag - 1);
                     break;
 
                 case UIC_PLUS:
                     writeString("zoom in");
-                    // g_mag+= 1;
-                    set_mag(g_mag + 1);
-                    plot_required = 1;
-                    // draw_magnification();
+                    plot_required = set_mag(g_mag + 1);
                     break;
 
                 case UIC_EQUALS:
-                    writeString("zoom in");
-                    // g_mag = 0;
-                    set_mag(0);
-                    
-                    plot_required = 1;
-                    // draw_magnification();
+                    writeString("no zoom");
+                    plot_required = set_mag(0);
                     break;
 
                 case UIC_M:
-                    // measure
                     writeString("measure");
                     measure(capture_buf);
                     break;
@@ -1534,25 +1527,25 @@ int main() {
                     if (g_capture_n_samples >= SCREEN_WIDTH) {
                         // we need to zoom out
                         int factor = g_capture_n_samples / SCREEN_WIDTH;
-                        set_mag(-(factor - 1));
+                        plot_required = set_mag(-(factor - 1));
                     } else {
                         // we need to zoom in
                         int factor = SCREEN_WIDTH / g_capture_n_samples;
-                        // g_mag = (factor - 1);
-                        set_mag(factor - 1);
+                        plot_required = set_mag(factor - 1);
                     }
                     // set_scroll_x(0);
-                    plot_required = 1;
-                    // draw_magnification();
                     break;
 
                 case UIC_C:
                     // printf("Arming trigger (Ctrl-C to exit)\n");
 
+                    fillRect(0, PLOT_TOP, SCREEN_WIDTH, MINIMAP_BOTTOM - PLOT_TOP, BLACK);
+
                     uart_puts(UART_ID, "Arming trigger...\n");
-                    
+
+
                     logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency);
-                    
+
                     logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, CAPTURE_TRIGGER_PIN, false);
 
                     // each bit on a uart travels at 115200 bits per second
@@ -1603,32 +1596,23 @@ int main() {
                 case UIC_DOWN:
                     switch (settings_state) {
                         case SS_CHANNEL:
-                            set_channel(MAX(channel - 1, 0));
-                            draw_channel_no();
+                            set_channel(MAX(g_channel - 1, 0));
                             break;
 
                         case SS_FREQ:
-                            if (g_sample_frequency > 0) {
-                                set_sample_frequency(MAX(g_sample_frequency - 1, 1));
-                                draw_sample_frequency();
-                            }
+                            set_sample_frequency(MAX(g_sample_frequency - 1, 1));
                             break;
 
                         case SS_NO_OF_PINS:
-                            if (g_no_of_captured_pins > 1) {
-                                set_no_of_pins(MAX(g_no_of_pins_to_capture - 1, 1));
-                                draw_no_of_pins();
-                            }
+                            set_no_of_pins(MAX(g_no_of_pins_to_capture - 1, 1));
                             break;
 
                         case SS_PINS_BASE:
                             set_pins_base(MAX(g_pins_base - 1, 0));
-                            draw_pins_base();
                             break;
 
                         case SS_ZOOM:
-                            set_mag(g_mag - 1);
-                            plot_required = 1;
+                            plot_required = set_mag(g_mag - 1);
                             break;
 
                     }
@@ -1638,28 +1622,23 @@ int main() {
 
                     switch (settings_state) {
                         case SS_CHANNEL:
-                            set_channel(MIN(channel + 1, g_no_of_captured_pins - 1));
-                            draw_channel_no();
+                            set_channel(MIN(g_channel + 1, g_no_of_captured_pins - 1));
                             break;
                         
                         case SS_FREQ:
                             set_sample_frequency(g_sample_frequency + 1);
-                            draw_sample_frequency();
                             break;
 
                         case SS_NO_OF_PINS:
                             set_no_of_pins(MIN(g_no_of_pins_to_capture + 1, 8));
-                            draw_no_of_pins();
                             break;
 
                         case SS_PINS_BASE:
                             set_pins_base(MIN(g_pins_base + 1, 29));
-                            draw_pins_base();
                             break;
 
                         case SS_ZOOM:
-                            set_mag(g_mag + 1);
-                            plot_required = 1;
+                            plot_required = set_mag(g_mag + 1);
                             break;
 
                         default:
@@ -1693,17 +1672,17 @@ int main() {
                     set_settings_state((settings_state + 1) % SS_COUNT);
                     // draw a line under, or something under the appropriate item in the toolbar
                     // the one that now will respond to the up and down keys
-                    uart_putcf(UART_ID, "State: %d\n", settings_state);
+                    // uart_putcf(UART_ID, "State: %d\n", settings_state);
                     break;
 
                 case UIC_SHIFT_TAB:
-                    if (settings_state == 0) {
+                    if (settings_state <= 0) {
                         set_settings_state(SS_COUNT - 1);
                     } else {
                         set_settings_state(settings_state - 1);
                     }
-                    uart_putcf(UART_ID, "State: %d\n", settings_state);
-                    break;    
+                    // uart_putcf(UART_ID, "State: %d\n", settings_state);
+                    break;
             }
 
             if (plot_required) {
