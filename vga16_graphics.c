@@ -206,7 +206,13 @@ void initVGA() {
 #if VGA_USE_PIO_PROG == 1
         &pio->txf[rgb_sm],          // write address (RGB PIO TX FIFO)
 #elif VGA_USE_PIO_PROG == 2
+
+#if VGA_TEST_PIO_PROG == 2
         &pio_2->txf[rgb2_sm],          // write address (RGB PIO TX FIFO)
+#else
+        &pio_2->txf[rgb3_sm],          // write address (RGB PIO TX FIFO)
+#endif
+
 #endif
         &vga_data_array,            // The initial read address (pixel color array)
         TXCOUNT,                    // Number of transfers; in this case each is 1 byte.

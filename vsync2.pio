@@ -16,29 +16,34 @@
 
 ; ACTIVE
     mov x, osr                    ; Copy value from OSR to x scratch register
-activefront:
+active:
     wait 1 irq 4 [5]              ; Wait for hsync to go high
     irq 5                         ; Signal that we're in active mode
-    jmp x-- activefront           ; Remain in active mode, decrementing counter
+    jmp x-- active                ; Remain in active mode, decrementing counter
 
 
 ; FRONTPORCH
-    set y, 9                      ;
+; Set x to 10 for 11 loops, 1 allow the final active line to complete and 10 more
+; for the frontporch.
+    set x, 10                     ; 11 loops
 frontporch:
-    wait 1 irq 4 [5]              ;
-    jmp y-- frontporch            ;
+    wait 1 irq 4 [5]              ; Wait for hsync to go high
+    jmp x-- frontporch            ; Remain in frontporch, decrementing counter
 
 
 ; SYNC PULSE
     wait 1 irq 4   side 0         ; Wait for one line
-    wait 1 irq 4 [5]                 ; Wait for a second line
+    wait 1 irq 4 [5]              ; Wait for a second line
 
 
 ; BACKPORCH
-    mov y, isr                    ; y = 32, for 33 loops
+; Set x to 31 for 32 loops (not 33) as we get an extra line at `active` before the 
+; first of the 480 irqs is asserted.
+;
+    set x, 31                     ; 32 loops
 backporch:
-    wait 1 irq 4   side 1         ; Wait for hsync to go high - SIDESET REPLACEMENT HERE
-    jmp y-- backporch             ; Remain in backporch, decrementing counter
+    wait 1 irq 4   side 1         ; Wait for hsync to go high
+    jmp x-- backporch             ; Remain in backporch, decrementing counter
 
 .wrap                             ; Program wraps from here
 
@@ -70,9 +75,9 @@ static inline void vsync2_program_init(PIO pio, uint sm, uint offset, uint pin) 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
 
-    pio_sm_put_blocking(pio, sm, 32); // for 33 backporch loops
-    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // osr = 32
-    pio_sm_exec(pio, sm, pio_encode_mov(pio_isr, pio_osr)); // isr = osr = 32
+    // pio_sm_put_blocking(pio, sm, 32); // for 33 backporch loops
+    // pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // osr = 32
+    // pio_sm_exec(pio, sm, pio_encode_mov(pio_isr, pio_osr)); // isr = osr = 32
 
     pio_sm_put_blocking(pio, sm, 479); // for 480 loops
     pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // osr = 479

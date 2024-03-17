@@ -82,7 +82,7 @@ uint8_t g_no_of_pins_to_capture = CAPTURE_PIN_COUNT;
 
 uint8_t g_trigger_pin_base = HSYNC;
 
-enum TRIGGER_TYPES {TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_HSYNC, TT_VGA_RGB, TT_COUNT};
+enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_HSYNC, TT_VGA_RGB, TT_VGA_FRONT_PORCH, TT_COUNT};
 
 uint8_t g_trigger_type = TT_VGA_HSYNC;
 
@@ -178,9 +178,12 @@ void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     bool triggered = false; // assume fail
 
 
-// enum TRIGGER_TYPES {TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_HSYNC, TT_VGA_RGB, TT_COUNT};
+// enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_HSYNC, TT_VGA_RGB, TT_VGA_FRONT_PORCH, TT_COUNT};
 
     switch (trigger_type) {
+
+        case TT_NONE:
+            break;
 
         case TT_LOW_LEVEL:
             triggered = pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(0, trigger_pin), TRIGGER_TIMEOUT_US);
@@ -213,9 +216,12 @@ void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
 
         case TT_VGA_HSYNC:
         case TT_VGA_RGB:
+        case TT_VGA_FRONT_PORCH:
             int x = 524; // assume we're trying to capture HSYNC
             if (trigger_type == TT_VGA_RGB) {
                 x = 34; //
+            } else if (trigger_type == TT_VGA_FRONT_PORCH) {
+                x = 34 + 480; //
             }
             if (pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(1, trigger_pin + 1), TRIGGER_TIMEOUT_US)) {
                 // VSYNC is high
@@ -316,7 +322,7 @@ void write_intf(const char *s, int c) {
 #define TOOL_BAR_TEXT_PADDING 1
 
 #define TOOLBAR_COLOR DARK_BLUE
-#define TOOLBAR_ITEM_PADDING 2
+#define TOOLBAR_ITEM_PADDING 0
 
 #define TOOLBAR_HINT_WIDTH (TOOLBAR_WIDTH) / 3
 
@@ -327,7 +333,7 @@ void write_intf(const char *s, int c) {
 
 
 
-#define CHANNEL_NO_WIDTH (FONT_WIDTH * 5) + TOOLBAR_ITEM_PADDING
+#define CHANNEL_NO_WIDTH (FONT_WIDTH * 6) + TOOLBAR_ITEM_PADDING
 
 #define MAG_LEFT CHANNEL_NO_LEFT + CHANNEL_NO_WIDTH + TOOLBAR_ITEM_PADDING
 #define MAG_WIDTH (FONT_WIDTH * 11) + TOOLBAR_ITEM_PADDING
@@ -340,13 +346,13 @@ void write_intf(const char *s, int c) {
 #define NO_OF_PINS_WIDTH (FONT_WIDTH * 8) + TOOLBAR_ITEM_PADDING
 
 #define PINS_BASE_LEFT NO_OF_PINS_LEFT + NO_OF_PINS_WIDTH + TOOLBAR_ITEM_PADDING
-#define PINS_BASE_WIDTH (FONT_WIDTH * 10) + TOOLBAR_ITEM_PADDING
+#define PINS_BASE_WIDTH (FONT_WIDTH * 11) + TOOLBAR_ITEM_PADDING
 
 #define TRIGGER_BASE_LEFT PINS_BASE_LEFT + PINS_BASE_WIDTH + TOOLBAR_ITEM_PADDING
-#define TRIGGER_BASE_WIDTH (FONT_WIDTH * 10) + TOOLBAR_ITEM_PADDING
+#define TRIGGER_BASE_WIDTH (FONT_WIDTH * 11) + TOOLBAR_ITEM_PADDING
 
 #define TRIGGER_TYPE_LEFT TRIGGER_BASE_LEFT + TRIGGER_BASE_WIDTH + TOOLBAR_ITEM_PADDING
-#define TRIGGER_TYPE_WIDTH (FONT_WIDTH * 7) + TOOLBAR_ITEM_PADDING
+#define TRIGGER_TYPE_WIDTH (FONT_WIDTH * 13) + TOOLBAR_ITEM_PADDING
 
 #define PLOT_TOP 55
 #define PLOT_HEIGHT 40
@@ -832,6 +838,7 @@ int measure(const uint32_t *buf) {
 
     uart_putcf(UART_ID, "hsync_end..vsync_start: %d\n", vsync_end - (hsync_end + 0));
 
+    uart_putcf(UART_ID, "vsync_end..green_start: %d\n", green_start - (vsync_end + 0));
 
     pin = 0;
 
@@ -1006,96 +1013,101 @@ void demo() {
 
 void draw_channel_no() {
     fillRect(CHANNEL_NO_LEFT, TOOLBAR_TOP, CHANNEL_NO_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
-    setCursor(CHANNEL_NO_LEFT + 1, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
+    setCursor(CHANNEL_NO_LEFT, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
     setTextColor(WHITE);
     setTextSize(1);
-    writeString("ch ");
+    writeString("ch");
     if (settings_state == SS_CHANNEL) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
     }
-    write_intf("%d", g_channel);
+    write_intf(" %d ", g_channel);
 }
 
 
 void draw_magnification() {
     fillRect(MAG_LEFT, TOOLBAR_TOP, MAG_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
-    setCursor(MAG_LEFT + 1, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
+    setCursor(MAG_LEFT, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
     setTextColor(WHITE);
     setTextSize(1);
-    writeString("zoom ");
+    writeString("zoom");
     if (settings_state == SS_ZOOM) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
     }
     if (g_mag < 0) {
-        write_intf("1:%d", abs(g_mag - 1));
+        write_intf(" 1:%d ", abs(g_mag - 1));
     } else {
-        write_intf("%d:1", g_mag + 1);
+        write_intf(" %d:1 ", g_mag + 1);
     }
 }
 
 
 void draw_no_of_pins() {
     fillRect(NO_OF_PINS_LEFT, TOOLBAR_TOP, NO_OF_PINS_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
-    setCursor(NO_OF_PINS_LEFT + 1, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
+    setCursor(NO_OF_PINS_LEFT, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
     setTextColor(WHITE);
     setTextSize(1);
-    writeString("pins ");
+    writeString("pins");
     if (settings_state == SS_NO_OF_PINS) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
     }
-    write_intf("%d", g_no_of_pins_to_capture);
+    write_intf(" %d ", g_no_of_pins_to_capture);
 }
 
 
 void draw_pins_base() {
     fillRect(PINS_BASE_LEFT, TOOLBAR_TOP, PINS_BASE_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
-    setCursor(PINS_BASE_LEFT + 1, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
+    setCursor(PINS_BASE_LEFT, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
     setTextColor(WHITE);
     setTextSize(1);
-    writeString("base ");
+    writeString("base");
     if (settings_state == SS_PINS_BASE) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
     }
-    write_intf("GP%d", g_pins_base);
+    write_intf(" GP%d ", g_pins_base);
 }
 
 
 void draw_sample_frequency() {
     fillRect(FREQ_LEFT, TOOLBAR_TOP, FREQ_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
-    setCursor(FREQ_LEFT + 1, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
+    setCursor(FREQ_LEFT, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
     setTextColor(WHITE);
     setTextSize(1);
-    writeString("fdiv ");
+    writeString("fdiv");
     if (settings_state == SS_FREQ) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
     }
-    write_intf("%d", g_sample_frequency);
+    write_intf(" %d ", g_sample_frequency);
 }
 
 
 void draw_trigger_pin_base() {
     fillRect(TRIGGER_BASE_LEFT, TOOLBAR_TOP, TRIGGER_BASE_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
-    setCursor(TRIGGER_BASE_LEFT + 1, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
+    setCursor(TRIGGER_BASE_LEFT, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
     setTextColor(WHITE);
     setTextSize(1);
-    writeString("tpin ");
+    writeString("tpin");
     if (settings_state == SS_TRIGGER_PIN_BASE) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
     }
-    write_intf("GP%d", g_trigger_pin_base);
+    write_intf(" GP%d ", g_trigger_pin_base);
 }
 
 
 void draw_trigger_type() {
+
+// enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_HSYNC, TT_VGA_RGB, TT_VGA_FRONT_PORCH, TT_COUNT};
+
+    unsigned char tt_chars[9][8] = {"   \x07   ", "   _   ", "   -   ", "   \x18   ", "   \x19   ", "   \x12   ", " HSYNC ", "  RGB  ", " F.POR "};
+
     fillRect(TRIGGER_TYPE_LEFT, TOOLBAR_TOP, TRIGGER_TYPE_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
-    setCursor(TRIGGER_TYPE_LEFT + 1, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
+    setCursor(TRIGGER_TYPE_LEFT, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
     setTextColor(WHITE);
     setTextSize(1);
-    writeString("ttype ");
+    writeString("ttype");
     if (settings_state == SS_TRIGGER_TYPE) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
     }
-    write_intf("%d", g_trigger_type);
+    writeString(tt_chars[g_trigger_type]);
 }
 
 
