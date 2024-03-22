@@ -53,7 +53,7 @@ int g_scrollx = 0;
 uint8_t g_channel;
 
 
-enum SETTINGS_STATE {SS_CHANNEL, SS_ZOOM, SS_FREQ, SS_NO_OF_PINS, SS_PINS_BASE, SS_TRIGGER_PIN_BASE, SS_TRIGGER_TYPE, SS_COUNT};
+enum SETTINGS_STATES {SS_CHANNEL, SS_ZOOM, SS_FREQ, SS_NO_OF_PINS, SS_PINS_BASE, SS_TRIGGER_PIN_BASE, SS_TRIGGER_TYPE, SS_COUNT};
 
 uint8_t settings_state = SS_CHANNEL;
 
@@ -82,9 +82,9 @@ uint8_t g_no_of_pins_to_capture = CAPTURE_PIN_COUNT;
 
 uint8_t g_trigger_pin_base = HSYNC;
 
-enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_HSYNC, TT_VGA_RGB, TT_VGA_FRONT_PORCH, TT_COUNT};
+enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_VSYNC, TT_VGA_RGB, TT_VGA_VFRONT_PORCH, TT_COUNT};
 
-uint8_t g_trigger_type = TT_VGA_HSYNC;
+uint8_t g_trigger_type = TT_VGA_VSYNC;
 
 
 static inline uint bits_packed_per_word(uint pin_count) {
@@ -136,9 +136,9 @@ void logic_analyser_init(PIO pio, uint sm, uint pin_base, uint pin_count, float 
 }
 
 
+// Immediately execute an instruction on a state machine and wait for upto
+// a number of microseconds for it to complete.
 bool pio_sm_exec_timeout_us(PIO pio, uint sm, uint instr, uint32_t timeout_us) {
-    // Immediately execute an instruction on a state machine and wait for upto
-    // a number of microseconds for it to complete.
     pio_sm_exec(pio, sm, instr);
     uint32_t start_time = time_us_32();
     while (time_us_32() - start_time < timeout_us) {
@@ -152,6 +152,9 @@ bool pio_sm_exec_timeout_us(PIO pio, uint sm, uint instr, uint32_t timeout_us) {
 
 void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, size_t capture_size_words,
                         uint trigger_pin, uint8_t trigger_type) {
+
+    uart_puts(UART_ID, "\nArming trigger...\n");
+
     pio_sm_set_enabled(pio, sm, false);
     // Need to clear _input shift counter_, as well as FIFO, because there may be
     // partial ISR contents left over from a previous run. sm_restart does this.
@@ -178,7 +181,7 @@ void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     bool triggered = false; // assume fail
 
 
-// enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_HSYNC, TT_VGA_RGB, TT_VGA_FRONT_PORCH, TT_COUNT};
+// enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_VSYNC, TT_VGA_RGB, TT_VGA_VFRONT_PORCH, TT_COUNT};
 
     switch (trigger_type) {
 
@@ -207,22 +210,29 @@ void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
 
         case TT_ANY_EDGE:
             // read the state of the trigger pin
-            bool trigger_pin_state = gpio_get(trigger_pin); // use gpio_get as 
+            bool trigger_pin_state = gpio_get(trigger_pin);
 
             // wait for it to change to the opposite state
             triggered = pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(!trigger_pin_state, trigger_pin), TRIGGER_TIMEOUT_US);
             break;
 
 
-        case TT_VGA_HSYNC:
+        case TT_VGA_VSYNC:
         case TT_VGA_RGB:
-        case TT_VGA_FRONT_PORCH:
-            int x = 524; // assume we're trying to capture HSYNC
-            if (trigger_type == TT_VGA_RGB) {
-                x = 34; //
-            } else if (trigger_type == TT_VGA_FRONT_PORCH) {
-                x = 34 + 480; //
+        case TT_VGA_VFRONT_PORCH:
+            int x = 1; // number of pulses 
+            switch (trigger_type) {
+                case TT_VGA_VSYNC:
+                    x = 524; // capture just before the next VSYNC pulse
+                    break;
+                case TT_VGA_RGB:
+                    x = 34; // capture just before the active phase
+                    break;
+                case TT_VGA_VFRONT_PORCH:
+                    x = 480 + 33 + 2 - 1; // capture just before the vertical front porch phase
+                    break;
             }
+
             if (pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(1, trigger_pin + 1), TRIGGER_TIMEOUT_US)) {
                 // VSYNC is high
                 if (pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(0, trigger_pin + 1), TRIGGER_TIMEOUT_US)) {
@@ -318,20 +328,20 @@ void write_intf(const char *s, int c) {
 #define TOOLBAR_LEFT 1
 #define TOOLBAR_WIDTH SCREEN_WIDTH - (2 * TOOLBAR_LEFT)
 #define TOOLBAR_HEIGHT 10
-#define TOOLBAR_TOP SCREEN_HEIGHT - TOOLBAR_HEIGHT - 1
-#define TOOL_BAR_TEXT_PADDING 1
+// #define TOOLBAR_TOP SCREEN_HEIGHT - TOOLBAR_HEIGHT - 1
+#define TOOLBAR_TOP 55
+#define TOOLBAR_TEXT_PADDING 1
 
 #define TOOLBAR_COLOR DARK_BLUE
 #define TOOLBAR_ITEM_PADDING 0
 
-#define TOOLBAR_HINT_WIDTH (TOOLBAR_WIDTH) / 3
+// #define TOOLBAR_HINT_WIDTH (TOOLBAR_WIDTH) / 3
+ #define TOOLBAR_HINT_WIDTH 100
 
 
 // #define CHANNEL_NO_LEFT (SCREEN_WIDTH / 2)
 
-#define CHANNEL_NO_LEFT TOOLBAR_LEFT + TOOL_BAR_TEXT_PADDING + TOOLBAR_HINT_WIDTH + TOOL_BAR_TEXT_PADDING
-
-
+#define CHANNEL_NO_LEFT TOOLBAR_LEFT + TOOLBAR_TEXT_PADDING + TOOLBAR_HINT_WIDTH + TOOLBAR_TEXT_PADDING
 
 #define CHANNEL_NO_WIDTH (FONT_WIDTH * 6) + TOOLBAR_ITEM_PADDING
 
@@ -340,7 +350,7 @@ void write_intf(const char *s, int c) {
 
 
 #define FREQ_LEFT MAG_LEFT + MAG_WIDTH + TOOLBAR_ITEM_PADDING
-#define FREQ_WIDTH (FONT_WIDTH * 9) + TOOLBAR_ITEM_PADDING
+#define FREQ_WIDTH (FONT_WIDTH * 10) + TOOLBAR_ITEM_PADDING
 
 #define NO_OF_PINS_LEFT FREQ_LEFT + FREQ_WIDTH + TOOLBAR_ITEM_PADDING
 #define NO_OF_PINS_WIDTH (FONT_WIDTH * 8) + TOOLBAR_ITEM_PADDING
@@ -354,14 +364,37 @@ void write_intf(const char *s, int c) {
 #define TRIGGER_TYPE_LEFT TRIGGER_BASE_LEFT + TRIGGER_BASE_WIDTH + TOOLBAR_ITEM_PADDING
 #define TRIGGER_TYPE_WIDTH (FONT_WIDTH * 13) + TOOLBAR_ITEM_PADDING
 
-#define PLOT_TOP 55
-#define PLOT_HEIGHT 40
+#define PLOT_TOP 75
+#define PLOT_HEIGHT 36
 #define PLOT_PADDING 4
+
+// #define MINIMAP_BOTTOM TOOLBAR_TOP - 4
+
+// #define STATUSBAR_LEFT 1
+// #define STATUSBAR_WIDTH SCREEN_WIDTH - (2 * STATUSBAR_LEFT)
+// #define STATUSBAR_HEIGHT 10
+// // #define TOOLBAR_TOP SCREEN_HEIGHT - TOOLBAR_HEIGHT - 1
+// #define STATUSBAR_TOP SCREEN_HEIGHT - TOOLBAR_HEIGHT - 1
+// #define STATUSBAR_TEXT_PADDING 1
 
 // #define MINIMAP_TOP 420
 #define MINIMAP_HEIGHT 6
 #define MINIMAP_PADDING 1
-#define MINIMAP_BOTTOM TOOLBAR_TOP - 4
+#define MINIMAP_BOTTOM STATUSBAR_TOP - 4
+
+
+#define STATUSBAR_HEIGHT 10
+#define STATUSBAR_TOP SCREEN_HEIGHT - STATUSBAR_HEIGHT - 1
+#define STATUSBAR_LEFT 1
+#define STATUSBAR_WIDTH SCREEN_WIDTH - (2 * STATUSBAR_LEFT)
+
+// #define STATUSBAR_TOP 55
+#define STATUSBAR_TEXT_PADDING 1
+#define STATUSBAR_COLOR DARK_BLUE
+#define STATUSBAR_ITEM_PADDING 0
+
+// #define STATUSBAR_HINT_WIDTH (TOOLBAR_WIDTH) / 3
+#define STATUSBAR_HINT_WIDTH TOOLBAR_WIDTH
 
 
 void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples, int magnification,
@@ -720,9 +753,10 @@ bool my_uart_is_readable_within_us(uart_inst_t * uart, uint32_t us) {
 
 
 
+
+// Measures the number of samples between various transitions. Intended for VGA signal analysis.
 int measure(const uint32_t *buf) {
-    // currently measures the time between hsyng going high and rgb going high on the first line of the VGA frame
-    uart_puts(UART_ID, "\nMeasure something...\n");
+    uart_puts(UART_ID, "\nMeasuring...\n");
 
 
     char pin = 2;
@@ -865,11 +899,9 @@ int measure(const uint32_t *buf) {
 }
 
 
-
+// Finds the previous or next transition.
 int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next) {
-    // currently measures the time between hsyng going high and rgb going high on the first line of the VGA frame
-    uart_puts(UART_ID, "\nFinding transition...\n");
-
+    // uart_puts(UART_ID, "\nFinding transition...\n");
 
     uint record_size_bits = bits_packed_per_word(g_no_of_captured_pins);
 
@@ -899,7 +931,7 @@ int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next
 
             if (sample != first_sample) {
                 next_sample = i;
-                uart_putcf(UART_ID, "next_sample: %d\n", next_sample);
+                // uart_putcf(UART_ID, "next_sample: %d\n", next_sample);
                 break;
             }
 
@@ -922,7 +954,7 @@ int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next
 
             if (sample != first_sample) {
                 next_sample = i + 1;
-                uart_putcf(UART_ID, "next_sample: %d\n", next_sample);
+                // uart_putcf(UART_ID, "next_sample: %d\n", next_sample);
                 break;
             }
 
@@ -935,8 +967,6 @@ int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next
 
     return next_sample;
 }
-
-
 
 
 // Demonstrates the graphics primitives.
@@ -987,7 +1017,7 @@ void demo() {
     if (Hline_y > 400) Hline_y = 240;
 }
 
- enum UI_COMMANDS {
+enum UI_COMMANDS {
     UIC_NONE,
     UIC_LEFT,
     UIC_RIGHT,
@@ -1001,6 +1031,7 @@ void demo() {
     UIC_Z,
     UIC_M,
     UIC_C,
+    UIC_H,
     UIC_SPACEBAR,
     UIC_UP,
     UIC_DOWN,
@@ -1011,13 +1042,30 @@ void demo() {
     UIC_SHIFT_TAB
  };
 
-void draw_channel_no() {
-    fillRect(CHANNEL_NO_LEFT, TOOLBAR_TOP, CHANNEL_NO_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
-    setCursor(CHANNEL_NO_LEFT, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
+
+#define HINT_LEFT STATUSBAR_LEFT + 1
+
+void draw_hint(char *s) {
+    fillRect(STATUSBAR_LEFT, STATUSBAR_TOP, STATUSBAR_WIDTH, STATUSBAR_HEIGHT, STATUSBAR_COLOR);
+    setCursor(HINT_LEFT, STATUSBAR_TOP + STATUSBAR_TEXT_PADDING);
     setTextColor(WHITE);
     setTextSize(1);
-    writeString("ch");
+    writeString(s);
+}
+
+
+void draw_setting_helper(uint left, uint8_t label_len, uint8_t str_len) {
+    fillRect(left + (FONT_WIDTH * label_len), TOOLBAR_TOP, (FONT_WIDTH * str_len), TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    setCursor(left + (FONT_WIDTH * label_len), TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    setTextColor(WHITE);
+    setTextSize(1);
+}
+
+
+void draw_channel_no() {
+    draw_setting_helper(CHANNEL_NO_LEFT, 2, 3);
     if (settings_state == SS_CHANNEL) {
+        uart_putcf(UART_ID, "ch: %d\n", g_channel);
         setTextColor2(TOOLBAR_COLOR, WHITE);
     }
     write_intf(" %d ", g_channel);
@@ -1025,13 +1073,15 @@ void draw_channel_no() {
 
 
 void draw_magnification() {
-    fillRect(MAG_LEFT, TOOLBAR_TOP, MAG_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
-    setCursor(MAG_LEFT, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
-    setTextColor(WHITE);
-    setTextSize(1);
-    writeString("zoom");
+    draw_setting_helper(MAG_LEFT, 4, 7);
     if (settings_state == SS_ZOOM) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
+        uart_puts(UART_ID, "zoom: ");
+        if (g_mag < 0) {
+            uart_putcf(UART_ID, "1:%d\n", abs(g_mag - 1));
+        } else {
+            uart_putcf(UART_ID, "%d:1\n", abs(g_mag + 1));
+        }
     }
     if (g_mag < 0) {
         write_intf(" 1:%d ", abs(g_mag - 1));
@@ -1042,52 +1092,40 @@ void draw_magnification() {
 
 
 void draw_no_of_pins() {
-    fillRect(NO_OF_PINS_LEFT, TOOLBAR_TOP, NO_OF_PINS_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
-    setCursor(NO_OF_PINS_LEFT, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
-    setTextColor(WHITE);
-    setTextSize(1);
-    writeString("pins");
+    draw_setting_helper(NO_OF_PINS_LEFT, 4, 4);
     if (settings_state == SS_NO_OF_PINS) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
+        uart_putcf(UART_ID, "pins: %d\n", g_no_of_pins_to_capture);
     }
     write_intf(" %d ", g_no_of_pins_to_capture);
 }
 
 
 void draw_pins_base() {
-    fillRect(PINS_BASE_LEFT, TOOLBAR_TOP, PINS_BASE_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
-    setCursor(PINS_BASE_LEFT, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
-    setTextColor(WHITE);
-    setTextSize(1);
-    writeString("base");
+    draw_setting_helper(PINS_BASE_LEFT, 4, 7);
     if (settings_state == SS_PINS_BASE) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
+        uart_putcf(UART_ID, "base: %d\n", g_pins_base);
     }
     write_intf(" GP%d ", g_pins_base);
 }
 
 
 void draw_sample_frequency() {
-    fillRect(FREQ_LEFT, TOOLBAR_TOP, FREQ_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
-    setCursor(FREQ_LEFT, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
-    setTextColor(WHITE);
-    setTextSize(1);
-    writeString("fdiv");
+    draw_setting_helper(FREQ_LEFT, 4, 5);
     if (settings_state == SS_FREQ) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
+        uart_putcf(UART_ID, "fdiv: %d\n", g_sample_frequency);
     }
     write_intf(" %d ", g_sample_frequency);
 }
 
 
 void draw_trigger_pin_base() {
-    fillRect(TRIGGER_BASE_LEFT, TOOLBAR_TOP, TRIGGER_BASE_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
-    setCursor(TRIGGER_BASE_LEFT, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
-    setTextColor(WHITE);
-    setTextSize(1);
-    writeString("tpin");
+    draw_setting_helper(TRIGGER_BASE_LEFT, 4, 6);
     if (settings_state == SS_TRIGGER_PIN_BASE) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
+        uart_putcf(UART_ID, "tpin: %d\n", g_trigger_pin_base);
     }
     write_intf(" GP%d ", g_trigger_pin_base);
 }
@@ -1095,17 +1133,15 @@ void draw_trigger_pin_base() {
 
 void draw_trigger_type() {
 
-// enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_HSYNC, TT_VGA_RGB, TT_VGA_FRONT_PORCH, TT_COUNT};
+// enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_VSYNC, TT_VGA_RGB, TT_VGA_VFRONT_PORCH, TT_COUNT};
 
-    unsigned char tt_chars[9][8] = {"   \x07   ", "   _   ", "   -   ", "   \x18   ", "   \x19   ", "   \x12   ", " HSYNC ", "  RGB  ", " F.POR "};
-
-    fillRect(TRIGGER_TYPE_LEFT, TOOLBAR_TOP, TRIGGER_TYPE_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
-    setCursor(TRIGGER_TYPE_LEFT, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
-    setTextColor(WHITE);
-    setTextSize(1);
-    writeString("ttype");
+    unsigned char tt_chars[9][8] = {" NONE ", " LOW ", " HIGH ", " RISE ", " FALL ", " EDGE ", " VSYNC ", " RGB ", " VFPOR "};
+    draw_setting_helper(TRIGGER_TYPE_LEFT, 5, 7);
     if (settings_state == SS_TRIGGER_TYPE) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
+        uart_puts(UART_ID, "ttype:");
+        uart_puts(UART_ID, tt_chars[g_trigger_type]);
+        uart_puts(UART_ID, "\n");
     }
     writeString(tt_chars[g_trigger_type]);
 }
@@ -1124,20 +1160,46 @@ void draw_settings() {
 
 void draw_toolbar() {
     fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    setTextColor(WHITE);
+    setCursor(CHANNEL_NO_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    setTextSize(1);
+    writeString("ch    zoom       fdiv      pins    base       tpin       ttype");
     draw_settings();
 }
 
 
 void set_toolbar_text() {
-    setCursor(TOOLBAR_LEFT + TOOL_BAR_TEXT_PADDING, TOOLBAR_TOP + TOOL_BAR_TEXT_PADDING);
+    setCursor(TOOLBAR_LEFT + TOOLBAR_TEXT_PADDING, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
     setTextColor(WHITE);
     setTextSize(1);
 }
 
 
-void clear_tool_bar_hint() {
+void clear_toolbar_hint() {
     set_toolbar_text();
     fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_HINT_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    setCursor(2, SCREEN_HEIGHT - 1 - 8);
+    setTextColor(WHITE);
+    setTextSize(1);
+}
+
+
+void draw_statusbar() {
+    fillRect(STATUSBAR_LEFT, STATUSBAR_TOP, STATUSBAR_WIDTH, STATUSBAR_HEIGHT, STATUSBAR_COLOR);
+    // draw_settings();
+}
+
+
+void set_statusbar_text() {
+    setCursor(STATUSBAR_LEFT + STATUSBAR_TEXT_PADDING, STATUSBAR_TOP + STATUSBAR_TEXT_PADDING);
+    setTextColor(WHITE);
+    setTextSize(1);
+}
+
+
+void clear_statusbar_hint() {
+    set_statusbar_text();
+    fillRect(STATUSBAR_LEFT, STATUSBAR_TOP, STATUSBAR_HINT_WIDTH, STATUSBAR_HEIGHT, STATUSBAR_COLOR);
     setCursor(2, SCREEN_HEIGHT - 1 - 8);
     setTextColor(WHITE);
     setTextSize(1);
@@ -1151,8 +1213,8 @@ uint check_keyboard() {
     if ((last_uart_char == 27) || uart_is_readable(UART_ID)) {
 
 
-        clear_tool_bar_hint();
-        set_toolbar_text();
+        clear_statusbar_hint();
+        set_statusbar_text();
         // fillRect(1, SCREEN_HEIGHT - 1 - 8, SCREEN_WIDTH - 2, 8, BLUE);
         // setCursor(2, SCREEN_HEIGHT - 1 - 8);
         // setTextColor(WHITE);
@@ -1172,9 +1234,9 @@ uint check_keyboard() {
         char str[80];
         sprintf(str,"%d ", ch);
         writeString(str);
-        if (uart_is_writable(UART_ID)) {
-            uart_putc(UART_ID, ch);
-        }
+        // if (uart_is_writable(UART_ID)) {
+        //     uart_putc(UART_ID, ch);
+        // }
 
 
         if (ch == 27 /* ESC */) {
@@ -1204,9 +1266,9 @@ uint check_keyboard() {
 
                     sprintf(str,"%d ", ch);
                     writeString(str);
-                    if (uart_is_writable(UART_ID)) {
-                        uart_putc(UART_ID, ch);
-                    }
+                    // if (uart_is_writable(UART_ID)) {
+                    //     uart_putc(UART_ID, ch);
+                    // }
                 }
             }
 
@@ -1223,11 +1285,11 @@ uint check_keyboard() {
                 if ((char)escape_seq[0] == '[') {
                     switch ((char)escape_seq[1]) {
                         case 'A':
-                            writeString("up");
+                            // writeString("up");
                             ui_command = UIC_UP;
                             break;
                         case 'B':
-                            writeString("down");
+                            // writeString("down");
                             ui_command = UIC_DOWN;
                             break;
                         case 'C':
@@ -1254,11 +1316,9 @@ uint check_keyboard() {
                         ui_command = UIC_HOME;
 
                     } else if ((char)escape_seq[1] == '5') {
-                        writeString("page up");
                         ui_command = UIC_PAGE_UP;
 
                     } else if ((char)escape_seq[1] == '6') {
-                        writeString("page down");
                         ui_command = UIC_PAGE_DOWN;
                     }
                 }
@@ -1288,6 +1348,8 @@ uint check_keyboard() {
             ui_command = UIC_M;
         } else if ((char)ch == '0') {
             ui_command = UIC_0;
+        } else if ((char)ch == 'h') {
+            ui_command = UIC_H;
         } else if (ch == 9) {
             ui_command = UIC_TAB;
             // uart_puts(UART_ID, "TAB\n");
@@ -1335,56 +1397,128 @@ bool set_mag(int mag) {
     bool changed = mag != g_mag;
     if (changed) {
         g_mag = mag;
+        draw_magnification();
+        draw_minimap_indicator();
     }
-    draw_magnification();
-    draw_minimap_indicator();
     return changed;
 }
 
 
 void set_channel (uint8_t ch) {
-    g_channel = ch;
-    draw_channel_no();
+    if (g_channel != ch) {
+        g_channel = ch;
+        draw_channel_no();
+    }
 }
 
 
 void set_sample_frequency(uint f) {
-    g_sample_frequency = f;
-    draw_sample_frequency();
+    if (g_sample_frequency != f) {
+        g_sample_frequency = f;
+        draw_sample_frequency();
+    }
 }
 
 
 void set_no_of_pins(uint8_t no_of_pins) {
-    g_no_of_pins_to_capture = no_of_pins;
-    draw_no_of_pins();
+    if (g_no_of_pins_to_capture != no_of_pins) {
+        g_no_of_pins_to_capture = no_of_pins;
+        draw_no_of_pins();
+    }
 }
 
 
 void set_pins_base(uint8_t pins_base) {
-    g_pins_base = pins_base;
-    draw_pins_base();
+    if (g_pins_base != pins_base) {
+        g_pins_base = pins_base;
+        draw_pins_base();
+    }
 }
 
 
 void set_trigger_pin_base(uint8_t trigger_pin_base) {
-    g_trigger_pin_base = trigger_pin_base;
-    draw_trigger_pin_base();
+    if (g_trigger_pin_base != trigger_pin_base) {
+        g_trigger_pin_base = trigger_pin_base;
+        draw_trigger_pin_base();
+    }
 }
 
 
 void set_trigger_type(uint8_t trigger_type) {
-    g_trigger_type = trigger_type;
-    draw_trigger_type();
+    if (g_trigger_type != trigger_type) {
+        g_trigger_type = trigger_type;
+        draw_trigger_type();
+    }
+}
+
+
+void draw_setting(uint8_t setting) {
+    switch (setting) {
+        case SS_CHANNEL:
+            draw_channel_no();
+            break;
+
+        case SS_FREQ:
+            draw_sample_frequency();
+            break;
+
+        case SS_NO_OF_PINS:
+            draw_no_of_pins();
+            break;
+
+        case SS_PINS_BASE:
+            draw_pins_base();
+            break;
+
+        case SS_TRIGGER_PIN_BASE:
+            draw_trigger_pin_base();
+            break;
+
+        case SS_TRIGGER_TYPE:
+            draw_trigger_type();
+            break;
+
+        case SS_ZOOM:
+            draw_magnification();
+            break;
+    }
+    // if (setting == settings_state) {
+    //     draw_hint("Press UP / DOWN to increase / decrease the selected setting.");
+    // }
 }
 
 
 void set_settings_state(uint8_t state) {
+    uint8_t previous_state = settings_state;
     settings_state = state;
-    draw_settings();
+    draw_setting(previous_state);
+    draw_setting(settings_state);
+    
+    // draw_settings();
+
+
+    
+
     // draw a line under, or something, under the appropriate item in the toolbar
     // the one that now will respond to the up and down keys
     // uart_putcf(UART_ID, "State: %d\n", settings_state);
 }
+
+
+char* help_strings =
+    "LEFT / RIGHT to scroll one sample period left / right\n"
+    "CTRL-LEFT / CTRL-RIGHT to scroll to previous / next transition\n"
+    "  on the selected channel (ch)\n"
+    "PGUP / PGDN to scroll one page left / right\n"
+    "HOME / END to scroll to the beginning / end\n"
+    "TAB / SHIFT-TAB to select the next / previous setting\n"
+    "UP / DOWN to increase / decrease the selected setting\n"
+    "'c' to capture a sample with the settings'\n"
+    "'z' to zoom to fit all the samples on one page'\n"
+    "'+' / '-' to zoom in / out\n"
+    "'=' to zoom to 1:1\n"
+    "'m' to measure VGA timings\n"
+    "'h' to show this help\n";
 
 int main() {
 
@@ -1404,9 +1538,7 @@ int main() {
     // Initialize the VGA screen
     initVGA() ;
 
-    uart_puts(UART_ID, "\nPress SPACE to play/pause animation.\n");
-    uart_puts(UART_ID, "Press 'c' to capture.\n");
-
+    uart_puts(UART_ID, help_strings);
 
     // We're going to capture into a u32 buffer, for best DMA efficiency. Need
     // to be careful of rounding in case the number of pins being sampled
@@ -1444,7 +1576,7 @@ int main() {
     // logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, 5); // this works
 
     // animation pause
-    bool pause = true;
+    bool demo_paused = true;
 
 
     // Draw some filled rectangles
@@ -1473,6 +1605,8 @@ int main() {
     drawHLine(SCREEN_WIDTH - 16, SCREEN_HEIGHT - 1, 16, WHITE);
 
     draw_toolbar();
+
+    draw_statusbar();
 
     // drawHLine(630, 480 - 1, 1, WHITE);
 
@@ -1522,8 +1656,6 @@ int main() {
     // Wait for the pios to get warmed up. Probably not necessary.
     sleep_ms(10);
 
-    uart_puts(UART_ID, "Arming trigger...\n");
-
     logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, g_trigger_pin_base, g_trigger_type);
 
     // print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
@@ -1538,7 +1670,7 @@ int main() {
 
     while(true) {
 
-        if (!pause) {
+        if (!demo_paused) {
             demo();
         }
 
@@ -1560,43 +1692,44 @@ int main() {
             switch (ui_command) {
 
                 case UIC_SPACEBAR:
-                    pause = !pause;
+                    writeString("space");
+                    demo_paused = !demo_paused;
                     break;
 
                 case UIC_CTRL_RIGHT:
                 case UIC_CTRL_LEFT:
-                    writeString(ui_command == UIC_CTRL_RIGHT ? "next" : "prev");
+                    writeString(ui_command == UIC_CTRL_RIGHT ? "next" : "previous");
                     writeString(" edge");
                     plot_required = set_scroll_x(find_transition(capture_buf, g_channel, g_scrollx, ui_command == UIC_CTRL_RIGHT));
                     break;
 
                 case UIC_HOME:
-                    writeString("home");
+                    writeString("scroll home");
                     plot_required = set_scroll_x(0);
                     break;
 
                 case UIC_END:
-                    writeString("end");
+                    writeString("scroll end");
                     plot_required = set_scroll_x(MAX(g_capture_n_samples - (mag_factor(SCREEN_WIDTH)), 0));
                     break;
 
                 case UIC_RIGHT:
-                    writeString("right");
+                    writeString("scroll right");
                     plot_required = set_scroll_x(g_scrollx + 1);
                     break;
 
                 case UIC_LEFT:
-                    writeString("left");
+                    writeString("scroll left");
                     plot_required = set_scroll_x(MAX(g_scrollx - 1, 0));
                     break;
 
                 case UIC_PAGE_UP:
-                    writeString("page up");
+                    writeString("scroll left a page");
                     plot_required = set_scroll_x(MAX(g_scrollx - mag_factor(SCREEN_WIDTH), 0));
                     break;
 
                 case UIC_PAGE_DOWN:
-                    writeString("page down");
+                    writeString("scroll right a page");
                     plot_required = set_scroll_x(g_scrollx + mag_factor(SCREEN_WIDTH)); // 100% of the screen width
                     break;
 
@@ -1635,12 +1768,8 @@ int main() {
                     break;
 
                 case UIC_C:
-                    // printf("Arming trigger (Ctrl-C to exit)\n");
-
+                    writeString("capture");
                     fillRect(0, PLOT_TOP, SCREEN_WIDTH, MINIMAP_BOTTOM - PLOT_TOP, BLACK);
-
-                    uart_puts(UART_ID, "Arming trigger...\n");
-
 
                     logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency);
 
@@ -1692,6 +1821,8 @@ int main() {
                     break;
 
                 case UIC_DOWN:
+                    writeString("decrease setting");
+
                     switch (settings_state) {
                         case SS_CHANNEL:
                             set_channel(MAX(g_channel - 1, 0));
@@ -1725,6 +1856,8 @@ int main() {
                     break;
 
                 case UIC_UP:
+                    writeString("increase setting");
+
                     switch (settings_state) {
                         case SS_CHANNEL:
                             set_channel(MIN(g_channel + 1, g_no_of_captured_pins - 1));
@@ -1779,6 +1912,8 @@ int main() {
                 */
 
                 case UIC_TAB:
+                    writeString("next setting");
+
                     set_settings_state((settings_state + 1) % SS_COUNT);
                     // draw a line under, or something under the appropriate item in the toolbar
                     // the one that now will respond to the up and down keys
@@ -1786,12 +1921,21 @@ int main() {
                     break;
 
                 case UIC_SHIFT_TAB:
+                    writeString("previous setting");
+
                     if (settings_state <= 0) {
                         set_settings_state(SS_COUNT - 1);
                     } else {
                         set_settings_state(settings_state - 1);
                     }
                     // uart_putcf(UART_ID, "State: %d\n", settings_state);
+                    break;
+
+                case UIC_H:
+                    writeString("help");
+                    uart_puts(UART_ID, "\n");
+                    uart_puts(UART_ID, help_strings);
+                    uart_puts(UART_ID, "\n");
                     break;
             }
 
