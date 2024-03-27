@@ -275,6 +275,18 @@ void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
 }
 
 
+int get_channel_sample(const uint32_t *buf, int pin, uint pin_count, int index, uint record_size_bits) {
+
+    uint bit_index = pin + index * pin_count;
+    uint word_index = bit_index / record_size_bits;
+    // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
+    uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
+    //uart_puts(UART_ID, buf[word_index] & word_mask ? "-" : "_");
+
+    return buf[word_index] & word_mask ? 1 :0;
+}
+
+
 void print_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples) {
     // Display the capture buffer in text form, like this:
     // 00: __--__--__--__--__--__--
@@ -287,11 +299,7 @@ void print_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint3
         // uart_puts(UART_ID, "%02d: ", pin + pin_base);
         uart_puts(UART_ID, "todo");
         for (int sample = 0; sample < n_samples; ++sample) {
-            uint bit_index = pin + sample * pin_count;
-            uint word_index = bit_index / record_size_bits;
-            // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
-            uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-            uart_puts(UART_ID, buf[word_index] & word_mask ? "-" : "_");
+            uart_puts(UART_ID, get_channel_sample(buf, pin, pin_count, sample, record_size_bits) ? "-" : "_");
         }
         uart_puts(UART_ID, "\n");
     }
@@ -482,12 +490,8 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
         for (i = scrollx; i >= 0; i--) {
             // Go back from the current scroll position and find the first
             // sample that's different from the sample at the scroll position.
-            uint bit_index = pin + i * pin_count;
-            uint word_index = bit_index / record_size_bits;
-            // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
-            uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
 
-            uint sample = buf[word_index] & word_mask ? 1 :0;
+            uint sample = get_channel_sample(buf, pin, pin_count, i, record_size_bits);
 
             if (i == scrollx) {
                 last_sample = sample;
@@ -541,15 +545,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
         for (int i = scrollx; i < max_screen_x; i++) {
 
-            //
-
-            uint bit_index = pin + i * pin_count;
-            uint word_index = bit_index / record_size_bits;
-            // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
-            uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-            // uart_puts(UART_ID, buf[word_index] & word_mask ? "-" : "_");
-
-            uint sample = buf[word_index] & word_mask ? 1 :0;
+            uint sample = get_channel_sample(buf, pin, pin_count, i, record_size_bits);
 
             // Check to see whether we've drawn a pixel at this x location, which only
             // happens when we're zoomed out (zoom < 0). If not draw it.
@@ -616,13 +612,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
         for (int i = max_screen_x; i < n_samples; i++) {
 
-            uint bit_index = pin + i * pin_count;
-            uint word_index = bit_index / record_size_bits;
-            // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
-            uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-            //uart_puts(UART_ID, buf[word_index] & word_mask ? "-" : "_");
-
-            uint sample = buf[word_index] & word_mask ? 1 :0;
+            uint sample = get_channel_sample(buf, pin, pin_count, i, record_size_bits);
 
             // if (x != last_pixel_x) {
                 // drawPixel(x, y + (sample ? 0 : trace_height - 1), line_col);
@@ -767,12 +757,7 @@ int measure(const uint32_t *buf) {
     int green_start;
 
     for (i = 0; i < g_capture_n_samples; i++) {
-        uint bit_index = pin + i * g_no_of_captured_pins;
-        uint word_index = bit_index / record_size_bits;
-        // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
-        uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-
-        uint sample = buf[word_index] & word_mask ? 1 :0;
+        uint sample = get_channel_sample(buf, pin, g_no_of_captured_pins, i, record_size_bits);
 
         if (sample) {
             green_start = i;
@@ -787,12 +772,7 @@ int measure(const uint32_t *buf) {
     pin = 0;
 
     for (i = green_start; i >= 0; i--) {
-        uint bit_index = pin + i * g_no_of_captured_pins;
-        uint word_index = bit_index / record_size_bits;
-        // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
-        uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-
-        uint sample = buf[word_index] & word_mask ? 1 :0;
+        uint sample = get_channel_sample(buf, pin, g_no_of_captured_pins, i, record_size_bits);
 
         if (!sample) {
             hsync_end = i + 1; // this sample is still high (we're going backwards)
@@ -813,12 +793,7 @@ int measure(const uint32_t *buf) {
     int vsync_start;
 
     for (i = 0; i < g_capture_n_samples; i++) {
-        uint bit_index = pin + i * g_no_of_captured_pins;
-        uint word_index = bit_index / record_size_bits;
-        // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
-        uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-
-        uint sample = buf[word_index] & word_mask ? 1 :0;
+        uint sample = get_channel_sample(buf, pin, g_no_of_captured_pins, i, record_size_bits);
 
         if (!sample) {
             vsync_start = i;
@@ -832,12 +807,7 @@ int measure(const uint32_t *buf) {
     int vsync_end;
 
     for (i = vsync_start; i < g_capture_n_samples; i++) {
-        uint bit_index = pin + i * g_no_of_captured_pins;
-        uint word_index = bit_index / record_size_bits;
-        // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
-        uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-
-        uint sample = buf[word_index] & word_mask ? 1 :0;
+        uint sample = (buf, pin, g_no_of_captured_pins, i, record_size_bits);
 
         if (sample) {
             vsync_end = i;
@@ -854,12 +824,7 @@ int measure(const uint32_t *buf) {
     // int hsync_end;
 
     for (i = vsync_end; i >= 0; i--) {
-        uint bit_index = pin + i * g_no_of_captured_pins;
-        uint word_index = bit_index / record_size_bits;
-        // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
-        uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-
-        uint sample = buf[word_index] & word_mask ? 1 :0;
+        uint sample = get_channel_sample(buf, pin, g_no_of_captured_pins, i, record_size_bits);
 
         if (!sample) {
             hsync_end = i + 1;
@@ -917,13 +882,7 @@ int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next
     if (next) {
 
         for (i = from_sample; i < g_capture_n_samples; i++) {
-            uint bit_index = pin + i * g_no_of_captured_pins;
-            uint word_index = bit_index / record_size_bits;
-            // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
-            uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-
-
-            uint sample = buf[word_index] & word_mask ? 1 :0;
+            uint sample = get_channel_sample(buf, pin, g_no_of_captured_pins, i, record_size_bits);
 
             if (i == from_sample) {
                 first_sample = sample;
@@ -940,13 +899,7 @@ int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next
     } else {
 
         for (i = from_sample - 1; i >= 0; i--) {
-            uint bit_index = pin + i * g_no_of_captured_pins;
-            uint word_index = bit_index / record_size_bits;
-            // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
-            uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-
-
-            uint sample = buf[word_index] & word_mask ? 1 :0;
+            uint sample = get_channel_sample(buf, pin, g_no_of_captured_pins, i, record_size_bits);
 
             if (i == from_sample - 1) {
                 first_sample = sample;
@@ -1495,9 +1448,6 @@ void set_settings_state(uint8_t state) {
     draw_setting(settings_state);
     
     // draw_settings();
-
-
-    
 
     // draw a line under, or something, under the appropriate item in the toolbar
     // the one that now will respond to the up and down keys
