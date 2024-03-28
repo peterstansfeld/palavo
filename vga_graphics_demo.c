@@ -136,7 +136,7 @@ void logic_analyser_init(PIO pio, uint sm, uint pin_base, uint pin_count, float 
 }
 
 
-// Immediately execute an instruction on a state machine and wait for upto
+// Immediately execute an instruction on a state machine and wait for up to
 // a number of microseconds for it to complete.
 bool pio_sm_exec_timeout_us(PIO pio, uint sm, uint instr, uint32_t timeout_us) {
     pio_sm_exec(pio, sm, instr);
@@ -150,7 +150,21 @@ bool pio_sm_exec_timeout_us(PIO pio, uint sm, uint instr, uint32_t timeout_us) {
 }
 
 
-void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, size_t capture_size_words,
+// Immediately execute an instruction on a state machine and wait for it to
+// complete unless an expiry time is reached sooner.
+bool pio_sm_exec_expiry_time_us(PIO pio, uint sm, uint instr, uint32_t expiry_time_us) {
+    pio_sm_exec(pio, sm, instr);
+    // uint32_t start_time = time_us_32();
+    while (time_us_32() < expiry_time_us) {
+        if (!pio_sm_is_exec_stalled(pio, sm)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
+bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, size_t capture_size_words,
                         uint trigger_pin, uint8_t trigger_type) {
 
     uart_puts(UART_ID, "\nArming trigger...\n");
@@ -186,6 +200,7 @@ void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     switch (trigger_type) {
 
         case TT_NONE:
+            triggered = true;
             break;
 
         case TT_LOW_LEVEL:
@@ -233,15 +248,18 @@ void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
                     break;
             }
 
-            if (pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(1, trigger_pin + 1), TRIGGER_TIMEOUT_US)) {
+
+            uint32_t expiry_time = time_us_32() + TRIGGER_TIMEOUT_US;
+
+            if (pio_sm_exec_expiry_time_us(pio, sm, pio_encode_wait_gpio(1, trigger_pin + 1), expiry_time)) {
                 // VSYNC is high
-                if (pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(0, trigger_pin + 1), TRIGGER_TIMEOUT_US)) {
+                if (pio_sm_exec_expiry_time_us(pio, sm, pio_encode_wait_gpio(0, trigger_pin + 1), expiry_time)) {
                     // VSYNC is low
                     triggered = true; // assume pass
                     // Wait for x HSYNC pulses before starting the capture
                     for (int i = 0; i < x; i++) {
-                        if (pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(1, trigger_pin), TRIGGER_TIMEOUT_US)) {
-                            if (!pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(0, trigger_pin), TRIGGER_TIMEOUT_US)) {
+                        if (pio_sm_exec_expiry_time_us(pio, sm, pio_encode_wait_gpio(1, trigger_pin), expiry_time)) {
+                            if (!pio_sm_exec_expiry_time_us(pio, sm, pio_encode_wait_gpio(0, trigger_pin), expiry_time)) {
                                 triggered = false;
                                 break;
                             }
@@ -272,6 +290,8 @@ void logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     pio_sm_set_enabled(pio, sm, false); // Disable the state machine, which might save a bit of power? (todo - find out)
 
     g_no_of_captured_pins = g_no_of_pins_to_capture;
+
+    return triggered;
 }
 
 
@@ -1723,7 +1743,9 @@ int main() {
 
                     logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency);
 
-                    logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, g_trigger_pin_base, g_trigger_type);
+                    if (!logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, g_trigger_pin_base, g_trigger_type)) {
+                        writeString(" - failed to trigger");
+                    }
 
                     // each bit on a uart travels at 115200 bits per second
                     // the clock goes at 125,000,000 hz (I think)
