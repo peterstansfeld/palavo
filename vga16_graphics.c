@@ -69,6 +69,8 @@ char * address_pointer = &vga_data_array[0] ;
 unsigned short cursor_y, cursor_x, textsize ;
 char textcolor, textbgcolor, wrap;
 
+unsigned char str_cursor_x;
+
 // Screen width/height
 #define _width 640
 #define _height 480
@@ -738,7 +740,7 @@ inline void setTextWrap(char w) {
 void tft_write(unsigned char c){
   if (c == '\n') {
     cursor_y += textsize*8;
-    cursor_x  = 0;
+    cursor_x  = str_cursor_x;
   } else if (c == '\r') {
     // skip em
   } else if (c == '\t'){
@@ -761,6 +763,7 @@ inline void writeString(char* str){
  * Call tft_setCursor(), tft_setTextColor(), tft_setTextSize()
  *  as necessary before printing
  */
+    str_cursor_x = cursor_x;
     while (*str){
         tft_write(*str++);
     }
