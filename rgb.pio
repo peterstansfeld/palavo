@@ -19,6 +19,13 @@ colorout:
 	pull block				; Pull color value
 	out pins, 4	[4]			; Push out to pins (first pixel)
 	out pins, 4	[2]			; Push out to pins (next pixel)
+
+; test rgb data (white) to replace the above three lines
+;    nop
+;    set pins, 0x0f [4]
+;    set pins, 0x0f [2]
+; end oftest rgb data
+
 	jmp x-- colorout		; Stay here thru horizontal active mode
 
 .wrap

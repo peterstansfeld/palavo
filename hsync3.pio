@@ -61,7 +61,7 @@ active_phase:
 
 v_active_state:
     set x, v_frontporch_state [7]
-    set y, 9 [2]
+    set y, 10 [2]
 
 .wrap_target            ; Program wraps to here
 
