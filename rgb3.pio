@@ -15,14 +15,18 @@
 ;set pins, 0x0       				; Zero RGB pins in blanking
 mov x, isr       					; Initialize counter variable
 
-wait 1 irq 5 [4]	      		; Wait for vsync active mode (starts 5 cycles after execution)
+wait 1 irq 5 [0]	      		; Wait for vsync active mode (starts 5 cycles after execution)
 
 colorout:
-;	out pins, 4	[4]			; Push out to pins (first pixel)
-;	out pins, 4	[3]			; Push out to pins (next pixel)
-    set pins, 0xf [4]       
-    set pins, 0xf [3]       
-	jmp x-- colorout       		; Stay here thru horizontal active mode
+    out pins, 4	[4]			; Push out to pins (first pixel)
+    out pins, 4	[3]			; Push out to pins (next pixel)
+;    set pins, 0xf [4]       
+;    set pins, 0xf [3]       
+
+;    mov pins, x	[4]			; Push out to pins (first pixel)
+;    mov pins, !x	[3]			; Push out to pins (next pixel)
+
+    jmp x-- colorout       		; Stay here thru horizontal active mode
 
     set pins, 0x0       				; Zero RGB pins in blanking
 
@@ -77,7 +81,7 @@ static inline void rgb3_program_init(PIO pio, uint sm, uint offset, uint pin /*,
     // sm_config_set_clkdiv(&c, 5) ;
 
     // Enable autopull with the pull threshold set to 8 
-    // sm_config_set_out_shift(&c, true, true, 8);
+    sm_config_set_out_shift(&c, true, true, 8);
     // The above, as well as commenting out the pull instruction, didn't quite
     // work as expected because, I think, the osr is not loaded on startup and
     // the memory is laggging behind behind constantly
@@ -104,19 +108,18 @@ static inline void rgb3_program_init(PIO pio, uint sm, uint offset, uint pin /*,
     pio_sm_init(pio, sm, offset, &c);
 
 
-
     // these instructions have been moved from vga_graphics.c
 
     pio_sm_put_blocking(pio, sm, 319); // value to store RGB_ACTIVE in isr as a horizontal pixel pair counter
-    pio_sm_put_blocking(pio, sm, 480 - 1); // value to store in y as a line counter
-
     pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
     pio_sm_exec(pio, sm, pio_encode_out(pio_isr, 32)); // trigger auto-pl
+
+    /*
+    pio_sm_put_blocking(pio, sm, 480 - 1); // value to store in y as a line counter
     pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
     pio_sm_exec(pio, sm, pio_encode_out(pio_y, 32)); // trigger auto-pull
-
+*/
     // end of moved instructions
-
 
 
     // Set the state machine running (commented out, I'll start this in the C)

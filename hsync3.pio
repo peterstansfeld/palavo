@@ -37,9 +37,23 @@
 ;v_line_start:
 ;    mov y, isr          ; y and isr must be initialised to 479
 
+;active_phase:
+;    irq 5 [0]               ; signal rgb2 line buffer output
+
+
+;h_line_loop_active:
+;    nop
+;    irq 5 [0]               ; signal rgb2 line buffer output
+
+;public hsync3_start:
+
+
+h_line_loop_extra:
+    nop [7]
+
 h_line_loop:
 ;    set x, 19              ; x = 19, giving 20 loops, with delay of 1 = 40 cycles + this cycle = 41
-    set x, 18 [6]             ; x = 18, giving 19 loops, with delay of 1 = 34 cycles + this cycle + delay = 36
+    set x, 16 [6]             ; x = 18, giving 19 loops, with delay of 1 = 34 cycles + this cycle + delay = 36
 h_activefrontporch:
    jmp x-- h_activefrontporch [3] ; Remain high in active mode and front porch
 
@@ -52,21 +66,36 @@ h_activefrontporch:
     jmp !x active_phase
 
 not_active_phase:
-    jmp y-- h_line_loop [2]
+    jmp y-- h_line_loop_extra [2]
     mov pc, osr          ; jump to address stored in osr
 
 active_phase:
-    irq 5 [1]               ; signal rgb2 line buffer output
-    jmp y-- h_line_loop
+;    irq 5 [1]               ; signal rgb2 line buffer output
+;    jmp y-- h_line_loop
+
+;    nop [3]
+;    set x, v_frontporch_state [3]
+;    irq 5 [7]               ; signal rgb2 line buffer output
+;    jmp y-- set_state_and_jump [1]
+
+;instead of a nop
+    set x, v_frontporch_state [3]
+    irq 5 [0]               ; signal rgb2 line buffer output
+;    jmp y-- h_line_loop
+    jmp y-- h_line_loop [5]
+
+
 
 v_active_state:
-    set x, v_frontporch_state [7]
-    set y, 10 [2]
+;    set x, v_frontporch_state [0]
+    set y, 10 [4]
 
 .wrap_target            ; Program wraps to here
 
 set_state_and_jump:
-    mov osr, x [5]
+    mov osr, x [3]
+
+try_here:
     set x, 15
     jmp h_activefrontporch
 
@@ -76,7 +105,7 @@ v_frontporch_state:
 ;.wrap_target            ; Program wraps to here
 
 set_loop_count_of_1:
-    set y, 1 [2]
+    set y, 1 [4]
     jmp set_state_and_jump
     
 
@@ -95,13 +124,13 @@ v_backporch_state2:
 */
 
 v_pulse_state:     
-    set x, v_backporch_state side 1 ;set vsync high
+    set x, v_backporch_state side 1 [2] ;set vsync high
     set y, 31 [7]
     jmp set_state_and_jump
 
 v_backporch_state:
     set x, 0 [7]
-    mov y, isr [1]
+    mov y, isr [3]
 ;    jmp set_state_and_jump
 ;    mov osr, x
 

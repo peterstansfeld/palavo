@@ -5,7 +5,7 @@
 
 #define VGA_USE_PIO_PROG 1
 
-#define VGA_TEST_PIO_PROG 2
+#define VGA_TEST_PIO_PROG 3
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -195,27 +195,13 @@ void initVGA() {
     channel_config_set_transfer_data_size(&c0, DMA_SIZE_8);              // 8-bit txfers
     channel_config_set_read_increment(&c0, true);                        // yes read incrementing
     channel_config_set_write_increment(&c0, false);                      // no write incrementing
-#if VGA_USE_PIO_PROG == 1
     channel_config_set_dreq(&c0, DREQ_PIO0_TX2) ;                        // DREQ_PIO0_TX2 pacing (FIFO)
-#elif VGA_USE_PIO_PROG == 2
-    channel_config_set_dreq(&c0, DREQ_PIO1_TX2) ;                        // DREQ_PIO1_TX2 pacing (FIFO)
-#endif
     channel_config_set_chain_to(&c0, rgb_chan_1);                        // chain to other channel
 
      dma_channel_configure(
         rgb_chan_0,                 // Channel to be configured
         &c0,                        // The configuration we just created
-#if VGA_USE_PIO_PROG == 1
         &pio->txf[rgb_sm],          // write address (RGB PIO TX FIFO)
-#elif VGA_USE_PIO_PROG == 2
-
-#if VGA_TEST_PIO_PROG == 2
-        &pio_2->txf[rgb2_sm],          // write address (RGB PIO TX FIFO)
-#else
-        &pio_2->txf[rgb3_sm],          // write address (RGB PIO TX FIFO)
-#endif
-
-#endif
         &vga_data_array,            // The initial read address (pixel color array)
         TXCOUNT,                    // Number of transfers; in this case each is 1 byte.
         false                       // Don't start immediately.
@@ -238,9 +224,7 @@ void initVGA() {
     );
 
 
-
-
-    // More test DMA channels - 0 sends color data, 1 reconfigures and restarts 0
+    // More DMA channels - test ones - 0 sends color data, 1 reconfigures and restarts 0
     int rgb_test_chan_0 = dma_claim_unused_channel(true);
     int rgb_test_chan_1 = dma_claim_unused_channel(true);
 
@@ -249,19 +233,18 @@ void initVGA() {
     channel_config_set_transfer_data_size(&c0, DMA_SIZE_8);              // 8-bit txfers
     channel_config_set_read_increment(&c0, true);                        // yes read incrementing
     channel_config_set_write_increment(&c0, false);                      // no write incrementing
-#if VGA_USE_PIO_PROG == 1
-    channel_config_set_dreq(&c0, DREQ_PIO0_TX2) ;                        // DREQ_PIO0_TX2 pacing (FIFO)
-#elif VGA_USE_PIO_PROG == 2
+
+#if VGA_TEST_PIO_PROG == 2
     channel_config_set_dreq(&c0, DREQ_PIO1_TX2) ;                        // DREQ_PIO1_TX2 pacing (FIFO)
+#elif VGA_TEST_PIO_PROG == 3
+    channel_config_set_dreq(&c0, DREQ_PIO1_TX1) ;                        // DREQ_PIO1_TX1 pacing (FIFO)
 #endif
+
     channel_config_set_chain_to(&c0, rgb_test_chan_1);                        // chain to other channel
 
      dma_channel_configure(
         rgb_test_chan_0,                 // Channel to be configured
         &c0,                        // The configuration we just created
-// #if VGA_USE_PIO_PROG == 1
-//         &pio->txf[rgb_sm],          // write address (RGB PIO TX FIFO)
-// #elif VGA_USE_PIO_PROG == 2
 
 #if VGA_TEST_PIO_PROG == 2
         &pio_2->txf[rgb2_sm],          // write address (RGB PIO TX FIFO)
@@ -422,12 +405,8 @@ void drawPixel(short x, short y, char color) {
     // if (y < 0) y = 0 ;
     // if (y > 479) y = 479 ;
 
-    if (x > 639) return;
-    if (x < 0) return;
-    if (y < 0) return;
-    if (y > 479) return;
-
-    //if((x > 639) | (x < 0) | (y > 479) | (y < 0) ) return;
+    if ((x > 639) || (x < 0) || (y > 479) || (y < 0))
+        return;
 
     // Which pixel is it?
     int pixel = ((640 * y) + x) ;
