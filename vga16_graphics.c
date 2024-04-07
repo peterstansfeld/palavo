@@ -1,11 +1,28 @@
 
 // VGA_USE_PIO_PROG defines which VGA driver should be used to drive the VGA port
-// #define VGA_USE_PIO_PROG 1 // uses original driver which uses hsync.pio, vsync.pio and rgb.pio
-// #define VGA_USE_PIO_PROG 2 // uses new driver which uses hsync2.pio, vsync2.pio and rgb2.pio
+
+// If it's 1 Hunter Adams' VGA driver is used on HSYNC, VSYNC, LO_GRN, etc.
+// otherwise its output will be on HSYNC2, VSYNC2, LO_GRN2, etc. and another
+// VGA driver will be used on HSYNC, VSYNC, LO_GRN, etc.
 
 #define VGA_USE_PIO_PROG 1
 
+
+// VGA_TEST_PIO_PROG defines which VGA driver should be used to drive the VGA
+// test pins on HSYNC2, VSYNC2, LO_GRN2, etc.
+
 #define VGA_TEST_PIO_PROG 3
+
+
+#if (VGA_USE_PIO_PROG != 1) && (VGA_TEST_PIO_PROG != 1) 
+
+    #error Either VGA_USE_PIO_PROG or VGA_TEST_PIO_PROG must be 1.
+
+#elif (VGA_USE_PIO_PROG == 1) && (VGA_TEST_PIO_PROG == 1)
+
+    #error VGA_USE_PIO_PROG and VGA_TEST_PIO_PROG can't both be 1.
+
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,13 +35,13 @@
 #include "vsync.pio.h"
 #include "rgb.pio.h"
 
-#if VGA_TEST_PIO_PROG == 2
+#if (VGA_USE_PIO_PROG == 2) || (VGA_TEST_PIO_PROG == 2)
 
 #include "hsync2.pio.h"
 #include "vsync2.pio.h"
 #include "rgb2.pio.h"
 
-#elif VGA_TEST_PIO_PROG == 3
+#elif (VGA_USE_PIO_PROG == 3) || (VGA_TEST_PIO_PROG == 3)
 
 #include "hsync3.pio.h"
 #include "rgb3.pio.h"
@@ -113,7 +130,7 @@ void initVGA() {
 
     // Manually select a couple of state machines from pio instance pio1
 
- #if VGA_TEST_PIO_PROG == 2
+#if (VGA_USE_PIO_PROG == 2) || (VGA_TEST_PIO_PROG == 2)
 
     uint hsync2_offset = pio_add_program(pio_2, &hsync2_program);
     uint vsync2_offset = pio_add_program(pio_2, &vsync2_program);
@@ -123,7 +140,7 @@ void initVGA() {
     uint vsync2_sm = 1;
     uint rgb2_sm = 2;
     
-#elif VGA_TEST_PIO_PROG == 3
+#elif (VGA_USE_PIO_PROG == 3) || (VGA_TEST_PIO_PROG == 3)
     
     uint hsync3_sm = 0;
     uint rgb3_sm = 1;
@@ -144,39 +161,38 @@ void initVGA() {
     vsync_program_init(pio, vsync_sm, vsync_offset, VSYNC);
     rgb_program_init(pio, rgb_sm, rgb_offset, LO_GRN);
 
-#elif VGA_USE_PIO_PROG == 2
+    #if VGA_TEST_PIO_PROG == 2
 
+        hsync2_program_init(pio_2, hsync2_sm, hsync2_offset, HSYNC2);
+        vsync2_program_init(pio_2, vsync2_sm, vsync2_offset, VSYNC2);
+        rgb2_program_init(pio_2, rgb2_sm, rgb2_offset, LO_GRN2);
+
+    #elif VGA_TEST_PIO_PROG == 3
+    
+        hsync3_program_init(pio_2, hsync3_sm, hsync3_offset, HSYNC2, VSYNC2); // this has to be the first (not true, it must have .org 0)
+        rgb3_program_init(pio_2, rgb3_sm, rgb3_offset, LO_GRN2 /*, HI_GRN2*/); // 
+
+    #endif
+
+
+#else
+    // VGA_USE_PIO_PROG != 1, output it on test pins HSYNC2, HSYNC2, VSYNC2 & LO_GRN2 etc.
     hsync_program_init(pio, hsync_sm, hsync_offset, HSYNC2);
     vsync_program_init(pio, vsync_sm, vsync_offset, VSYNC2);
     rgb_program_init(pio, rgb_sm, rgb_offset, LO_GRN2);
 
-#endif
-    
-    // VGA test options
-
-    #if VGA_TEST_PIO_PROG == 2
-    
-#if VGA_USE_PIO_PROG == 1
-
-    hsync2_program_init(pio_2, hsync2_sm, hsync2_offset, HSYNC2);
-    vsync2_program_init(pio_2, vsync2_sm, vsync2_offset, VSYNC2);
-    rgb2_program_init(pio_2, rgb2_sm, rgb2_offset, LO_GRN2 /*, HI_GRN2*/);     
-
-#elif VGA_USE_PIO_PROG == 2
-
-    hsync2_program_init(pio_2, hsync2_sm, hsync2_offset, HSYNC);
-    vsync2_program_init(pio_2, vsync2_sm, vsync2_offset, VSYNC);
-    rgb2_program_init(pio_2, rgb2_sm, rgb2_offset, LO_GRN /*, HI_GRN2*/);     
-
-#endif
-
-
-    #elif VGA_TEST_PIO_PROG == 3
-    
-    hsync3_program_init(pio_2, hsync3_sm, hsync3_offset, HSYNC2, VSYNC2); // this has to be the first (not true, it must have .org 0)
-    rgb3_program_init(pio_2, rgb3_sm, rgb3_offset, LO_GRN2 /*, HI_GRN2*/); // 
-
+    // and use other pio programs to drive the VGA monitor
+    #if VGA_USE_PIO_PROG == 2
+      hsync2_program_init(pio_2, hsync2_sm, hsync2_offset, HSYNC);
+      vsync2_program_init(pio_2, vsync2_sm, vsync2_offset, VSYNC);
+      rgb2_program_init(pio_2, rgb2_sm, rgb2_offset, LO_GRN);
+    #else
+      hsync3_program_init(pio_2, hsync3_sm, hsync3_offset, HSYNC, VSYNC);
+      rgb3_program_init(pio_2, rgb3_sm, rgb3_offset, LO_GRN);
     #endif
+
+
+#endif
 
 
     // hsync3_program_init(pio_2, hsync3_sm, hsync3_offset, HI_GRN2);
@@ -234,9 +250,9 @@ void initVGA() {
     channel_config_set_read_increment(&c0, true);                        // yes read incrementing
     channel_config_set_write_increment(&c0, false);                      // no write incrementing
 
-#if VGA_TEST_PIO_PROG == 2
+#if (VGA_USE_PIO_PROG == 2) || (VGA_TEST_PIO_PROG == 2)
     channel_config_set_dreq(&c0, DREQ_PIO1_TX2) ;                        // DREQ_PIO1_TX2 pacing (FIFO)
-#elif VGA_TEST_PIO_PROG == 3
+#elif (VGA_USE_PIO_PROG == 3) || (VGA_TEST_PIO_PROG == 3)
     channel_config_set_dreq(&c0, DREQ_PIO1_TX1) ;                        // DREQ_PIO1_TX1 pacing (FIFO)
 #endif
 
@@ -246,9 +262,9 @@ void initVGA() {
         rgb_test_chan_0,                 // Channel to be configured
         &c0,                        // The configuration we just created
 
-#if VGA_TEST_PIO_PROG == 2
+#if (VGA_USE_PIO_PROG == 2) || (VGA_TEST_PIO_PROG == 2)
         &pio_2->txf[rgb2_sm],          // write address (RGB PIO TX FIFO)
-#else
+#elif (VGA_USE_PIO_PROG == 3) || (VGA_TEST_PIO_PROG == 3)
         &pio_2->txf[rgb3_sm],          // write address (RGB PIO TX FIFO)
 #endif
 
@@ -374,11 +390,11 @@ void initVGA() {
     pio_enable_sm_mask_in_sync(pio, ((1u << hsync_sm) | (1u << vsync_sm) | (1u << rgb_sm)));
 
 
-#if VGA_TEST_PIO_PROG == 2
+#if (VGA_USE_PIO_PROG == 2) || (VGA_TEST_PIO_PROG == 2)
 
     pio_enable_sm_mask_in_sync(pio_2, ((1u << hsync2_sm) | (1u << vsync2_sm) | (1u << rgb2_sm)));
 
-#elif VGA_TEST_PIO_PROG == 3
+#elif (VGA_USE_PIO_PROG == 3) || (VGA_TEST_PIO_PROG == 3)
 
     pio_enable_sm_mask_in_sync(pio_2, ((1u << hsync3_sm) | (1u << rgb3_sm)));
 
