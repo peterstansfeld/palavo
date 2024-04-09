@@ -11,7 +11,7 @@
 // VGA_TEST_PIO_PROG defines which VGA driver should be used to drive the VGA
 // test pins on HSYNC2, VSYNC2, LO_GRN2, etc.
 
-#define VGA_TEST_PIO_PROG 3
+#define VGA_TEST_PIO_PROG 4
 
 
 #if (VGA_USE_PIO_PROG != 1) && (VGA_TEST_PIO_PROG != 1) 
@@ -20,7 +20,7 @@
 
 #elif (VGA_USE_PIO_PROG == 1) && (VGA_TEST_PIO_PROG == 1)
 
-    #error VGA_USE_PIO_PROG and VGA_TEST_PIO_PROG can't both be 1.
+    #error VGA_USE_PIO_PROG and VGA_TEST_PIO_PROG cannot both be 1.
 
 #endif
 
@@ -45,6 +45,11 @@
 
 #include "hsync3.pio.h"
 #include "rgb3.pio.h"
+
+#elif (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
+
+#include "hsync4.pio.h"
+#include "rgb4.pio.h"
 
 #endif
 
@@ -148,6 +153,14 @@ void initVGA() {
     uint rgb3_offset = pio_add_program(pio_2, &rgb3_program);
     uint hsync3_offset = pio_add_program(pio_2, &hsync3_program);
 
+#elif (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
+    
+    uint hsync4_sm = 0;
+    uint rgb4_sm = 1;
+
+    uint rgb4_offset = pio_add_program(pio_2, &rgb4_program);
+    uint hsync4_offset = pio_add_program(pio_2, &hsync4_program);
+
 #endif
     
     // Call the initialization functions that are defined within each PIO file.
@@ -172,8 +185,12 @@ void initVGA() {
         hsync3_program_init(pio_2, hsync3_sm, hsync3_offset, HSYNC2, VSYNC2); // this has to be the first (not true, it must have .org 0)
         rgb3_program_init(pio_2, rgb3_sm, rgb3_offset, LO_GRN2 /*, HI_GRN2*/); // 
 
-    #endif
+    #elif VGA_TEST_PIO_PROG == 4
 
+        hsync4_program_init(pio_2, hsync4_sm, hsync4_offset, HSYNC2, VSYNC2); // this has to be the first (not true, it must have .org 0)
+        rgb4_program_init(pio_2, rgb4_sm, rgb4_offset, LO_GRN2 /*, HI_GRN2*/); // 
+
+    #endif
 
 #else
     // VGA_USE_PIO_PROG != 1, output it on test pins HSYNC2, HSYNC2, VSYNC2 & LO_GRN2 etc.
@@ -186,9 +203,15 @@ void initVGA() {
       hsync2_program_init(pio_2, hsync2_sm, hsync2_offset, HSYNC);
       vsync2_program_init(pio_2, vsync2_sm, vsync2_offset, VSYNC);
       rgb2_program_init(pio_2, rgb2_sm, rgb2_offset, LO_GRN);
-    #else
+    
+    #elif VGA_USE_PIO_PROG == 3
       hsync3_program_init(pio_2, hsync3_sm, hsync3_offset, HSYNC, VSYNC);
       rgb3_program_init(pio_2, rgb3_sm, rgb3_offset, LO_GRN);
+
+    #elif VGA_USE_PIO_PROG == 4
+      hsync4_program_init(pio_2, hsync4_sm, hsync4_offset, HSYNC, VSYNC);
+      rgb4_program_init(pio_2, rgb4_sm, rgb4_offset, LO_GRN);
+
     #endif
 
 
@@ -254,6 +277,8 @@ void initVGA() {
     channel_config_set_dreq(&c0, DREQ_PIO1_TX2) ;                        // DREQ_PIO1_TX2 pacing (FIFO)
 #elif (VGA_USE_PIO_PROG == 3) || (VGA_TEST_PIO_PROG == 3)
     channel_config_set_dreq(&c0, DREQ_PIO1_TX1) ;                        // DREQ_PIO1_TX1 pacing (FIFO)
+#elif (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
+    channel_config_set_dreq(&c0, DREQ_PIO1_TX1) ;                        // DREQ_PIO1_TX1 pacing (FIFO)
 #endif
 
     channel_config_set_chain_to(&c0, rgb_test_chan_1);                        // chain to other channel
@@ -266,6 +291,8 @@ void initVGA() {
         &pio_2->txf[rgb2_sm],          // write address (RGB PIO TX FIFO)
 #elif (VGA_USE_PIO_PROG == 3) || (VGA_TEST_PIO_PROG == 3)
         &pio_2->txf[rgb3_sm],          // write address (RGB PIO TX FIFO)
+#elif (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
+        &pio_2->txf[rgb4_sm],          // write address (RGB PIO TX FIFO)
 #endif
 
 // #endif
@@ -397,6 +424,10 @@ void initVGA() {
 #elif (VGA_USE_PIO_PROG == 3) || (VGA_TEST_PIO_PROG == 3)
 
     pio_enable_sm_mask_in_sync(pio_2, ((1u << hsync3_sm) | (1u << rgb3_sm)));
+
+#elif (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
+
+    pio_enable_sm_mask_in_sync(pio_2, ((1u << hsync4_sm) | (1u << rgb4_sm)));
 
 #endif
 

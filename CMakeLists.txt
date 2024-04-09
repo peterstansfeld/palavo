@@ -9,6 +9,8 @@ pico_generate_pio_header(graphics_test ${CMAKE_CURRENT_LIST_DIR}/vsync2.pio)
 pico_generate_pio_header(graphics_test ${CMAKE_CURRENT_LIST_DIR}/rgb2.pio)
 pico_generate_pio_header(graphics_test ${CMAKE_CURRENT_LIST_DIR}/hsync3.pio)
 pico_generate_pio_header(graphics_test ${CMAKE_CURRENT_LIST_DIR}/rgb3.pio)
+pico_generate_pio_header(graphics_test ${CMAKE_CURRENT_LIST_DIR}/hsync4.pio)
+pico_generate_pio_header(graphics_test ${CMAKE_CURRENT_LIST_DIR}/rgb4.pio)
 
 # must match with executable name and source file names
 target_sources(graphics_test PRIVATE vga_graphics_demo.c vga16_graphics.c)
