@@ -50,7 +50,7 @@ char timetext[40];
 
 int g_mag = 0;
 int g_scrollx = 0;
-uint8_t g_channel = 2;
+uint8_t g_channel = 1;
 
 
 enum SETTINGS_STATES {SS_CHANNEL, SS_ZOOM, SS_FREQ, SS_PINS_BASE, SS_NO_OF_PINS, SS_TRIGGER_PIN_BASE, SS_TRIGGER_TYPE, SS_COUNT};
@@ -84,8 +84,9 @@ uint8_t g_trigger_pin_base = CAPTURE_PIN_BASE;
 
 enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_VSYNC, TT_VGA_RGB, TT_VGA_VFRONT_PORCH, TT_COUNT};
 
-uint8_t g_trigger_type = TT_VGA_VSYNC;
+// uint8_t g_trigger_type = TT_VGA_VSYNC;
 
+uint8_t g_trigger_type = TT_VGA_VSYNC;
 
 static inline uint bits_packed_per_word(uint pin_count) {
     // If the number of pins to be sampled divides the shift register size, we

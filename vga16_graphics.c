@@ -74,6 +74,15 @@
 unsigned char vga_data_array[TXCOUNT];
 char * address_pointer = &vga_data_array[0] ;
 
+#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
+
+// #define SYNC_BUFFER_COUNT 14
+#define SYNC_BUFFER_COUNT 9
+
+uint32_t sync_buffer[SYNC_BUFFER_COUNT];
+uint32_t * sync_buffer_address_pointer = &sync_buffer[0] ;
+#endif
+
 // Bit masks for drawPixel routine
 #define TOPMASK 0b00001111
 #define BOTTOMMASK 0b11110000
@@ -318,6 +327,128 @@ void initVGA() {
     );
 
 
+
+#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
+
+    // More DMA channels - test ones - 0 sends color data, 1 reconfigures and restarts 0
+    int sync_test_chan_0 = dma_claim_unused_channel(true);
+    int sync_test_chan_1 = dma_claim_unused_channel(true);
+
+    // Channel Zero (sends color data to PIO VGA machine)
+    c0 = dma_channel_get_default_config(sync_test_chan_0);  // default configs
+    channel_config_set_transfer_data_size(&c0, DMA_SIZE_32);             // 32-bit txfers
+
+    // don'tactually need the following two as they are the default values
+    channel_config_set_read_increment(&c0, true);                        // yes read incrementing
+    channel_config_set_write_increment(&c0, false);                      // no write incrementing
+
+    // Wrap read address on 4 word boundary
+    // channel_config_set_ring(&c0, false, 3); // 2 stops it working. 3 gives us only HSYNC working  as expected
+
+    // channel_config_set_ring(&c0, false, 5); // 0 (default) ignores it. 
+    // 2 stops it working.
+    // 3 gives us only HSYNC working as expected
+    // 4 seems to work but doesn't wrap by itself - it still seems to need chaining, it does
+    //   as the ring only repeats until SYNC_BUFFER_COUNT is decremented to 0
+
+    // channel_config_set_dreq(&c0, DREQ_PIO1_TX0) ;                        // DREQ_PIO1_TX0 pacing (FIFO)
+    channel_config_set_dreq(&c0, pio_get_dreq(pio_2, hsync4_sm, true));     // hsync4_sm tx FIFO pacing
+
+    channel_config_set_chain_to(&c0, sync_test_chan_1);                  // chain to other channel
+
+     dma_channel_configure(
+        sync_test_chan_0,           // Channel to be configured
+        &c0,                        // The configuration we just created
+        &pio_2->txf[hsync4_sm],     // write address (RGB PIO TX FIFO)
+        &sync_buffer,            // The initial read address (pixel color array)
+        // SYNC_BUFFER_COUNT * 200 * 60 * 5,                    // Number of transfers; in this case each is 1 32-bit word.
+        SYNC_BUFFER_COUNT,                    // Number of transfers; in this case each is 1 32-bit word.
+
+        false                       // Don't start immediately.
+    );
+
+    // Channel One (reconfigures the first channel)
+    c1 = dma_channel_get_default_config(sync_test_chan_1);   // default configs
+    channel_config_set_transfer_data_size(&c1, DMA_SIZE_32);              // 32-bit txfers
+    channel_config_set_read_increment(&c1, false);                        // no read incrementing
+    channel_config_set_write_increment(&c1, false);                       // no write incrementing
+    channel_config_set_chain_to(&c1, sync_test_chan_0);                         // chain to other channel
+
+    dma_channel_configure(
+        sync_test_chan_1,                         // Channel to be configured
+        &c1,                                // The configuration we just created
+        &dma_hw->ch[sync_test_chan_0].read_addr,  // Write address (channel 0 read address)
+        &sync_buffer_address_pointer,                   // Read address (POINTER TO AN ADDRESS)
+        1,                                  // Number of transfers, in this case each is 4 byte
+        false                               // Don't start immediately.
+    );
+
+    // put some data in the buffer
+/*
+    for (int i = 0; i < SYNC_BUFFER_COUNT; i++) {
+        // sync_buffer[i] = 0x55aa55aa;
+        // sync_buffer[i] = 0x55555555;
+        // sync_buffer[i] = 0x12345678;
+        sync_buffer[i] = i;
+    }
+*/
+
+
+
+/*
+
+    sync_buffer[0] = ((88 - 4) << 2) | 0b11;
+    sync_buffer[1] = ((12 - 4) << 2) | 0b10;
+    sync_buffer[2] = ((88 - 4) << 2) | 0b11;
+    sync_buffer[3] = ((12 - 4) << 2) | 0b10;
+
+    // these should be ignored if we set the ring to (1 << 4) = 16 (bytes)) - they are
+    sync_buffer[4] = ((88 - 4) << 2) | 0b11;
+    sync_buffer[5] = ((12 - 4) << 2) | 0b10;
+    sync_buffer[6] = ((6 - 4) << 2)  | 0b11;
+
+    sync_buffer[7] = ((88 - 6 - 4) << 2) | 0b01;
+    sync_buffer[8] = ((12 - 4) << 2) | 0b00;
+
+    sync_buffer[9] = ((88 - 4) << 2) | 0b01;
+    sync_buffer[10] = ((12 - 4) << 2) | 0b00;
+
+    sync_buffer[11] = ((6 - 4) << 2) | 0b01;
+    sync_buffer[12] = ((88 - 6 - 4) << 2) | 0b11;
+    sync_buffer[13] = ((12 - 4) << 2) | 0b10;
+
+*/
+
+
+    uint32_t encode(char delay1, bool vsync1, bool hsync1, char delay0,  bool vsync0, bool hsync0, char repeat) {
+        // return ((delay1 - 6) << 2 | vsync1 << 1 | hsync1) << 16 | (delay0 - 5) << 2 | vsync0 << 1 | hsync0;
+        // return ((delay1 - 5) << 2 | vsync1 << 1 | hsync1) << 16 | (delay0 - 5) << 2 | vsync0 << 1 | hsync0;
+        return ((delay1 - 6) << 2 | vsync1 << 1 | hsync1) << 16 | repeat << 9 | (delay0 - 5) << 2 | vsync0 << 1 | hsync0;
+  }
+
+    // sync_buffer[0] = (((12 - 4 - 2) << 2) | 0b10) << 16 | (88 - 4 - 1) << 2 | 0b11;
+    // sync_buffer[1] = (((12 - 4 - 2) << 2) | 0b10) << 16 | (88 - 4 - 1) << 2 | 0b11;
+    // sync_buffer[2] = (((12 - 4 - 2) << 2) | 0b10) << 16 | (88 - 4 - 1) << 2 | 0b11;
+    // sync_buffer[3] = (((88 - 6 - 4 - 2) << 2) | 0b01) << 16 | (6 - 4 - 1) << 2 | 0b11;
+    // sync_buffer[4] = (((88 - 4 - 2) << 2) | 0b01) << 16 | (12 - 4 - 1) << 2 | 0b00;
+    // sync_buffer[5] = (((6 - 4 - 2) << 2) | 0b01) << 16 | (12 - 4 - 1) << 2 | 0b00;
+    // sync_buffer[6] = (((12 - 4 - 2) << 2) | 0b10) << 16 | (88 - 6 - 4 - 1) << 2 | 0b11;
+
+    sync_buffer[0] = encode(12, 1, 0, 88, 1, 1, 127);
+    sync_buffer[1] = encode(12, 1, 0, 88, 1, 1, 127);
+    sync_buffer[2] = encode(12, 1, 0, 88, 1, 1, 127);
+    sync_buffer[3] = encode(12, 1, 0, 88, 1, 1, 127);
+
+    sync_buffer[4] = encode(12, 1, 0, 88, 1, 1, 9);
+    // sync_buffer[5] = encode(12, 1, 0, 88, 1, 1, 0);
+
+    sync_buffer[5] = encode(88 - 6, 0, 1, 6, 1, 1, 0);
+    sync_buffer[6] = encode(88, 0, 1, 12, 0, 0, 0);
+    sync_buffer[7] = encode(6, 0, 1, 12, 0, 0, 0);
+    sync_buffer[8] = encode(12, 1, 0, 88 - 6, 1, 1, 0);
+
+#endif
+
     /////////////////////////////////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -437,6 +568,11 @@ void initVGA() {
     // of that array.
     dma_start_channel_mask((1u << rgb_chan_0)) ;
     dma_start_channel_mask((1u << rgb_test_chan_0)) ;
+
+#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
+    dma_start_channel_mask((1u << sync_test_chan_0)) ;
+#endif
+
 }
 
 
