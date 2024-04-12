@@ -77,7 +77,7 @@ char * address_pointer = &vga_data_array[0] ;
 #if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
 
 // #define SYNC_BUFFER_COUNT 14
-#define SYNC_BUFFER_COUNT 9
+#define SYNC_BUFFER_COUNT 6
 
 uint32_t sync_buffer[SYNC_BUFFER_COUNT];
 uint32_t * sync_buffer_address_pointer = &sync_buffer[0] ;
@@ -420,11 +420,13 @@ void initVGA() {
 */
 
 
-    uint32_t encode(char delay1, bool vsync1, bool hsync1, char delay0,  bool vsync0, bool hsync0, char repeat) {
+    uint32_t encode(char delay1, bool vsync1, bool hsync1, char delay0,  bool vsync0, bool hsync0, int repeat) {
         // return ((delay1 - 6) << 2 | vsync1 << 1 | hsync1) << 16 | (delay0 - 5) << 2 | vsync0 << 1 | hsync0;
         // return ((delay1 - 5) << 2 | vsync1 << 1 | hsync1) << 16 | (delay0 - 5) << 2 | vsync0 << 1 | hsync0;
-        return ((delay1 - 6) << 2 | vsync1 << 1 | hsync1) << 16 | repeat << 9 | (delay0 - 5) << 2 | vsync0 << 1 | hsync0;
-  }
+        // return ((delay1 - 6) << 2 | vsync1 << 1 | hsync1) << 16 | repeat << 9 | (delay0 - 5) << 2 | vsync0 << 1 | hsync0;
+        // return ((delay1 - 6) << 2 | vsync1 << 1 | hsync1) << 16 | (delay0 - 5) << 9 | vsync0 << 8 | hsync0 << 7 | repeat;
+        return ((delay1 - 6) << 2 | vsync1 << 1 | hsync1) << 19 | repeat << 10 | (delay0 - 6) << 2 | vsync0 << 1 | hsync0;
+     }
 
     // sync_buffer[0] = (((12 - 4 - 2) << 2) | 0b10) << 16 | (88 - 4 - 1) << 2 | 0b11;
     // sync_buffer[1] = (((12 - 4 - 2) << 2) | 0b10) << 16 | (88 - 4 - 1) << 2 | 0b11;
@@ -434,18 +436,24 @@ void initVGA() {
     // sync_buffer[5] = (((6 - 4 - 2) << 2) | 0b01) << 16 | (12 - 4 - 1) << 2 | 0b00;
     // sync_buffer[6] = (((12 - 4 - 2) << 2) | 0b10) << 16 | (88 - 6 - 4 - 1) << 2 | 0b11;
 
-    sync_buffer[0] = encode(12, 1, 0, 88, 1, 1, 127);
-    sync_buffer[1] = encode(12, 1, 0, 88, 1, 1, 127);
-    sync_buffer[2] = encode(12, 1, 0, 88, 1, 1, 127);
-    sync_buffer[3] = encode(12, 1, 0, 88, 1, 1, 127);
+    // sync_buffer[0] = encode(12, 1, 0, 88, 1, 1, 127);
+    // sync_buffer[1] = encode(12, 1, 0, 88, 1, 1, 127);
+    // sync_buffer[2] = encode(12, 1, 0, 88, 1, 1, 127);
+    // sync_buffer[3] = encode(12, 1, 0, 88, 1, 1, 127);
+    // sync_buffer[4] = encode(12, 1, 0, 88, 1, 1, 9);
+    // sync_buffer[5] = encode(88 - 6, 0, 1, 6, 1, 1, 0);
+    // sync_buffer[6] = encode(88, 0, 1, 12, 0, 0, 0);
+    // sync_buffer[7] = encode(6, 0, 1, 12, 0, 0, 0);
+    // sync_buffer[8] = encode(12, 1, 0, 88 - 6, 1, 1, 0);
 
-    sync_buffer[4] = encode(12, 1, 0, 88, 1, 1, 9);
-    // sync_buffer[5] = encode(12, 1, 0, 88, 1, 1, 0);
+    sync_buffer[0] = encode(12, 1, 0,       88,     1, 1, 511);
+    sync_buffer[1] = encode(12, 1, 0,       88,     1, 1, 9);
+    sync_buffer[2] = encode(88 - 6, 0, 1,    6,     1, 1, 0);
+    sync_buffer[3] = encode(88, 0, 1,       12,     0, 0, 0);
+    sync_buffer[4] = encode(6, 0, 1,        12,     0, 0, 0);
+    sync_buffer[5] = encode(12, 1, 0,       88 - 6, 1, 1, 0);
 
-    sync_buffer[5] = encode(88 - 6, 0, 1, 6, 1, 1, 0);
-    sync_buffer[6] = encode(88, 0, 1, 12, 0, 0, 0);
-    sync_buffer[7] = encode(6, 0, 1, 12, 0, 0, 0);
-    sync_buffer[8] = encode(12, 1, 0, 88 - 6, 1, 1, 0);
+
 
 #endif
 

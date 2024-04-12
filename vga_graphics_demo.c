@@ -50,7 +50,7 @@ char timetext[40];
 
 int g_mag = 0;
 int g_scrollx = 0;
-uint8_t g_channel = 1;
+uint8_t g_channel = 0;
 
 
 enum SETTINGS_STATES {SS_CHANNEL, SS_ZOOM, SS_FREQ, SS_PINS_BASE, SS_NO_OF_PINS, SS_TRIGGER_PIN_BASE, SS_TRIGGER_TYPE, SS_COUNT};

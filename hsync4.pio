@@ -105,10 +105,27 @@ start:
     pull
     mov isr, osr  ;save the word in case there's a repeat
 
-loop:
+;loop:
+    ; out y, 7  [0]      ; repeat count
+
+    ; mov isr, osr      ;save the word in case there's a repeat
+
     out pins, 2     ; VSYNC, HSYNC
-    out x, 7        ; delay clocks - 1
-    out y, 7  [1]      ; repeat count
+    out x, 8        ; delay clocks - 1
+
+;     out y, 1
+;     jmp !y dont_set_irq
+;     irq 5
+; get_repeat_count:
+
+;or 
+
+    out y, 9  [0]      ; repeat count
+
+    jmp x!=y dont_set_irq
+    irq 5
+
+get_repeat_count:
 
 delay_loop:
     jmp x-- delay_loop
@@ -119,9 +136,8 @@ delay_loop:
 ;    out x, 1
 ;    jmp !x 
 
-
     out x, 7        ; delay clocks - 1
-;    out null, 7        ; there should be no repeat count - could use them to make a huge delay
+;    out null, 7        ; there should be no repeat count - could use them to make a huge delay or repeat count
 
 delay_loop2:
     jmp x-- delay_loop2
@@ -133,20 +149,16 @@ delay_loop2:
 repeat:
     mov osr, isr    [1]
     out pins, 2     ; VSYNC, HSYNC
-    out x, 7        ; delay clocks - 1
-    out null, 7     ; dump the repeat count
+    out x, 8        ; delay clocks - 1
+    out null, 9     ; dump the repeat count
 
 ;    out x, 1
 ;    jmp !x 
 
+    jmp delay_loop [1]
 
-
-
-
-    jmp delay_loop [0]
-
-
-
+dont_set_irq:
+    jmp get_repeat_count
 
 
 ;delay_loop2:
