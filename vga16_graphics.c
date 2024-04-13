@@ -77,7 +77,7 @@ char * address_pointer = &vga_data_array[0] ;
 #if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
 
 // #define SYNC_BUFFER_COUNT 14
-#define SYNC_BUFFER_COUNT 6
+#define SYNC_BUFFER_COUNT 7
 
 uint32_t sync_buffer[SYNC_BUFFER_COUNT];
 uint32_t * sync_buffer_address_pointer = &sync_buffer[0] ;
@@ -420,12 +420,18 @@ void initVGA() {
 */
 
 
-    uint32_t encode(char delay1, bool vsync1, bool hsync1, char delay0,  bool vsync0, bool hsync0, int repeat) {
+    // uint32_t encode(char delay1, bool vsync1, bool hsync1, char delay0,  bool vsync0, bool hsync0, int repeat) {
         // return ((delay1 - 6) << 2 | vsync1 << 1 | hsync1) << 16 | (delay0 - 5) << 2 | vsync0 << 1 | hsync0;
         // return ((delay1 - 5) << 2 | vsync1 << 1 | hsync1) << 16 | (delay0 - 5) << 2 | vsync0 << 1 | hsync0;
         // return ((delay1 - 6) << 2 | vsync1 << 1 | hsync1) << 16 | repeat << 9 | (delay0 - 5) << 2 | vsync0 << 1 | hsync0;
         // return ((delay1 - 6) << 2 | vsync1 << 1 | hsync1) << 16 | (delay0 - 5) << 9 | vsync0 << 8 | hsync0 << 7 | repeat;
-        return ((delay1 - 6) << 2 | vsync1 << 1 | hsync1) << 19 | repeat << 10 | (delay0 - 6) << 2 | vsync0 << 1 | hsync0;
+        // return ((delay1 - 9) << 3 | vsync1 << 1 | hsync1) << 19 | repeat << 10 | (delay0 - 6) << 2 | vsync0 << 1 | hsync0;
+    //  }
+
+    uint32_t encode(int repeat, bool vsync0, bool hsync0, char delay0, bool irq, bool vsync1, bool hsync1, char delay1) {
+        return ((delay1 - 8 - irq) << 3 | irq << 2 | vsync1 << 1 | hsync1) << 19 | repeat << 10 | (delay0 - 6) << 2 | vsync0 << 1 | hsync0;
+        // return ((delay0 - 9) << 3 | irq << 2 | vsync0 << 1 | hsync0) << 19 | repeat << 10 | (delay1 - 6) << 2 | vsync1 << 1 | hsync1;
+     
      }
 
     // sync_buffer[0] = (((12 - 4 - 2) << 2) | 0b10) << 16 | (88 - 4 - 1) << 2 | 0b11;
@@ -446,13 +452,64 @@ void initVGA() {
     // sync_buffer[7] = encode(6, 0, 1, 12, 0, 0, 0);
     // sync_buffer[8] = encode(12, 1, 0, 88 - 6, 1, 1, 0);
 
-    sync_buffer[0] = encode(12, 1, 0,       88,     1, 1, 511);
-    sync_buffer[1] = encode(12, 1, 0,       88,     1, 1, 9);
-    sync_buffer[2] = encode(88 - 6, 0, 1,    6,     1, 1, 0);
-    sync_buffer[3] = encode(88, 0, 1,       12,     0, 0, 0);
-    sync_buffer[4] = encode(6, 0, 1,        12,     0, 0, 0);
-    sync_buffer[5] = encode(12, 1, 0,       88 - 6, 1, 1, 0);
+    // sync_buffer[0] = encode(12, 1, 0,       88,     1, 1, 511);
+    // sync_buffer[1] = encode(12, 1, 0,       88,     1, 1, 9);
+    // sync_buffer[2] = encode(88 - 6, 0, 1,    6,     1, 1, 0);
+    // sync_buffer[3] = encode(88, 0, 1,       12,     0, 0, 0);
+    // sync_buffer[4] = encode(6, 0, 1,        12,     0, 0, 0);
+    // sync_buffer[5] = encode(12, 1, 0,       88 - 6, 1, 1, 0);
 
+    // sync_buffer[0] = encode(24, 1, 1, 0,       176,     1, 1, 479);
+    // sync_buffer[1] = encode(24, 0, 1, 0,       176,     1, 1, 39);
+    // sync_buffer[2] = encode(24, 0, 1, 0,       176,     1, 1, 0);
+    // sync_buffer[3] = encode(176 - 12, 0, 0, 1,  12,     1, 1, 0);
+    // sync_buffer[4] = encode(176, 0, 0, 1,       24,     0, 0, 0);
+    // sync_buffer[5] = encode(12, 0, 0, 1,        24,     0, 0, 0);
+    // sync_buffer[6] = encode(24, 0, 1, 0,       176 - 12, 1, 1, 0);
+
+    // sync_buffer[0] = encode(24,       1, 1, 0,       176,       1, 1, 479);
+    // sync_buffer[1] = encode(24,       0, 1, 0,       176,       1, 1, 39 );
+    // sync_buffer[2] = encode(24,       0, 1, 0,       176,       1, 1,   0);
+    // sync_buffer[3] = encode(176 - 12, 0, 0, 1,       12,        1, 1,   0);
+    // sync_buffer[4] = encode(176,      0, 0, 1,       24,        0, 0,   0);
+    // sync_buffer[5] = encode(12,       0, 0, 1,       24,        0, 0,   0);
+    // sync_buffer[6] = encode(24,       0, 1, 0,       176 - 12,  1, 1,   0);
+
+    // sync_buffer[0] = encode(176,      1, 1, 1,       24,        1, 0, 479);
+    // sync_buffer[1] = encode(176,      0, 1, 1,       24,        1, 0, 39 );
+    // sync_buffer[2] = encode(176,      0, 1, 1,       24,        1, 0, 0  );
+    // sync_buffer[3] = encode(12,       0, 1, 0,       176 - 12,  0, 1, 0  );
+    // sync_buffer[4] = encode(24,       0, 0, 0,       176,       0, 1, 0  );
+    // sync_buffer[5] = encode(24,       0, 0, 0,       12,        0, 1, 0  );
+    // sync_buffer[6] = encode(176 - 12, 0, 1, 1,       24,        1, 0, 0  );
+
+    // sync_buffer[0] = encode(24,       1, 1, 0,       176,       1, 1, 479);
+    // sync_buffer[1] = encode(24,       0, 1, 0,       176,       1, 1, 10  );
+    // sync_buffer[2] = encode(176 - 12, 0, 0, 1,       12,        1, 1, 0  );
+    // sync_buffer[3] = encode(176,      0, 0, 1,       24,        0, 0, 0  );
+    // sync_buffer[4] = encode(12,       0, 0, 1,       24,        0, 0, 0  );
+    // sync_buffer[5] = encode(24,       0, 1, 0,       176 - 12,  1, 1, 0  );
+    // sync_buffer[6] = encode(24,       0, 1, 0,       176,       1, 1, 30  );
+
+
+
+//                          delay     iq V  H        delay      V  H  rpt 
+    // sync_buffer[0] = encode(176,      1, 1, 1,       24,        1, 0, 479);
+    // sync_buffer[1] = encode(176,      0, 1, 1,       24,        1, 0, 9  );
+    // sync_buffer[2] = encode(12,       0, 1, 1,       24,        1, 0, 0  );
+    // sync_buffer[3] = encode(24,       0, 0, 0,       176 - 12,  0, 1, 0  );
+    // sync_buffer[4] = encode(24,       0, 0, 0,       176,       0, 1, 0  );
+    // sync_buffer[5] = encode(176 - 12, 0, 1, 1,       12,        0, 1, 0  );
+    // sync_buffer[6] = encode(176,      0, 1, 1,       24,        1, 0, 31 );
+
+//                          rpt    V  H, delay         irq V  H, delay
+    sync_buffer[0] = encode(479,   1, 0, 24,           1,  1, 1, 176     );
+    sync_buffer[1] = encode(9,     1, 0, 24,           0,  1, 1, 176     );
+    sync_buffer[2] = encode(0,     1, 0, 24,           0,  1, 1, 12      );
+    sync_buffer[3] = encode(0,     0, 1, 176 - 12,     0,  0, 0, 24      );
+    sync_buffer[4] = encode(0,     0, 1, 176,          0,  0, 0, 24      );
+    sync_buffer[5] = encode(0,     0, 1, 12,           0,  1, 1, 176 - 12);
+    sync_buffer[6] = encode(31,    1, 0, 24,           0,  1, 1, 176     );
 
 
 #endif
