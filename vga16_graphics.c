@@ -429,7 +429,8 @@ void initVGA() {
     //  }
 
     uint32_t encode(int repeat, bool vsync0, bool hsync0, char delay0, bool irq, bool vsync1, bool hsync1, char delay1) {
-        return ((delay1 - 8 - irq) << 3 | irq << 2 | vsync1 << 1 | hsync1) << 19 | repeat << 10 | (delay0 - 6) << 2 | vsync0 << 1 | hsync0;
+        // return ((delay1 - 8 - irq) << 3 | irq << 2 | vsync1 << 1 | hsync1) << 19 | repeat << 10 | (delay0 - 6) << 2 | vsync0 << 1 | hsync0;
+        return ((delay1 - 8 - irq) << 3 | vsync1 << 2 | hsync1 << 1 | irq) << 19 | (delay0 - 6) << 11 | vsync0 << 10 | hsync0 << 9 | repeat;
         // return ((delay0 - 9) << 3 | irq << 2 | vsync0 << 1 | hsync0) << 19 | repeat << 10 | (delay1 - 6) << 2 | vsync1 << 1 | hsync1;
      
      }

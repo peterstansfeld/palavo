@@ -18,8 +18,9 @@
     mov x, isr       					; Initialize counter variable
     wait 1 irq 5 [0]	      		; Wait for vsync active mode (starts 5 cycles after execution)
 
-    set y, 6 [2] ; 0 = 47,1 = 48, 2 = 48 3 = 48, 4 = 48, 5 = 49. Pick first value = 1
-                 ;        1 = 239, 2 = 240, 3 = 242, 5 = 243 
+    ; set y, 6 [2] ; 0 = 47,1 = 48, 2 = 48 3 = 48, 4 = 48, 5 = 49. Pick first value = 1
+    ;              ;        1 = 239, 2 = 240, 3 = 242, 5 = 243 
+    set y, 6 [22]  ;        22 = 240 
 delay:
     jmp y-- delay [24]
 

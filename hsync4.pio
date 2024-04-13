@@ -103,6 +103,9 @@ delay_loop2:
 start:
 
     pull
+
+    out y, 9              ; repeat count
+
     mov isr, osr  ;save the word in case there's a repeat
 
 ;loop:
@@ -111,7 +114,7 @@ start:
     ; mov isr, osr      ;save the word in case there's a repeat
 
     out pins, 2     ; VSYNC, HSYNC
-    out x, 8        ; delay clocks - 1
+    out x, 8 [2]       ; delay clocks - 1
 
 ;     out y, 1
 ;     jmp !y dont_set_irq
@@ -120,7 +123,9 @@ start:
 
 ;or 
 
-    out y, 9  [2]      ; repeat count
+;this line would go
+
+;    out y, 9  [2]      ; repeat count
 
 ;    jmp x!=y dont_set_irq
 ;    irq 5
@@ -131,10 +136,11 @@ delay_loop:
 
 ;    nop
 
+    out x, 1
 
     out pins, 2     ; VSYNC, HSYNC
 
-    out x, 1
+;    out x, 1
 ;    jmp !x, dont_set_irq
     jmp !x, get_delay2_clocks
     irq 5
@@ -152,10 +158,12 @@ delay_loop2:
 .wrap
 
 repeat:
-    mov osr, isr    [1]
+    mov osr, isr    [2]
     out pins, 2     ; VSYNC, HSYNC
     out x, 8        ; delay clocks - 1
-    out null, 9     ; dump the repeat count
+
+;this line would go
+;    out null, 9     ; dump the repeat count
 
 ;    out x, 1
 ;    jmp !x 
