@@ -29,22 +29,32 @@
 
 
 ; 32-bit word to drive vsync & hsync
-; bit(       used for
+; bit(s)     description
 ; --------------------------------
-; 31 - 22    delay (9 bits 0..511)
-; 21, 20     vsync, hsync
-; 19         IRQ5 (to trigger pixels)
+; 31 - 22    delay2 (9 bits 0..511)
+; 21, 20     vsync2, hsync2
+; 19         rgb_flag
 ; 18 - 11    delay (8 bits 0..255)
 ; 10, 9      vsync, hsync
-; 8 - 0      repeat count (9 bits 0..511)
+; 8 - 0      repeat_count (9 bits 0..511)
 
+; psuedo code
+; for (i = repeat_count; i >= 0; i--) {
+;     vsync & hsync GPIO pins = vsync & hsync respectively
+;     wait for delay + 1 cycles
+;     vsync & hsync GPIO pins = vsync2 & hsync2 respectively
+;     if (rgb_flag) {
+;         set IRQ to trigger pixel data in `rgb4.pio` 
+;     }
+;     wait for delay1 + 1 cycles
+; }
 
 .wrap_target
 
 ;start:
     pull                        ; load 32-bit word from TX FIFO into OSR
-    out y, 9                    ; load repeat count into Y
-    mov isr, osr                ; save OSR (minus the repeat count)
+    out y, 9                    ; load repeat_count into Y
+    mov isr, osr                ; save OSR (minus the repeat_count)
 set_syncs:
     out pins, 2                 ; set vsync & hsync
     out x, 8 [2]                ; load delay cycles into X
@@ -53,11 +63,11 @@ delay_loop:
     jmp x-- delay_loop          ; perform the delay
 
     out x, 1                    ; load whether we need to trigger irq5 into X
-    out pins, 2                 ; set vsync & hsync
-    jmp !x, load_delay_cycles   ; skip next line if we don't need to trigger irq5
-    irq 5                       ; set irq5 to trigger pixel data in rgb4.pio
+    out pins, 2                 ; set vsync2 & hsync2
+    jmp !x, load_delay_cycles   ; skip next line if rgb_flag == 0
+    irq 5                       ; set IRQ to trigger pixel data in `rgb4.pio`
 load_delay_cycles:
-    out x, 9                    ; load delay cycles into X
+    out x, 9                    ; load delay2 cycles into X
 
 delay_loop2:
     jmp x-- delay_loop2         ; perform the delay
@@ -67,15 +77,14 @@ delay_loop2:
 
 repeat:
     mov osr, isr [1]            ; retrieve the original word (minus the repeat count)
-    jmp set_syncs               ; and repeat 
+    jmp set_syncs               ; and repeat
+
 
 % c-sdk {
 static inline void hsync4_program_init(PIO pio, uint sm, uint offset, uint pin) {
 
-    // creates state machine configuration object c, sets
-    // to default configurations. I believe this function is auto-generated
-    // and gets a name of <program name>_program_get_default_config
-    // Yes, page 40 of SDK guide
+    // Creates state machine configuration object c, and sets it to
+    // default values.
     pio_sm_config c = hsync4_program_get_default_config(offset);
 
     // Map the state machine's SET pin group to two pins, namely the `pin`
