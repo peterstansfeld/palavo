@@ -196,8 +196,8 @@ void initVGA() {
 
     #elif VGA_TEST_PIO_PROG == 4
 
-        hsync4_program_init(pio_2, hsync4_sm, hsync4_offset, HSYNC2, VSYNC2); // this has to be the first (not true, it must have .org 0)
-        rgb4_program_init(pio_2, rgb4_sm, rgb4_offset, LO_GRN2 /*, HI_GRN2*/); // 
+        hsync4_program_init(pio_2, hsync4_sm, hsync4_offset, HSYNC2); //
+        rgb4_program_init(pio_2, rgb4_sm, rgb4_offset, LO_GRN2); // 
 
     #endif
 
@@ -218,7 +218,7 @@ void initVGA() {
       rgb3_program_init(pio_2, rgb3_sm, rgb3_offset, LO_GRN);
 
     #elif VGA_USE_PIO_PROG == 4
-      hsync4_program_init(pio_2, hsync4_sm, hsync4_offset, HSYNC, VSYNC);
+      hsync4_program_init(pio_2, hsync4_sm, hsync4_offset, HSYNC);
       rgb4_program_init(pio_2, rgb4_sm, rgb4_offset, LO_GRN);
 
     #endif
