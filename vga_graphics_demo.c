@@ -39,6 +39,7 @@
 // datasheet for information on which other pins can be used.
 #define UART_TX_PIN 4
 #define UART_RX_PIN 5
+#define LED_PIN PICO_DEFAULT_LED_PIN
 
 uint8_t last_uart_char = 0;
 
@@ -1574,6 +1575,11 @@ int main() {
     // Set datasheet for more information on function select
     gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
     gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
+    // gpio_set_function(LED_PIN, GPIO_FUNC_UART);
+
+    gpio_init(LED_PIN);
+    gpio_set_dir(LED_PIN, GPIO_OUT); // set LED_PIN GPIO to an output
+    gpio_put(LED_PIN, 1); // set LED_PIN
 
     // Initialize the VGA screen
     initVGA() ;
@@ -1725,6 +1731,7 @@ int main() {
             setCursor(250, 20) ;
             setTextSize(2) ;
             writeString(timetext) ;
+            // gpio_xor_mask(1 << LED_PIN);
         }
 
         uint ui_command = check_keyboard();

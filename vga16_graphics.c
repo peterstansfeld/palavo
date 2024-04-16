@@ -5,13 +5,13 @@
 // otherwise its output will be on HSYNC2, VSYNC2, LO_GRN2, etc. and another
 // VGA driver will be used on HSYNC, VSYNC, LO_GRN, etc.
 
-#define VGA_USE_PIO_PROG 1
+#define VGA_USE_PIO_PROG 4
 
 
 // VGA_TEST_PIO_PROG defines which VGA driver should be used to drive the VGA
 // test pins on HSYNC2, VSYNC2, LO_GRN2, etc.
 
-#define VGA_TEST_PIO_PROG 4
+#define VGA_TEST_PIO_PROG 1
 
 
 #if (VGA_USE_PIO_PROG != 1) && (VGA_TEST_PIO_PROG != 1) 
@@ -29,6 +29,8 @@
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
 #include "hardware/dma.h"
+// #include "hardware/irq.h"
+
 // Our assembled programs:
 // Each gets the name <pio_filename.pio.h>
 #include "hsync.pio.h"
@@ -77,7 +79,7 @@ char * address_pointer = &vga_data_array[0] ;
 #if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
 
 // #define SYNC_BUFFER_COUNT 14
-#define SYNC_BUFFER_COUNT 7
+#define SYNC_BUFFER_COUNT 8
 
 uint32_t sync_buffer[SYNC_BUFFER_COUNT];
 uint32_t * sync_buffer_address_pointer = &sync_buffer[0] ;
@@ -105,6 +107,46 @@ unsigned char str_cursor_x;
 // Screen width/height
 #define _width 640
 #define _height 480
+
+
+#define LED_PIN PICO_DEFAULT_LED_PIN
+
+#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
+
+static int sync_test_chan_0 = 0;
+
+#define USE_RING_BUF
+
+
+void __not_in_flash_func(dma_handler)() {
+    // gpio_put(LED_PIN, 0); // clear LED_PIN
+
+
+    // if (dma_hw->ints0 & (1u << sync_test_chan_0)) {
+    //     dma_hw->ints0 = 1u << sync_test_chan_0;
+
+    // } else {
+
+    //     dma_hw->ints0 = dma_hw->ints0;
+    // }
+
+
+    // Clear the interrupt request.
+    dma_hw->ints0 = 1u << sync_test_chan_0;
+    // Give the channel a new wave table entry to read from, and re-trigger it
+    // dma_channel_set_read_addr(dma_chan, &wavetable[pwm_level], true);}
+
+    dma_hw->ch[sync_test_chan_0].transfer_count = SYNC_BUFFER_COUNT * 60 * 1;
+    dma_channel_start(sync_test_chan_0);
+    // dma_channel_set_read_addr(sync_test_chan_0, &sync_buffer, true);
+
+    gpio_xor_mask(1 << LED_PIN);
+
+
+}
+
+#endif
+
 
 void initVGA() {
         // Choose which PIO instance to use (there are two instances, each with 4 state machines)
@@ -330,22 +372,33 @@ void initVGA() {
 
 #if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
 
+
+
     // More DMA channels - test ones - 0 sends color data, 1 reconfigures and restarts 0
-    int sync_test_chan_0 = dma_claim_unused_channel(true);
+    sync_test_chan_0 = dma_claim_unused_channel(true);
+
+#ifndef USE_RING_BUF
     int sync_test_chan_1 = dma_claim_unused_channel(true);
+#endif
 
     // Channel Zero (sends color data to PIO VGA machine)
     c0 = dma_channel_get_default_config(sync_test_chan_0);  // default configs
     channel_config_set_transfer_data_size(&c0, DMA_SIZE_32);             // 32-bit txfers
 
-    // don'tactually need the following two as they are the default values
+    //  Prevent this channel from generating IRQs at the end of every transfer block
+    // channel_config_set_irq_quiet(&c0, true); 
+
+    // don't actually need the following two as they are the default values
     channel_config_set_read_increment(&c0, true);                        // yes read incrementing
     channel_config_set_write_increment(&c0, false);                      // no write incrementing
 
     // Wrap read address on 4 word boundary
     // channel_config_set_ring(&c0, false, 3); // 2 stops it working. 3 gives us only HSYNC working  as expected
 
-    // channel_config_set_ring(&c0, false, 5); // 0 (default) ignores it. 
+#ifdef USE_RING_BUF
+    channel_config_set_ring(&c0, false, 5); // Set read address to wrap at (1<<5) = 32 byte boundary
+#endif
+
     // 2 stops it working.
     // 3 gives us only HSYNC working as expected
     // 4 seems to work but doesn't wrap by itself - it still seems to need chaining, it does
@@ -354,19 +407,27 @@ void initVGA() {
     // channel_config_set_dreq(&c0, DREQ_PIO1_TX0) ;                        // DREQ_PIO1_TX0 pacing (FIFO)
     channel_config_set_dreq(&c0, pio_get_dreq(pio_2, hsync4_sm, true));     // hsync4_sm tx FIFO pacing
 
+#ifndef USE_RING_BUF
     channel_config_set_chain_to(&c0, sync_test_chan_1);                  // chain to other channel
+#endif
 
      dma_channel_configure(
         sync_test_chan_0,           // Channel to be configured
         &c0,                        // The configuration we just created
         &pio_2->txf[hsync4_sm],     // write address (RGB PIO TX FIFO)
         &sync_buffer,            // The initial read address (pixel color array)
-        // SYNC_BUFFER_COUNT * 200 * 60 * 5,                    // Number of transfers; in this case each is 1 32-bit word.
-        SYNC_BUFFER_COUNT,                    // Number of transfers; in this case each is 1 32-bit word.
 
+#ifdef USE_RING_BUF
+        SYNC_BUFFER_COUNT * 60 * 2,                    // Number of transfers; in this case each is 1 32-bit word.
+        // 0xffffffff,                    // transfer_count. Should last 0xffffffff /(SYNC_BUFFER_COUNT * 24 * 60 * 60 * 60) = 103.56 days.
+
+#else
+        SYNC_BUFFER_COUNT,                    // Number of transfers; in this case each is 1 32-bit word.
+#endif
         false                       // Don't start immediately.
     );
 
+#ifndef USE_RING_BUF
     // Channel One (reconfigures the first channel)
     c1 = dma_channel_get_default_config(sync_test_chan_1);   // default configs
     channel_config_set_transfer_data_size(&c1, DMA_SIZE_32);              // 32-bit txfers
@@ -383,6 +444,8 @@ void initVGA() {
         false                               // Don't start immediately.
     );
 
+#endif
+
     // put some data in the buffer
 /*
     for (int i = 0; i < SYNC_BUFFER_COUNT; i++) {
@@ -392,6 +455,15 @@ void initVGA() {
         sync_buffer[i] = i;
     }
 */
+
+    // Setup interrupt handler for sync_test_chan_0 DMA channels
+
+    // dma_channel_set_irq0_enabled(sync_test_chan_0, true);
+    // irq_set_exclusive_handler(DMA_IRQ_0, dma_irh);
+    // irq_set_enabled(DMA_IRQ_0, true);
+
+
+
 
 
 
@@ -429,79 +501,8 @@ void initVGA() {
     //  }
 
     uint32_t encode(int repeat, bool vsync0, bool hsync0, char delay0, bool irq, bool vsync1, bool hsync1, char delay1) {
-        // return ((delay1 - 8 - irq) << 3 | irq << 2 | vsync1 << 1 | hsync1) << 19 | repeat << 10 | (delay0 - 6) << 2 | vsync0 << 1 | hsync0;
-        return ((delay1 - 8 - irq) << 3 | vsync1 << 2 | hsync1 << 1 | irq) << 19 | (delay0 - 6) << 11 | vsync0 << 10 | hsync0 << 9 | repeat;
-        // return ((delay0 - 9) << 3 | irq << 2 | vsync0 << 1 | hsync0) << 19 | repeat << 10 | (delay1 - 6) << 2 | vsync1 << 1 | hsync1;
-     
+        return ((delay1 - 8 - irq) << 3 | vsync1 << 2 | hsync1 << 1 | irq) << 20 | (delay0 - 4) << 11 | vsync0 << 10 | hsync0 << 9 | repeat;
      }
-
-    // sync_buffer[0] = (((12 - 4 - 2) << 2) | 0b10) << 16 | (88 - 4 - 1) << 2 | 0b11;
-    // sync_buffer[1] = (((12 - 4 - 2) << 2) | 0b10) << 16 | (88 - 4 - 1) << 2 | 0b11;
-    // sync_buffer[2] = (((12 - 4 - 2) << 2) | 0b10) << 16 | (88 - 4 - 1) << 2 | 0b11;
-    // sync_buffer[3] = (((88 - 6 - 4 - 2) << 2) | 0b01) << 16 | (6 - 4 - 1) << 2 | 0b11;
-    // sync_buffer[4] = (((88 - 4 - 2) << 2) | 0b01) << 16 | (12 - 4 - 1) << 2 | 0b00;
-    // sync_buffer[5] = (((6 - 4 - 2) << 2) | 0b01) << 16 | (12 - 4 - 1) << 2 | 0b00;
-    // sync_buffer[6] = (((12 - 4 - 2) << 2) | 0b10) << 16 | (88 - 6 - 4 - 1) << 2 | 0b11;
-
-    // sync_buffer[0] = encode(12, 1, 0, 88, 1, 1, 127);
-    // sync_buffer[1] = encode(12, 1, 0, 88, 1, 1, 127);
-    // sync_buffer[2] = encode(12, 1, 0, 88, 1, 1, 127);
-    // sync_buffer[3] = encode(12, 1, 0, 88, 1, 1, 127);
-    // sync_buffer[4] = encode(12, 1, 0, 88, 1, 1, 9);
-    // sync_buffer[5] = encode(88 - 6, 0, 1, 6, 1, 1, 0);
-    // sync_buffer[6] = encode(88, 0, 1, 12, 0, 0, 0);
-    // sync_buffer[7] = encode(6, 0, 1, 12, 0, 0, 0);
-    // sync_buffer[8] = encode(12, 1, 0, 88 - 6, 1, 1, 0);
-
-    // sync_buffer[0] = encode(12, 1, 0,       88,     1, 1, 511);
-    // sync_buffer[1] = encode(12, 1, 0,       88,     1, 1, 9);
-    // sync_buffer[2] = encode(88 - 6, 0, 1,    6,     1, 1, 0);
-    // sync_buffer[3] = encode(88, 0, 1,       12,     0, 0, 0);
-    // sync_buffer[4] = encode(6, 0, 1,        12,     0, 0, 0);
-    // sync_buffer[5] = encode(12, 1, 0,       88 - 6, 1, 1, 0);
-
-    // sync_buffer[0] = encode(24, 1, 1, 0,       176,     1, 1, 479);
-    // sync_buffer[1] = encode(24, 0, 1, 0,       176,     1, 1, 39);
-    // sync_buffer[2] = encode(24, 0, 1, 0,       176,     1, 1, 0);
-    // sync_buffer[3] = encode(176 - 12, 0, 0, 1,  12,     1, 1, 0);
-    // sync_buffer[4] = encode(176, 0, 0, 1,       24,     0, 0, 0);
-    // sync_buffer[5] = encode(12, 0, 0, 1,        24,     0, 0, 0);
-    // sync_buffer[6] = encode(24, 0, 1, 0,       176 - 12, 1, 1, 0);
-
-    // sync_buffer[0] = encode(24,       1, 1, 0,       176,       1, 1, 479);
-    // sync_buffer[1] = encode(24,       0, 1, 0,       176,       1, 1, 39 );
-    // sync_buffer[2] = encode(24,       0, 1, 0,       176,       1, 1,   0);
-    // sync_buffer[3] = encode(176 - 12, 0, 0, 1,       12,        1, 1,   0);
-    // sync_buffer[4] = encode(176,      0, 0, 1,       24,        0, 0,   0);
-    // sync_buffer[5] = encode(12,       0, 0, 1,       24,        0, 0,   0);
-    // sync_buffer[6] = encode(24,       0, 1, 0,       176 - 12,  1, 1,   0);
-
-    // sync_buffer[0] = encode(176,      1, 1, 1,       24,        1, 0, 479);
-    // sync_buffer[1] = encode(176,      0, 1, 1,       24,        1, 0, 39 );
-    // sync_buffer[2] = encode(176,      0, 1, 1,       24,        1, 0, 0  );
-    // sync_buffer[3] = encode(12,       0, 1, 0,       176 - 12,  0, 1, 0  );
-    // sync_buffer[4] = encode(24,       0, 0, 0,       176,       0, 1, 0  );
-    // sync_buffer[5] = encode(24,       0, 0, 0,       12,        0, 1, 0  );
-    // sync_buffer[6] = encode(176 - 12, 0, 1, 1,       24,        1, 0, 0  );
-
-    // sync_buffer[0] = encode(24,       1, 1, 0,       176,       1, 1, 479);
-    // sync_buffer[1] = encode(24,       0, 1, 0,       176,       1, 1, 10  );
-    // sync_buffer[2] = encode(176 - 12, 0, 0, 1,       12,        1, 1, 0  );
-    // sync_buffer[3] = encode(176,      0, 0, 1,       24,        0, 0, 0  );
-    // sync_buffer[4] = encode(12,       0, 0, 1,       24,        0, 0, 0  );
-    // sync_buffer[5] = encode(24,       0, 1, 0,       176 - 12,  1, 1, 0  );
-    // sync_buffer[6] = encode(24,       0, 1, 0,       176,       1, 1, 30  );
-
-
-
-//                          delay     iq V  H        delay      V  H  rpt 
-    // sync_buffer[0] = encode(176,      1, 1, 1,       24,        1, 0, 479);
-    // sync_buffer[1] = encode(176,      0, 1, 1,       24,        1, 0, 9  );
-    // sync_buffer[2] = encode(12,       0, 1, 1,       24,        1, 0, 0  );
-    // sync_buffer[3] = encode(24,       0, 0, 0,       176 - 12,  0, 1, 0  );
-    // sync_buffer[4] = encode(24,       0, 0, 0,       176,       0, 1, 0  );
-    // sync_buffer[5] = encode(176 - 12, 0, 1, 1,       12,        0, 1, 0  );
-    // sync_buffer[6] = encode(176,      0, 1, 1,       24,        1, 0, 31 );
 
 //                          rpt    V  H, delay         irq V  H, delay
     sync_buffer[0] = encode(479,   1, 0, 24,           1,  1, 1, 176     );
@@ -510,7 +511,9 @@ void initVGA() {
     sync_buffer[3] = encode(0,     0, 1, 176 - 12,     0,  0, 0, 24      );
     sync_buffer[4] = encode(0,     0, 1, 176,          0,  0, 0, 24      );
     sync_buffer[5] = encode(0,     0, 1, 12,           0,  1, 1, 176 - 12);
-    sync_buffer[6] = encode(31,    1, 0, 24,           0,  1, 1, 176     );
+    sync_buffer[6] = encode(30,    1, 0, 24,           0,  1, 1, 176     );
+// add a buffer entry so we can use RING on the DMA channel
+    sync_buffer[7] = encode(0,     1, 0, 24,           0,  1, 1, 176     );
 
 
 #endif
@@ -636,7 +639,37 @@ void initVGA() {
     dma_start_channel_mask((1u << rgb_test_chan_0)) ;
 
 #if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
-    dma_start_channel_mask((1u << sync_test_chan_0)) ;
+
+
+    // Tell the DMA to raise IRQ line 0 when the channel finishes a block
+    dma_channel_set_irq0_enabled(sync_test_chan_0, true);
+
+    // Configure the processor to run dma_handler() when DMA IRQ 0 is asserted
+    irq_set_exclusive_handler(DMA_IRQ_0, dma_handler); // just setting this causes problems
+
+    irq_set_enabled(DMA_IRQ_0, true);
+
+    // Manually call the handler once, to trigger the first transfer
+    // dma_handler();
+
+
+    dma_start_channel_mask((1u << sync_test_chan_0));
+
+
+
+
+    // Manually call the handler once, to trigger the first transfer
+    // dma_handler();
+
+#ifdef USE_RING_BUF
+
+//    dma_hw->ch[sync_test_chan_0].transfer_count = SYNC_BUFFER_COUNT * 60 * 30; this doesn't work
+
+#endif
+
+
+
+
 #endif
 
 }
