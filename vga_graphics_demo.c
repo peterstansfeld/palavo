@@ -53,6 +53,7 @@ int g_mag = 0;
 int g_scrollx = 0;
 uint8_t g_channel = 1;
 
+int g_prev_scrollx = 0;
 
 enum SETTINGS_STATES {SS_CHANNEL, SS_ZOOM, SS_FREQ, SS_PINS_BASE, SS_NO_OF_PINS, SS_TRIGGER_PIN_BASE, SS_TRIGGER_TYPE, SS_COUNT};
 
@@ -435,8 +436,16 @@ void write_intf(const char *s, int c) {
 #define STATUSBAR_ITEM_PADDING 0
 
 // #define STATUSBAR_HINT_WIDTH (TOOLBAR_WIDTH) / 3
-#define STATUSBAR_HINT_WIDTH TOOLBAR_WIDTH
+#define STATUSBAR_HINT_LEFT STATUSBAR_LEFT + 2
+// #define STATUSBAR_HINT_WIDTH STATUSBAR_WIDTH
+#define STATUSBAR_HINT_WIDTH 400
 
+#define STATUSBAR_HINT_COLOR STATUSBAR_COLOR
+
+#define STATUSBAR_INFO_LEFT STATUSBAR_HINT_LEFT + STATUSBAR_HINT_WIDTH
+#define STATUSBAR_INFO_WIDTH STATUSBAR_WIDTH - STATUSBAR_HINT_WIDTH - (2 * STATUSBAR_HINT_LEFT)
+#define STATUSBAR_INFO_RIGHT STATUSBAR_INFO_LEFT + STATUSBAR_INFO_WIDTH
+#define STATUSBAR_INFO_COLOR STATUSBAR_COLOR
 
 void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples, int magnification,
                         int scrollx, bool show_numbers) {
@@ -1031,11 +1040,11 @@ enum UI_COMMANDS {
  };
 
 
-#define HINT_LEFT STATUSBAR_LEFT + 1
+// #define HINT_LEFT STATUSBAR_LEFT + 1
 
 void draw_hint(char *s) {
-    fillRect(STATUSBAR_LEFT, STATUSBAR_TOP, STATUSBAR_WIDTH, STATUSBAR_HEIGHT, STATUSBAR_COLOR);
-    setCursor(HINT_LEFT, STATUSBAR_TOP + STATUSBAR_TEXT_PADDING);
+    fillRect(STATUSBAR_HINT_LEFT, STATUSBAR_TOP, STATUSBAR_HINT_WIDTH, STATUSBAR_HEIGHT, STATUSBAR_HINT_COLOR);
+    setCursor(STATUSBAR_HINT_LEFT, STATUSBAR_TOP + STATUSBAR_TEXT_PADDING);
     setTextColor(WHITE);
     setTextSize(1);
     writeString(s);
@@ -1186,13 +1195,20 @@ void set_statusbar_text() {
 
 
 void clear_statusbar_hint() {
-    set_statusbar_text();
-    fillRect(STATUSBAR_LEFT, STATUSBAR_TOP, STATUSBAR_HINT_WIDTH, STATUSBAR_HEIGHT, STATUSBAR_COLOR);
-    setCursor(2, SCREEN_HEIGHT - 1 - 8);
+    // set_statusbar_text();
+    fillRect(STATUSBAR_HINT_LEFT, STATUSBAR_TOP, STATUSBAR_HINT_WIDTH, STATUSBAR_HEIGHT, STATUSBAR_HINT_COLOR);
+    setCursor(STATUSBAR_HINT_LEFT, STATUSBAR_TOP + STATUSBAR_TEXT_PADDING);
     setTextColor(WHITE);
     setTextSize(1);
 }
 
+void clear_statusbar_info() {
+    fillRect(STATUSBAR_INFO_LEFT, STATUSBAR_TOP, STATUSBAR_INFO_WIDTH, STATUSBAR_HEIGHT, STATUSBAR_INFO_COLOR);
+    // draw_settings();
+    // setCursor(STATUSBAR_INFO_LEFT + 1, SCREEN_HEIGHT - 1 - 8);
+    setTextColor(WHITE);
+    setTextSize(1);
+}
 
 uint check_keyboard() {
 
@@ -1202,7 +1218,7 @@ uint check_keyboard() {
         ui_command = UIC_ANY;
 
         clear_statusbar_hint();
-        set_statusbar_text();
+        // set_statusbar_text();
         // fillRect(1, SCREEN_HEIGHT - 1 - 8, SCREEN_WIDTH - 2, 8, BLUE);
         // setCursor(2, SCREEN_HEIGHT - 1 - 8);
         // setTextColor(WHITE);
@@ -1390,10 +1406,27 @@ void draw_minimap_indicator() {
 }
 
 
+void draw_statusbar_info(){
+    char str[80];
+    clear_statusbar_info();
+    // write_intf("x:%d ", g_scrollx);
+    // write_intf("was:%d ", g_prev_scrollx);
+    // write_intf("diff:%d", g_scrollx - g_prev_scrollx);
+
+    // int diff = g_scrollx - g_prev_scrollx;
+
+    sprintf(str, "x:%d prev:%d diff:%d", g_scrollx, g_prev_scrollx, g_scrollx - g_prev_scrollx);
+    setCursor(STATUSBAR_INFO_RIGHT - (strlen(str) * FONT_WIDTH), STATUSBAR_TOP + STATUSBAR_TEXT_PADDING);
+    writeString(str);
+}
+
+
 bool set_scroll_x(int x) {
     bool changed = x != g_scrollx;
     if (changed) {
         g_scrollx = x;
+        draw_statusbar_info();
+        g_prev_scrollx = x;
     }
     draw_minimap_indicator();
     return changed;

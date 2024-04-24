@@ -81,7 +81,15 @@ char * address_pointer = &vga_data_array[0] ;
 // #define SYNC_BUFFER_COUNT 14
 #define SYNC_BUFFER_COUNT 8
 
-uint32_t sync_buffer[SYNC_BUFFER_COUNT];
+// Maximum should last about 0xffffffff / (SYNC_BUFFER_COUNT * 24 * 60 * 60 * 60) = 103.56 days.
+// #define SYNC_DMA_TRANSFER_COUNT 0xffffffff
+
+#define SYNC_DMA_TRANSFER_COUNT SYNC_BUFFER_COUNT * 60 // one second (ish)
+// #define SYNC_DMA_TRANSFER_COUNT SYNC_BUFFER_COUNT * 60 * 10 // ten seconds (ish)
+
+// uint32_t sync_buffer [SYNC_BUFFER_COUNT];
+uint32_t sync_buffer [SYNC_BUFFER_COUNT] __attribute__ ((aligned(SYNC_BUFFER_COUNT * sizeof(uint32_t))));
+
 uint32_t * sync_buffer_address_pointer = &sync_buffer[0] ;
 #endif
 
@@ -119,6 +127,7 @@ static int sync_test_chan_0 = 0;
 
 
 void __not_in_flash_func(dma_handler)() {
+// void dma_handler() {
     // gpio_put(LED_PIN, 0); // clear LED_PIN
 
 
@@ -133,10 +142,13 @@ void __not_in_flash_func(dma_handler)() {
 
     // Clear the interrupt request.
     dma_hw->ints0 = 1u << sync_test_chan_0;
-    // Give the channel a new wave table entry to read from, and re-trigger it
-    // dma_channel_set_read_addr(dma_chan, &wavetable[pwm_level], true);}
 
-    dma_hw->ch[sync_test_chan_0].transfer_count = SYNC_BUFFER_COUNT * 60 * 1;
+    // Reload the transfer count
+    dma_hw->ch[sync_test_chan_0].transfer_count = SYNC_DMA_TRANSFER_COUNT;
+
+    // dma_hw->ch[sync_test_chan_0].transfer_count = 1; // this works - don't quite understand why
+    // maybe it's because we're using ring and not resetting the read address each time
+
     dma_channel_start(sync_test_chan_0);
     // dma_channel_set_read_addr(sync_test_chan_0, &sync_buffer, true);
 
@@ -402,7 +414,7 @@ void initVGA() {
     // 2 stops it working.
     // 3 gives us only HSYNC working as expected
     // 4 seems to work but doesn't wrap by itself - it still seems to need chaining, it does
-    //   as the ring only repeats until SYNC_BUFFER_COUNT is decremented to 0
+    // as the ring only repeats until SYNC_BUFFER_COUNT is decremented to 0
 
     // channel_config_set_dreq(&c0, DREQ_PIO1_TX0) ;                        // DREQ_PIO1_TX0 pacing (FIFO)
     channel_config_set_dreq(&c0, pio_get_dreq(pio_2, hsync4_sm, true));     // hsync4_sm tx FIFO pacing
@@ -415,14 +427,12 @@ void initVGA() {
         sync_test_chan_0,           // Channel to be configured
         &c0,                        // The configuration we just created
         &pio_2->txf[hsync4_sm],     // write address (RGB PIO TX FIFO)
-        &sync_buffer,            // The initial read address (pixel color array)
+        &sync_buffer,               // The initial read address (pixel color array)
 
 #ifdef USE_RING_BUF
-        SYNC_BUFFER_COUNT * 60 * 2,                    // Number of transfers; in this case each is 1 32-bit word.
-        // 0xffffffff,                    // transfer_count. Should last 0xffffffff /(SYNC_BUFFER_COUNT * 24 * 60 * 60 * 60) = 103.56 days.
-
+        SYNC_DMA_TRANSFER_COUNT,    // Number of transfers to perform
 #else
-        SYNC_BUFFER_COUNT,                    // Number of transfers; in this case each is 1 32-bit word.
+        SYNC_BUFFER_COUNT,          // Number of transfers to perform
 #endif
         false                       // Don't start immediately.
     );
@@ -640,7 +650,7 @@ void initVGA() {
 
 #if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
 
-
+#ifdef USE_RING_BUF
     // Tell the DMA to raise IRQ line 0 when the channel finishes a block
     dma_channel_set_irq0_enabled(sync_test_chan_0, true);
 
@@ -648,6 +658,7 @@ void initVGA() {
     irq_set_exclusive_handler(DMA_IRQ_0, dma_handler); // just setting this causes problems
 
     irq_set_enabled(DMA_IRQ_0, true);
+#endif
 
     // Manually call the handler once, to trigger the first transfer
     // dma_handler();
