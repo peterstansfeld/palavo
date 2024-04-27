@@ -11,9 +11,12 @@
 ;pull block                         ; Pull from FIFO to OSR (only once)
 ;mov y, osr                         ; Copy value from OSR to y scratch register
 
+;Would need to increase the clock frequency
+
 
 lut0:
     jmp out_loop_test [1]
+    nop
 
 lut1:
     out null, 4                     ; shift OSR 4 bits right
@@ -23,24 +26,39 @@ lut2:
     out null, 8                     ; shift OSR 4 bits right
     jmp out_loop_test
 
-lut3:
-    out null, 12                    ; shift OSR 4 bits right
-    jmp out_loop_test
+.wrap
 
+lut3:
+    out null, 12 [1]                   ; shift OSR 4 bits right
+    ; jmp out_loop_test
 
 .wrap_target
 
+out_loop_test:
+    out pins, 4                     ; put the colour on the pins
+loop_test:
+    jmp !osre loop2_alias
+; osre is empty, which means we've out'ed all 16 2-bit values from the pull'ed word
+    jmp x-- loop
+; x is zero, which mean we've out'ed all (16 * 40) = 640 2-bit values from the fifo
+; so wait for 
+
+    nop [6]
+    set pins, 0
+
+
 ; load 39 into x
-    set x, 20
-    mov isr, x
-    in null, 1
-    mov x, isr
-    jmp x-- x_is_decremented
+;    set x, 20
+;    mov isr, x
+;    in null, 1
+;    mov x, isr
+;    jmp x-- x_is_decremented
 x_is_decremented:
 
     wait 1 irq 5 [0]                ; Wait for vsync active mode (starts 5 cycles after execution)
 
-    pull                            ; get 16 bits from the TX FIFO
+    pull                            ; get 32 bits from the TX FIFO
+    out x, 16                       ; save loop repeat counter (39) in X
     out y, 16                       ; save the 4 * 4-bit colours
 
 loop:
@@ -52,16 +70,6 @@ loop2:
     mov osr, y                      ; put the 4 4-bit colours in the OSR
     mov PC, isr                     ; jump to lut0, lut1, lut2 or lut3
 
-out_loop_test:
-    out pins, 4                     ; put the colour on the pins
-loop_test:
-    jmp !osre loop2_alias
-; osre is empty, which means we've out'ed all 16 2-bit values from the pull'ed word
-    jmp x-- loop
-; x is zero, which mean we've out'ed all (16 * 40) = 640 2-bit values from the fifo
-; so wait for 
-.wrap
-
 loop2_alias:
     jmp loop2 [1]
 
@@ -70,9 +78,12 @@ loop2_alias:
 
 
 
+
+
+
 ; ---- here's a 2-bit (2 colours per line) version ----
 
-
+; I think we can also 'auto-pull' the two pull instructions away 
 
 lut0:
     jmp out_loop_test               ; ISR = 0 no need to shift OSR 

@@ -1,4 +1,6 @@
 
+#define SPEED_UP_GRAPHICS
+
 // VGA_USE_PIO_PROG defines which VGA driver should be used to drive the VGA port
 
 // If it's 1 Hunter Adams' VGA driver is used on HSYNC, VSYNC, LO_GRN, etc.
@@ -60,6 +62,12 @@
 // Font file
 #include "glcdfont.c"
 #include "font_rom_brl4.h"
+
+#ifdef SPEED_UP_GRAPHICS
+
+#include <string.h>
+
+#endif
 
 // VGA timing constants
 #define H_ACTIVE   655    // (active + frontporch - 1) - one cycle delay for mov
@@ -722,9 +730,34 @@ void drawVLine(short x, short y, short h, char color) {
 }
 
 void drawHLine(short x, short y, short w, char color) {
+
+#ifdef SPEED_UP_GRAPHICS
+    if ((x >= _width) || (x < 0) || (y > _height)) {
+        return;
+    }
+    if (x + w > _width) {
+        w = _width - x;
+    }
+
+    if (x & 1) {
+        drawPixel(x, y, color);
+        x++;
+        w--;
+        // if (x )
+    }
+
+    if (w & 1) {
+        drawPixel(x + w - 1, y, color);
+        w--;
+    }
+
+    memset(&vga_data_array[(y * (_width / 2)) + (x / 2)], (color << 4) | color, w / 2);
+
+#else
     for (short i=x; i<(x+w); i++) {
         drawPixel(i, y, color) ;
     }
+#endif
 }
 
 // Bresenham's algorithm - thx wikipedia and thx Bruce!
@@ -982,11 +1015,34 @@ void fillRect(short x, short y, short w, short h, char color) {
 
   // tft_setAddrWindow(x, y, x+w-1, y+h-1);
 
+#ifdef SPEED_UP_GRAPHICS
+
+    if (y >= _height) {
+        return;
+    }
+    
+    if (y + h > _height) {
+        h = _height - y;
+    }
+
+    if ((x == 0) && (w == _width)) {
+        memset(&vga_data_array[y * (_width / 2)], (color << 4) | color, h * (_width / 2));
+    } else {
+
+        for (int i = 0; i < h; i++) {
+            drawHLine(x, y + i, w, color);
+        }
+    }
+
+#else
+
   for(int i=x; i<(x+w); i++) {
     for(int j=y; j<(y+h); j++) {
         drawPixel(i, j, color);
     }
   }
+
+#endif
 }
 
 // Draw a character
