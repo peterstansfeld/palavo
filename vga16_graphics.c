@@ -90,9 +90,9 @@ char * address_pointer = &vga_data_array[0] ;
 #define SYNC_BUFFER_COUNT 8
 
 // Maximum should last about 0xffffffff / (SYNC_BUFFER_COUNT * 24 * 60 * 60 * 60) = 103.56 days.
-// #define SYNC_DMA_TRANSFER_COUNT 0xffffffff
+#define SYNC_DMA_TRANSFER_COUNT 0xffffffff
 
-#define SYNC_DMA_TRANSFER_COUNT SYNC_BUFFER_COUNT * 60 // one second (ish)
+// #define SYNC_DMA_TRANSFER_COUNT SYNC_BUFFER_COUNT * 60 // one second (ish)
 // #define SYNC_DMA_TRANSFER_COUNT SYNC_BUFFER_COUNT * 60 * 10 // ten seconds (ish)
 
 // uint32_t sync_buffer [SYNC_BUFFER_COUNT];
