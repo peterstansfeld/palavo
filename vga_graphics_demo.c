@@ -502,25 +502,23 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
     }
 
     void print_debug(uint8_t pin) {
-        char str[80];
-        sprintf(str, "pin: %d scrollx: %d, prev start: %d prev_end: %d next start: %d next end: %d\n", pin, scrollx, edges[pin].prev_start, edges[pin].prev_end, edges[pin].next_start, edges[pin].next_end);
+        char str[256];
+        sprintf(str, "pin: %d scrollx: %d, prev start: %d prev_end: %d next start: %d next end: %d\n", 
+            pin, scrollx, edges[pin].prev_start, edges[pin].prev_end, edges[pin].next_start, edges[pin].next_end);
         uart_puts(UART_ID, str);
     }
 
 
-#define FIRST_PIN_TO_DEBUG 5
-#define LAST_PIN_TO_DEBUG 5
+#define FIRST_PIN_TO_DEBUG 2
+#define LAST_PIN_TO_DEBUG 2
 
     char str[80];
 
     setTextSize(1);
 
-    // uart_puts(UART_ID, "-\n");
+    uart_puts(UART_ID, "-\n");
 
     for (int pin = 0; pin < pin_count; ++pin) {
-
-        fillRect(0, y, SCREEN_WIDTH, (trace_height), BLACK); // clear plot area
-
 
         int x = 0;
 
@@ -528,60 +526,61 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
         char line_col = colours[pin];
 
-        int last_sample = 1;
+        int last_sample = 1; // fix at high for now
         int last_x = 0;
 
         setTextColor(line_col);
 
-        last_sample = 1; // fix at high for now
-        last_x = 0;
-
         int last_i = 0;
         int cursor_x = 0;
 
-        bool use_prev_edge = false;
+        bool use_prev_start = false;
 
         if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
             print_debug(pin);
         }
 
+        int safe_scrollx = scrollx;
+
+        if (safe_scrollx >= n_samples) {
+            safe_scrollx = n_samples - 1;
+        }
+
         if (scrollx >= edges[pin].prev_start) {
-            if (edges[pin].prev_end == -1) {
-                use_prev_edge = true;
-            } else if (scrollx < edges[pin].prev_end) {
-                use_prev_edge = true;
+            if (max_screen_x < edges[pin].next_end) {
+                if (edges[pin].prev_end == -1) {
+                    use_prev_start = true;
+                } else if (scrollx < edges[pin].prev_end) {
+                    use_prev_start = true;
+                }
+            } else if (edges[pin].next_end == n_samples) {
+                // the rest is a duplicate of the above and should be combined
+                if (edges[pin].prev_end == -1) {
+                    use_prev_start = true;
+                } else if (scrollx < edges[pin].prev_end) {
+                    use_prev_start = true;
+                }
             }
         }
 
-            // if (max_screen_x <= edges[pin].next_end) {
-            //     if (next_start == edges[pin].next_start) {
-            //         use_next_edge = true;
-            //     }
-            // }
-            // edges[pin].next_start = next_start;
+        // last_sample = get_channel_sample(buf, pin, pin_count, scrollx, record_size_bits);
+        last_sample = get_channel_sample(buf, pin, pin_count, safe_scrollx, record_size_bits);
 
-
-
-
-
-
-        last_sample = get_channel_sample(buf, pin, pin_count, scrollx, record_size_bits);
-
-        if (use_prev_edge) {
-            // we can use the previous searched-for edge
+        if (use_prev_start) {
+            // we can use the previously searched-for prev_start edge
             last_i = edges[pin].prev_start;
 
         } else {
             // we can not use the previous searched-for edge, so search for it
 
-        if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
+            if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
                 sprintf(str, "finding prev edge on pin %d at scrollx: %d...\n", pin, scrollx);
                 uart_puts(UART_ID, str);
             }
 
             last_i = 0;
 
-            for (int i = scrollx - 1; i >= 0; i--) {
+            for (int i = safe_scrollx - 1; i >= 0; i--) {
                 // go back from the current scroll position and find the first
                 // sample that's different from the sample at the scroll position.
 
@@ -589,21 +588,14 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
                 if (last_sample != sample) {
                     last_i = i + 1; // the "+ 1" is needed as we're going backwards
-
-                    edges[pin].prev_start = last_i;
-
-                    // if (pin == PIN_TO_DEBUG) {
-                    //     sprintf(str, "prev edge on pin %d @ %d\n", pin, last_i);
-                    //     uart_puts(UART_ID, str);
-                    // }
-
+                    // edges[pin].prev_start = last_i;
                     break;
                 }
             }
 
-            edges[pin].prev_start = last_i;
+            edges[pin].prev_start = last_i; // save the previous start edge for next time
 
-        if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
+            if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
                 print_debug(pin);
             }
         }
@@ -637,6 +629,10 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
         int prev_end = -1;
 
         int next_start = -1;
+
+        fillRect(0, y, SCREEN_WIDTH, (trace_height), BLACK); // clear plot area
+
+        // paint the windowed part of the plot
 
         for (int i = scrollx; i < max_screen_x; i++) {
 
@@ -740,64 +736,43 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
             bool use_next_edge = false;
 
 
-            if ((use_prev_edge == false) && (prev_end == -1)) {
+            if ((use_prev_start == false) && (prev_end == -1)) {
 
             } else {
-            
-            // if ((/*edges[pin].*/ next_start < max_screen_x) && (edges[pin].next_end > max_screen_x)) {
-            if (max_screen_x <= edges[pin].next_end) {
-                // if (next_start == -1) {
-                if (next_start == edges[pin].next_start) {
-                    use_next_edge = true;
-                } else {
-                    // edges[pin].next_start - next_start;
-                // } else if (max_screen_x > next_start) {
-                    // use_next_edge = true;
+                // if ((/*edges[pin].*/ next_start < max_screen_x) && (edges[pin].next_end > max_screen_x)) {
+                if (max_screen_x <= edges[pin].next_end) {
+                    // if (next_start == -1) {
+                    if (next_start == edges[pin].next_start) {
+                        use_next_edge = true;
+                    } else {
+                        // edges[pin].next_start - next_start;
+                    // } else if (max_screen_x > next_start) {
+                        // use_next_edge = true;
+                    }
                 }
-            }
-
             }
 
             edges[pin].prev_end = prev_end;
             edges[pin].next_start = next_start;
-
-
-        // if (scrollx >= edges[pin].prev_start) {
-        //     if (edges[pin].prev_end == -1) {
-        //         use_prev_edge = true;
-        //     } else if (scrollx < edges[pin].prev_end) {
-        //         use_prev_edge = true;
-        //     }
-        // }
-
-
-
-
-            // edges[pin].next_start = next_start;
 
             if (!use_next_edge) {
 
                 if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
                     sprintf(str, "finding next edge on pin %d at scrollx: %d...\n", pin, scrollx);
                     uart_puts(UART_ID, str);
-
                 }
 
                 for (i = max_screen_x; i < n_samples; i++) {
-
                     uint sample = get_channel_sample(buf, pin, pin_count, i, record_size_bits);
-
                     if (last_sample != sample) {
                         if (!found_prev_end) {
                             edges[pin].prev_end = i;
                             found_prev_end = true;
                         }
-
                         edges[pin].next_end = i;
                         found_next = true;
                         break;
                     }
-
                 }
 
                 found_next = true;
@@ -806,6 +781,8 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                 
                 if (next_start == -1) {
                     // edges[pin].prev_start should also be -1
+                    // we didn't find any edges in the windowed area 
+
                     last_i = edges[pin].prev_start;
                 } else {
                     last_i = next_start;
@@ -830,7 +807,6 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                     // calculated_last_x = ((last_i - 1) * (magnification + 1)) - (scrollx * (magnification + 1));
                     calculated_next_x = ((i - scrollx) * (magnification + 1));
                 }
-
 
                 x = calculated_next_x;
 
