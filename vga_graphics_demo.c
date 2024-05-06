@@ -501,6 +501,13 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
         max_screen_x = n_samples;
     }
 
+// #define DEBUG_PINS
+
+#ifdef DEBUG_PINS
+
+#define FIRST_PIN_TO_DEBUG 2
+#define LAST_PIN_TO_DEBUG 2
+
     void print_debug(uint8_t pin) {
         char str[256];
         sprintf(str, "pin: %d scrollx: %d, prev start: %d prev_end: %d next start: %d next end: %d\n", 
@@ -508,15 +515,16 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
         uart_puts(UART_ID, str);
     }
 
+#endif
 
-#define FIRST_PIN_TO_DEBUG 2
-#define LAST_PIN_TO_DEBUG 2
 
     char str[80];
 
     setTextSize(1);
 
+#ifdef DEBUG_PINS
     uart_puts(UART_ID, "-\n");
+#endif
 
     for (int pin = 0; pin < pin_count; ++pin) {
 
@@ -536,9 +544,11 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
         bool use_prev_start = false;
 
+#ifdef DEBUG_PINS
         if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
             print_debug(pin);
         }
+#endif
 
         int safe_scrollx = scrollx;
 
@@ -573,10 +583,12 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
         } else {
             // we can not use the previous searched-for edge, so search for it
 
+#ifdef DEBUG_PINS
             if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
                 sprintf(str, "finding prev edge on pin %d at scrollx: %d...\n", pin, scrollx);
                 uart_puts(UART_ID, str);
             }
+#endif
 
             last_i = 0;
 
@@ -595,9 +607,12 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
             edges[pin].prev_start = last_i; // save the previous start edge for next time
 
+#ifdef DEBUG_PINS
             if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
                 print_debug(pin);
             }
+#endif
+
         }
 
         // last_i is now the index if the previous off-screen edge, or the beginning of the samples
@@ -624,8 +639,6 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
         bool found_prev_end = false;
 
-        // edges[pin].prev_end = -1;
-
         int prev_end = -1;
 
         int next_start = -1;
@@ -638,68 +651,55 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
             uint sample = get_channel_sample(buf, pin, pin_count, i, record_size_bits);
 
-            // Check to see whether we've already drawn a pixel at this x location, which only
-            // happens when we're zoomed out (zoom < 0). If not draw it.
-
-            if (x != last_pixel_x) {
-                //
-                drawPixel(x, y + (sample ? 0 : trace_height - 1), line_col);
-                last_pixel_x = x;
-            }
-
-            // Check to see whether we've already drawn vertical line a pixel at this x location, which only
-            // happens when we're zoomed out (zoom < 0). If not draw it.
-
             if ((last_sample != sample))  {
+
                 if ((!found_prev_end) && (i != scrollx)) {
-                    // edges[pin].prev_end = i;
                     prev_end = i;
                     found_prev_end = true;
                 }
 
-                // edges[pin].next_start = i;
-
                 next_start = i;
 
-                // if (x < 640) {
-                    if (x != last_v_line_x) {
-                        drawVLine(x, y, trace_height, line_col);
-                        last_v_line_x = x;
-                    }
-                // } else {
-                    // not quite sure why we get here, but we do just twice when the mag is < 0 - todo
-                    // if (pin == 0) {
-                    //     uart_putcf(UART_ID, "x: %d ", x);
-                    // }
-                // }
-                if (show_numbers) {
-                    sprintf(str,"%d", i - last_i);
-                    int str_width = strlen(str) * FONT_WIDTH;
+                if (x != last_v_line_x) {
+                    // We've not yet drawn a vertical line at this x location, so let's draw one.
+                    drawVLine(x, y, trace_height, line_col);
+                    last_v_line_x = x;
+                    last_pixel_x = x;
 
-                    // if ((pin == 0) && (i - last_i == 25)) uart_putc(UART_ID, '~');
+                    if (show_numbers) {
+                        sprintf(str,"%d", i - last_i);
+                        int str_width = strlen(str) * FONT_WIDTH;
 
+                        if (str_width < (x - last_x)) {
+                            // the string fits between the two edges
+                            cursor_x = last_x + ((x - last_x - str_width) / 2);
 
-                    if (str_width < (x - last_x)) { // todo - undo this line - don't delet
+                            if (cursor_x < 0) {
+                                cursor_x = 0;
+                                if (cursor_x + str_width >= x) {
+                                    cursor_x = x - str_width - 1;
+                                }
+                            }
 
-                        cursor_x = (last_x + ((x - last_x) / 2)) - (str_width / 2);
-                        if (cursor_x < 0) {
-                            cursor_x = 0;
-                            if (cursor_x + str_width >= x) {
-                                cursor_x = x - str_width - 1;
+                            if (cursor_x - str_width < SCREEN_WIDTH) {
+                                setCursor(cursor_x, y + (trace_height / 2) - (FONT_HEIGHT / 2));
+                                writeString(str);
                             }
                         }
-                        // cursor_x = (last_i + ((i - last_i) / 2)) - (str_width / 2) - scrollx;
-                        // if ((cursor_x >= 0) && (cursor_x - str_width < 640)) {
-                        if (cursor_x - str_width < SCREEN_WIDTH) {
-                            setCursor(cursor_x, y + (trace_height / 2) - (FONT_HEIGHT / 2));
-                            writeString(str);
-                        }
                     }
+                    last_sample = sample;
+                    last_x = x;
+                    last_i = i;
                 }
-                last_sample = sample;
-                last_x = x;
-                last_i = i;
+
+            } else {
+                if (x != last_pixel_x) {
+                    // We've not yet drawn a pixel at this x location, so let's draw one.
+                    drawPixel(x, y + (sample ? 0 : trace_height - 1), line_col);
+                    last_pixel_x = x;
+                }
             }
+
             if (magnification < 0) {
                 if (++magIndex >= abs(magnification) + 1) {
                     x++;
@@ -710,44 +710,18 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
             }
         }
 
-        // if (pin == PIN_TO_DEBUG) {
-        //     print_debug(pin);
-        // }
-
-/*
-
-        if (!found_prev_end) {
-            edges[pin].prev_end = edges[pin].prev_start;
-        }
-
-        if (next_start == -1) {
-            next_start = edges[pin].prev_end;
-        }
-
-*/
-
-
-        if (show_numbers) {
+         if (show_numbers) {
 
             int i;
-            bool found_next = false;
 
-            
             bool use_next_edge = false;
-
 
             if ((use_prev_start == false) && (prev_end == -1)) {
 
             } else {
-                // if ((/*edges[pin].*/ next_start < max_screen_x) && (edges[pin].next_end > max_screen_x)) {
                 if (max_screen_x <= edges[pin].next_end) {
-                    // if (next_start == -1) {
                     if (next_start == edges[pin].next_start) {
                         use_next_edge = true;
-                    } else {
-                        // edges[pin].next_start - next_start;
-                    // } else if (max_screen_x > next_start) {
-                        // use_next_edge = true;
                     }
                 }
             }
@@ -757,10 +731,12 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
             if (!use_next_edge) {
 
+#ifdef DEBUG_PINS
                 if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
                     sprintf(str, "finding next edge on pin %d at scrollx: %d...\n", pin, scrollx);
                     uart_puts(UART_ID, str);
                 }
+#endif
 
                 for (i = max_screen_x; i < n_samples; i++) {
                     uint sample = get_channel_sample(buf, pin, pin_count, i, record_size_bits);
@@ -770,79 +746,49 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                             found_prev_end = true;
                         }
                         edges[pin].next_end = i;
-                        found_next = true;
                         break;
                     }
                 }
 
-                found_next = true;
+                edges[pin].next_end = i;
 
             } else {
-                
+
                 if (next_start == -1) {
                     // edges[pin].prev_start should also be -1
                     // we didn't find any edges in the windowed area 
-
                     last_i = edges[pin].prev_start;
                 } else {
                     last_i = next_start;
                 }
 
                 i = edges[pin].next_end;
-                
-                found_next = true;
             }
 
-            if (found_next) {
+            if (magnification < 0) {
+                x = ((i - scrollx) / (abs(magnification) + 1));
+            } else {
+                x = ((i - scrollx) * (magnification + 1));
+            }
 
-                edges[pin].next_end = i;
-                int calculated_next_x;
-                // calculated_last_x = ((last_i - scrollx) * (magnification + 1));
+            sprintf(str,"%d", i - last_i);
+            int str_width = strlen(str) * FONT_WIDTH;
+            if (str_width < (x - last_x)) {
 
-                // last_x = calculated_last_x;
-                
-                if (magnification < 0) {
-                    calculated_next_x = ((i - scrollx) / (abs(magnification) + 1));
-                } else {
-                    // calculated_last_x = ((last_i - 1) * (magnification + 1)) - (scrollx * (magnification + 1));
-                    calculated_next_x = ((i - scrollx) * (magnification + 1));
-                }
-
-                x = calculated_next_x;
-
-                sprintf(str,"%d", i - last_i);
-                int str_width = strlen(str) * FONT_WIDTH;
-                if (str_width < (x - last_x)) {
-
-                    cursor_x = (last_x + ((x - last_x) / 2)) - (str_width / 2);
-                    if (cursor_x + str_width >= SCREEN_WIDTH) {
-                        // some of the string is off screen and to the right
-                        // if (pin == 0) uart_putc(UART_ID, '$');
-                        cursor_x = last_x + 3;
-                        if (cursor_x + str_width < SCREEN_WIDTH) {
-                            // if (pin == 0) uart_putc(UART_ID, '%');
-                        // if (pin == 0) uart_putc(UART_ID, '*');
-                        // cursor_x = 640 - str_width - 1;
-                            cursor_x = SCREEN_WIDTH - str_width - 1;
-
-                        // if (cursor_x + str_width >= x) {
-                            // uart_putc(UART_ID, '*');
-                            // cursor_x = x - str_width - 1;
-                            // setCursor(cursor_x, y + (trace_height / 2) - (font_height / 2));
-                            // writeString(str);
-                        // } else {
-                            // uart_putc(UART_ID, '+');
-                            // cursor_x = last_x + 3;
-                        }
-
-                    } else if (cursor_x < 0) {
-                        cursor_x = 0;
+                cursor_x = last_x + ((x - last_x - str_width) / 2);
+                if (cursor_x + str_width >= SCREEN_WIDTH) {
+                    // some of the string is off screen and to the right
+                    cursor_x = last_x + 3;
+                    if (cursor_x + str_width < SCREEN_WIDTH) {
+                        cursor_x = SCREEN_WIDTH - str_width - 1;
                     }
-                    setCursor(cursor_x, y + (trace_height / 2) - (FONT_HEIGHT / 2));
-                    writeString(str);
-                }
-            }
 
+                } else if (cursor_x < 0) {
+                    cursor_x = 0;
+                }
+                setCursor(cursor_x, y + (trace_height / 2) - (FONT_HEIGHT / 2));
+                writeString(str);
+            }
         }
 
         y += trace_height + y_padding;
