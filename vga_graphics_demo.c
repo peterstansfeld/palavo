@@ -167,6 +167,24 @@ bool pio_sm_exec_expiry_time_us(PIO pio, uint sm, uint instr, uint32_t expiry_ti
 }
 
 
+// define a structure for storing edge locations for each of the channels
+
+struct Edges {
+    int prev_start;
+    int prev_end;
+    int next_start;
+    int next_end;
+};
+
+#define MAX_NO_OF_CHANNELS 8
+
+struct Edges edges[MAX_NO_OF_CHANNELS];
+
+void clear_previous_edges() {
+        memset(edges, 0, sizeof(edges[0]) * MAX_NO_OF_CHANNELS);
+}
+
+
 bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, size_t capture_size_words,
                         uint trigger_pin, uint8_t trigger_type) {
 
@@ -293,6 +311,8 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     pio_sm_set_enabled(pio, sm, false); // Disable the state machine, which might save a bit of power? (todo - find out)
 
     g_no_of_captured_pins = g_no_of_pins_to_capture;
+
+    clear_previous_edges();
 
     return triggered;
 }
@@ -447,16 +467,6 @@ void write_intf(const char *s, int c) {
 #define STATUSBAR_INFO_RIGHT STATUSBAR_INFO_LEFT + STATUSBAR_INFO_WIDTH
 #define STATUSBAR_INFO_COLOR STATUSBAR_COLOR
 
-// define a structure for storing edge locations for each of the channels
-
-struct Edges {
-    int prev_start;
-    int prev_end;
-    int next_start;
-    int next_end;
-};
-
-struct Edges edges[8];
 
 void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples, int magnification,
                         int scrollx, bool show_numbers) {
@@ -517,7 +527,6 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
 #endif
 
-
     char str[80];
 
     setTextSize(1);
@@ -557,14 +566,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
         }
 
         if (scrollx >= edges[pin].prev_start) {
-            if (max_screen_x < edges[pin].next_end) {
-                if (edges[pin].prev_end == -1) {
-                    use_prev_start = true;
-                } else if (scrollx < edges[pin].prev_end) {
-                    use_prev_start = true;
-                }
-            } else if (edges[pin].next_end == n_samples) {
-                // the rest is a duplicate of the above and should be combined
+            if ((max_screen_x < edges[pin].next_end) || (edges[pin].next_end == n_samples)) {
                 if (edges[pin].prev_end == -1) {
                     use_prev_start = true;
                 } else if (scrollx < edges[pin].prev_end) {
@@ -573,7 +575,6 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
             }
         }
 
-        // last_sample = get_channel_sample(buf, pin, pin_count, scrollx, record_size_bits);
         last_sample = get_channel_sample(buf, pin, pin_count, safe_scrollx, record_size_bits);
 
         if (use_prev_start) {
@@ -600,7 +601,6 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
                 if (last_sample != sample) {
                     last_i = i + 1; // the "+ 1" is needed as we're going backwards
-                    // edges[pin].prev_start = last_i;
                     break;
                 }
             }
@@ -617,7 +617,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
         // last_i is now the index if the previous off-screen edge, or the beginning of the samples
 
-        // make scale adjustments, if necessary
+        // make any needed scale adjustments
 
         if (magnification < 0) {
             last_x = ((last_i - scrollx) / (abs(magnification) + 1));
@@ -672,7 +672,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
                         if (str_width < (x - last_x)) {
                             // the string fits between the two edges
-                            cursor_x = last_x + ((x - last_x - str_width) / 2);
+                            cursor_x = last_x + ((x - last_x - str_width) / 2) + 1;
 
                             if (cursor_x < 0) {
                                 cursor_x = 0;
@@ -729,7 +729,18 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
             edges[pin].prev_end = prev_end;
             edges[pin].next_start = next_start;
 
-            if (!use_next_edge) {
+            if (use_next_edge) {
+
+                if (next_start == -1) {
+                    // edges[pin].prev_start should also be -1
+                    // we didn't find any edges in the windowed area 
+                    last_i = edges[pin].prev_start;
+                } else {
+                    last_i = next_start;
+                }
+
+                i = edges[pin].next_end;
+            } else {
 
 #ifdef DEBUG_PINS
                 if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
@@ -751,18 +762,6 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                 }
 
                 edges[pin].next_end = i;
-
-            } else {
-
-                if (next_start == -1) {
-                    // edges[pin].prev_start should also be -1
-                    // we didn't find any edges in the windowed area 
-                    last_i = edges[pin].prev_start;
-                } else {
-                    last_i = next_start;
-                }
-
-                i = edges[pin].next_end;
             }
 
             if (magnification < 0) {
@@ -775,7 +774,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
             int str_width = strlen(str) * FONT_WIDTH;
             if (str_width < (x - last_x)) {
 
-                cursor_x = last_x + ((x - last_x - str_width) / 2);
+                cursor_x = last_x + ((x - last_x - str_width) / 2) + 1;
                 if (cursor_x + str_width >= SCREEN_WIDTH) {
                     // some of the string is off screen and to the right
                     cursor_x = last_x + 3;
