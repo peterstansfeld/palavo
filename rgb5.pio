@@ -6,139 +6,27 @@
 ; Program name
 .program rgb5
 ;.side_set 1 ;opt
-.origin 0           ; we modify the PC, which needs absolute addresses
 
-;pull block                         ; Pull from FIFO to OSR (only once)
-;mov y, osr                         ; Copy value from OSR to y scratch register
-
-;Would need to increase the clock frequency
-
-
-lut0:
-    jmp out_loop_test [1]
-    nop
-
-lut1:
-    out null, 4                     ; shift OSR 4 bits right
-    jmp out_loop_test
-
-lut2:
-    out null, 8                     ; shift OSR 4 bits right
-    jmp out_loop_test
-
-.wrap
-
-lut3:
-    out null, 12 [1]                   ; shift OSR 4 bits right
-    ; jmp out_loop_test
+;pull block 					; Pull from FIFO to OSR (only once)
+;mov y, osr 					; Copy value from OSR to y scratch register
 
 .wrap_target
 
-out_loop_test:
-    out pins, 4                     ; put the colour on the pins
-loop_test:
-    jmp !osre loop2_alias
-; osre is empty, which means we've out'ed all 16 2-bit values from the pull'ed word
-    jmp x-- loop
-; x is zero, which mean we've out'ed all (16 * 40) = 640 2-bit values from the fifo
-; so wait for 
+;set pins, 0x0       				; Zero RGB pins in blanking
+;mov x, isr       					; Initialize counter variable
 
-    nop [6]
-    set pins, 0
-
-
-; load 39 into x
-;    set x, 20
-;    mov isr, x
-;    in null, 1
-;    mov x, isr
-;    jmp x-- x_is_decremented
-x_is_decremented:
-
-    wait 1 irq 5 [0]                ; Wait for vsync active mode (starts 5 cycles after execution)
-
-    pull                            ; get 32 bits from the TX FIFO
-    out x, 16                       ; save loop repeat counter (39) in X
-    out y, 16                       ; save the 4 * 4-bit colours
-
-loop:
-    pull                            ; get 32 bits from the TX FIFO
-    ; out PC, 2
-loop2:
-    out isr, 2                      ; put 2 bits of the pixel index into the ISR
-    in null, 2                      ; shift ISR left one bit to multiply it by 2 
-    mov osr, y                      ; put the 4 4-bit colours in the OSR
-    mov PC, isr                     ; jump to lut0, lut1, lut2 or lut3
-
-loop2_alias:
-    jmp loop2 [1]
-
-
-
-
-
-
-
-
-
-; ---- here's a 2-bit (2 colours per line) version ----
-
-; I think we can also 'auto-pull' the two pull instructions away 
-
-lut0:
-    jmp out_loop_test               ; ISR = 0 no need to shift OSR 
-
-lut1:
-    out null, 4                     ; ISR = 1, so shift OSR 4 bits right
-;    jmp out_loop_test
-
-out_loop_test:
-    out pins, 4 [2]                    ; put the colour on the pins
-loop_test:
-    jmp !osre loop2_alias
-; osre is empty, which means we've out'ed all 32 1-bit values from the pull'ed word
-    jmp x-- loop
-; x is zero, which mean we've out'ed all (32 * 20) = 640 1-bit values from the fifo
-; so wait for 
-.wrap
-
-loop2_alias:
-    jmp loop2 [1]
-
-
-.wrap_target
-    set x, 19 [5]                  ; load 19 into X
-    set pins, 0                     ; 
-
-    wait 1 irq 5 [0]                ; Wait for vsync active mode (starts 5 cycles after execution)
-
-    pull                            ; get 32 bits from the TX FIFO
-    out y, 8                        ; save the 2 * 4-bit colours into Y
-
-loop:
-    pull                            ; get 32 bits from the TX FIFO
-    ; out PC, 2
-loop2:
-    out isr, 1                      ; put 1 bit of the pixel index into the ISR
-;    in null, 2                      ; shift ISR left one bit to multiply it by 2 
-    mov osr, y                      ; put the 4 4-bit colours in the OSR
-    mov PC, isr                     ; jump to lut0, lut1
-
-; 14 instructions
-
-
-
-
+    mov x, isr       					; Initialize counter variable
+    wait 1 irq 5 [0]	      		; Wait for vsync active mode (starts 5 cycles after execution)
 
     ; set y, 6 [2] ; 0 = 47,1 = 48, 2 = 48 3 = 48, 4 = 48, 5 = 49. Pick first value = 1
     ;              ;        1 = 239, 2 = 240, 3 = 242, 5 = 243 
-    set y, 6 [22]  ;        22 = 240 
+    set y, 14 [22]  ;        22 = 240 
 delay:
     jmp y-- delay [24]
 
 colorout:
-    out pins, 4	[4]			; Push out to pins (first pixel)
-    out pins, 4	[3]			; Push out to pins (next pixel)
+    out pins, 4	[9]			; Push out to pins (first pixel)
+    out pins, 4	[8]			; Push out to pins (next pixel)
 ;    set pins, 0xf [4]       
 ;    set pins, 0xf [3]       
 
@@ -195,9 +83,11 @@ static inline void rgb5_program_init(PIO pio, uint sm, uint offset, uint pin /*,
 
     // sm_config_set_sideset_pins(&c, sidepin);
 
-
-    // Set clock division (Commented out, this one runs at full speed)
-    // sm_config_set_clkdiv(&c, 5) ;
+    // Set clock division (unless sys clock is 125 MHz)
+#if SYS_CLOCK_FREQ_KHZ == 250000u
+    // 
+    // sm_config_set_clkdiv(&c, 2);
+#endif
 
     // Enable autopull with the pull threshold set to 8 
     sm_config_set_out_shift(&c, true, true, 8);

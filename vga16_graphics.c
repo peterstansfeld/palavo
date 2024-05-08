@@ -7,7 +7,7 @@
 // otherwise its output will be on HSYNC2, VSYNC2, LO_GRN2, etc. and another
 // VGA driver will be used on HSYNC, VSYNC, LO_GRN, etc.
 
-#define VGA_USE_PIO_PROG 4
+#define VGA_USE_PIO_PROG 5
 
 
 // VGA_TEST_PIO_PROG defines which VGA driver should be used to drive the VGA
@@ -55,6 +55,11 @@
 #include "hsync4.pio.h"
 #include "rgb4.pio.h"
 
+#elif (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
+
+#include "hsync5.pio.h"
+#include "rgb5.pio.h"
+
 #endif
 
 // Header file
@@ -84,7 +89,7 @@
 unsigned char vga_data_array[TXCOUNT];
 char * address_pointer = &vga_data_array[0] ;
 
-#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
+#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4) || (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
 
 // #define SYNC_BUFFER_COUNT 14
 #define SYNC_BUFFER_COUNT 8
@@ -127,7 +132,7 @@ unsigned char str_cursor_x;
 
 #define LED_PIN PICO_DEFAULT_LED_PIN
 
-#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
+#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4) || (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
 
 static int sync_test_chan_0 = 0;
 
@@ -232,6 +237,16 @@ void initVGA() {
     uint rgb4_offset = pio_add_program(pio_2, &rgb4_program);
     uint hsync4_offset = pio_add_program(pio_2, &hsync4_program);
 
+#elif (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
+    
+    uint hsync5_sm = 0;
+    uint rgb5_sm = 1;
+
+    uint rgb5_offset = pio_add_program(pio_2, &rgb5_program);
+    uint hsync5_offset = pio_add_program(pio_2, &hsync5_program);
+
+
+
 #endif
     
     // Call the initialization functions that are defined within each PIO file.
@@ -261,6 +276,11 @@ void initVGA() {
         hsync4_program_init(pio_2, hsync4_sm, hsync4_offset, HSYNC2); //
         rgb4_program_init(pio_2, rgb4_sm, rgb4_offset, LO_GRN2); // 
 
+    #elif VGA_TEST_PIO_PROG == 5
+
+        hsync5_program_init(pio_2, hsync5_sm, hsync5_offset, HSYNC2); //
+        rgb5_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN2); // 
+
     #endif
 
 #else
@@ -282,6 +302,10 @@ void initVGA() {
     #elif VGA_USE_PIO_PROG == 4
       hsync4_program_init(pio_2, hsync4_sm, hsync4_offset, HSYNC);
       rgb4_program_init(pio_2, rgb4_sm, rgb4_offset, LO_GRN);
+
+    #elif VGA_USE_PIO_PROG == 5
+      hsync5_program_init(pio_2, hsync5_sm, hsync5_offset, HSYNC);
+      rgb5_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN);
 
     #endif
 
@@ -350,6 +374,8 @@ void initVGA() {
     channel_config_set_dreq(&c0, DREQ_PIO1_TX1) ;                        // DREQ_PIO1_TX1 pacing (FIFO)
 #elif (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
     channel_config_set_dreq(&c0, DREQ_PIO1_TX1) ;                        // DREQ_PIO1_TX1 pacing (FIFO)
+#elif (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
+    channel_config_set_dreq(&c0, DREQ_PIO1_TX1) ;                        // DREQ_PIO1_TX1 pacing (FIFO)
 #endif
 
     channel_config_set_chain_to(&c0, rgb_test_chan_1);                        // chain to other channel
@@ -364,6 +390,8 @@ void initVGA() {
         &pio_2->txf[rgb3_sm],          // write address (RGB PIO TX FIFO)
 #elif (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
         &pio_2->txf[rgb4_sm],          // write address (RGB PIO TX FIFO)
+#elif (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
+        &pio_2->txf[rgb5_sm],          // write address (RGB PIO TX FIFO)
 #endif
 
 // #endif
@@ -388,11 +416,7 @@ void initVGA() {
         false                               // Don't start immediately.
     );
 
-
-
-#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
-
-
+#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4) || (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
 
     // More DMA channels - test ones - 0 sends color data, 1 reconfigures and restarts 0
     sync_test_chan_0 = dma_claim_unused_channel(true);
@@ -425,7 +449,12 @@ void initVGA() {
     // as the ring only repeats until SYNC_BUFFER_COUNT is decremented to 0
 
     // channel_config_set_dreq(&c0, DREQ_PIO1_TX0) ;                        // DREQ_PIO1_TX0 pacing (FIFO)
+
+#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
     channel_config_set_dreq(&c0, pio_get_dreq(pio_2, hsync4_sm, true));     // hsync4_sm tx FIFO pacing
+#elif (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
+    channel_config_set_dreq(&c0, pio_get_dreq(pio_2, hsync5_sm, true));     // hsync5_sm tx FIFO pacing
+#endif
 
 #ifndef USE_RING_BUF
     channel_config_set_chain_to(&c0, sync_test_chan_1);                  // chain to other channel
@@ -434,7 +463,13 @@ void initVGA() {
      dma_channel_configure(
         sync_test_chan_0,           // Channel to be configured
         &c0,                        // The configuration we just created
+
+#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
         &pio_2->txf[hsync4_sm],     // write address (RGB PIO TX FIFO)
+#elif (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
+        &pio_2->txf[hsync5_sm],     // write address (RGB PIO TX FIFO)
+#endif
+
         &sync_buffer,               // The initial read address (pixel color array)
 
 #ifdef USE_RING_BUF
@@ -647,6 +682,11 @@ void initVGA() {
 
     pio_enable_sm_mask_in_sync(pio_2, ((1u << hsync4_sm) | (1u << rgb4_sm)));
 
+#elif (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
+
+    pio_enable_sm_mask_in_sync(pio_2, ((1u << hsync5_sm) | (1u << rgb5_sm)));
+
+
 #endif
 
     // Start DMA channel 0. Once started, the contents of the pixel color array
@@ -656,7 +696,7 @@ void initVGA() {
     dma_start_channel_mask((1u << rgb_chan_0)) ;
     dma_start_channel_mask((1u << rgb_test_chan_0)) ;
 
-#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
+#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4) || (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
 
 #ifdef USE_RING_BUF
     // Tell the DMA to raise IRQ line 0 when the channel finishes a block

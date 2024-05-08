@@ -73,7 +73,7 @@ const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
 const uint CAPTURE_PIN_COUNT = 4;
 const uint CAPTURE_TRIGGER_PIN = VSYNC; // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
 const uint CAPTURE_N_SAMPLES = SCREEN_WIDTH * 96; // enough for 48 screen width's worth of data
-const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 8 * 5 * 1; /*271.267*/ // was 5 * 4
+const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 2 * 5 * 1; /*271.267*/ // was 5 * 4
 
 uint g_sample_frequency = CAPTURE_SAMPLE_FREQ_DIVISOR;
 uint8_t g_no_of_captured_pins = CAPTURE_PIN_COUNT;
@@ -1644,6 +1644,12 @@ void close_help_window() {
 int main() {
 
     // Initialize stdio
+    
+    // set sys clock freq to 250 MHz
+    #ifdef SYS_CLOCK_FREQ_KHZ 
+    set_sys_clock_khz(SYS_CLOCK_FREQ_KHZ, true);
+    #endif
+
     stdio_init_all();
 
     printf("Initialising VGA...");

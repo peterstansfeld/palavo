@@ -1,3 +1,6 @@
+add_compile_definitions(SYS_CLOCK_FREQ_KHZ=250000u)
+#add_compile_definitions(SYS_CLOCK_FREQ_KHZ=125000u)
+
 add_executable(graphics_test)
 
 # must match with pio filename and executable name from above
@@ -11,6 +14,8 @@ pico_generate_pio_header(graphics_test ${CMAKE_CURRENT_LIST_DIR}/hsync3.pio)
 pico_generate_pio_header(graphics_test ${CMAKE_CURRENT_LIST_DIR}/rgb3.pio)
 pico_generate_pio_header(graphics_test ${CMAKE_CURRENT_LIST_DIR}/hsync4.pio)
 pico_generate_pio_header(graphics_test ${CMAKE_CURRENT_LIST_DIR}/rgb4.pio)
+pico_generate_pio_header(graphics_test ${CMAKE_CURRENT_LIST_DIR}/hsync5.pio)
+pico_generate_pio_header(graphics_test ${CMAKE_CURRENT_LIST_DIR}/rgb5.pio)
 
 # must match with executable name and source file names
 target_sources(graphics_test PRIVATE vga_graphics_demo.c vga16_graphics.c)

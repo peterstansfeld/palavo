@@ -2,7 +2,7 @@
 ; HSync & VSync generation for VGA driver
 ; Inspired by Hunter Adams (vha3@cornell.edu)
 
-.program hsync4
+.program hsync5
 ;.side_set 1 opt     ; used to control vsync. Max delay is 7 cycles
 ;.origin 0           ; we modify the PC, which needs absolute addresseses
 
@@ -53,7 +53,7 @@
 
 .wrap_target
 
-;start:
+start:
     pull block                  ; load 32-bit word from TX FIFO into OSR
     out y, 9                    ; load repeat_count into Y
     mov isr, osr                ; save OSR (except the repeat_count)
@@ -82,11 +82,11 @@ repeat:
 
 
 % c-sdk {
-static inline void hsync4_program_init(PIO pio, uint sm, uint offset, uint pin) {
+static inline void hsync5_program_init(PIO pio, uint sm, uint offset, uint pin) {
 
     // Creates state machine configuration object c, and sets it to
     // default values.
-    pio_sm_config c = hsync4_program_get_default_config(offset);
+    pio_sm_config c = hsync5_program_get_default_config(offset);
 
     // We can't use autopull as we're re-using OSR values when
     // repeat_count is not zero.

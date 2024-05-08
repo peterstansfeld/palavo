@@ -68,9 +68,10 @@ static inline void rgb2_program_init(PIO pio, uint sm, uint offset, uint pin /*,
 
     // sm_config_set_sideset_pins(&c, sidepin);
 
-
-    // Set clock division (Commented out, this one runs at full speed)
-    // sm_config_set_clkdiv(&c, 5) ;
+    // Set clock division (unless sys clock is 125 MHz)
+#if SYS_CLOCK_FREQ_KHZ == 250000u
+    sm_config_set_clkdiv(&c, 2);
+#endif
 
     // Enable autopull with the pull threshold set to 8 
     sm_config_set_out_shift(&c, true, true, 8);
