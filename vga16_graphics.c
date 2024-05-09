@@ -7,13 +7,13 @@
 // otherwise its output will be on HSYNC2, VSYNC2, LO_GRN2, etc. and another
 // VGA driver will be used on HSYNC, VSYNC, LO_GRN, etc.
 
-#define VGA_USE_PIO_PROG 5
+#define VGA_USE_PIO_PROG 1
 
 
 // VGA_TEST_PIO_PROG defines which VGA driver should be used to drive the VGA
 // test pins on HSYNC2, VSYNC2, LO_GRN2, etc.
 
-#define VGA_TEST_PIO_PROG 1
+#define VGA_TEST_PIO_PROG 5
 
 
 #if (VGA_USE_PIO_PROG != 1) && (VGA_TEST_PIO_PROG != 1) 
@@ -104,6 +104,25 @@ char * address_pointer = &vga_data_array[0] ;
 uint32_t sync_buffer [SYNC_BUFFER_COUNT] __attribute__ ((aligned(SYNC_BUFFER_COUNT * sizeof(uint32_t))));
 
 uint32_t * sync_buffer_address_pointer = &sync_buffer[0] ;
+
+#if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
+
+ // (16 bits (639) + 16 bits (2, 4-bit colors) + (20 * 32 = 640 bits)
+#define TXCOUNT_2 21
+
+uint32_t vga_1bit_data_array[TXCOUNT_2];
+uint32_t * address_pointer_2 = &vga_1bit_data_array[0] ;
+
+
+// vga_1bit_data_array[0] = 12;
+
+// (639 << 16) | (RED << 4) | GREEN;
+
+// vga_1bit_data_array[1] = 0xff00ff; //0b10101010110011001111000011111111;
+
+
+#endif
+
 #endif
 
 // Bit masks for drawPixel routine
@@ -364,7 +383,11 @@ void initVGA() {
 
     // Channel Zero (sends color data to PIO VGA machine)
     c0 = dma_channel_get_default_config(rgb_test_chan_0);  // default configs
+#if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
+    channel_config_set_transfer_data_size(&c0, DMA_SIZE_32);              // 32-bit txfers
+#else
     channel_config_set_transfer_data_size(&c0, DMA_SIZE_8);              // 8-bit txfers
+#endif
     channel_config_set_read_increment(&c0, true);                        // yes read incrementing
     channel_config_set_write_increment(&c0, false);                      // no write incrementing
 
@@ -395,8 +418,13 @@ void initVGA() {
 #endif
 
 // #endif
+#if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
+        &vga_1bit_data_array,       // The initial read address (pixel color array)
+        TXCOUNT_2,                  // Number of transfers; in this case each is 4 byte.
+#else
         &vga_data_array,            // The initial read address (pixel color array)
         TXCOUNT,                    // Number of transfers; in this case each is 1 byte.
+#endif
         false                       // Don't start immediately.
     );
 
@@ -411,7 +439,11 @@ void initVGA() {
         rgb_test_chan_1,                         // Channel to be configured
         &c1,                                // The configuration we just created
         &dma_hw->ch[rgb_test_chan_0].read_addr,  // Write address (channel 0 read address)
+#if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
+        &address_pointer_2,                 // Read address (POINTER TO AN ADDRESS)
+#else
         &address_pointer,                   // Read address (POINTER TO AN ADDRESS)
+#endif
         1,                                  // Number of transfers, in this case each is 4 byte
         false                               // Don't start immediately.
     );
@@ -567,6 +599,24 @@ void initVGA() {
     sync_buffer[6] = encode(30,    1, 0, 24,           0,  1, 1, 176     );
 // add a buffer entry so we can use RING on the DMA channel
     sync_buffer[7] = encode(0,     1, 0, 24,           0,  1, 1, 176     );
+
+
+#endif
+
+
+#if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
+
+// vga_1bit_data_array[0] = (((WHITE << 4) | BLACK) << 16) | (639);
+vga_1bit_data_array[0] = (((YELLOW << 4) | MAGENTA) << 16) | (639);
+// vga_1bit_data_array[1] = 0b10101010110011001111000011111111;
+// vga_1bit_data_array[1] = 0xffffffff;
+
+for (int i = 1; i< TXCOUNT_2; i++) {
+    // vga_1bit_data_array[i] = 0xf0f0f0f0;
+    vga_1bit_data_array[i] = 0b10101010110011001111000011111111;
+
+}
+
 
 
 #endif
