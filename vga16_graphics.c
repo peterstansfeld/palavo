@@ -1,5 +1,5 @@
 
-#define SPEED_UP_GRAPHICS
+// #define SPEED_UP_GRAPHICS
 
 // VGA_USE_PIO_PROG defines which VGA driver should be used to drive the VGA port
 
@@ -7,13 +7,13 @@
 // otherwise its output will be on HSYNC2, VSYNC2, LO_GRN2, etc. and another
 // VGA driver will be used on HSYNC, VSYNC, LO_GRN, etc.
 
-#define VGA_USE_PIO_PROG 1
+#define VGA_USE_PIO_PROG 5
 
 
 // VGA_TEST_PIO_PROG defines which VGA driver should be used to drive the VGA
 // test pins on HSYNC2, VSYNC2, LO_GRN2, etc.
 
-#define VGA_TEST_PIO_PROG 5
+#define VGA_TEST_PIO_PROG 1
 
 
 #if (VGA_USE_PIO_PROG != 1) && (VGA_TEST_PIO_PROG != 1) 
@@ -80,8 +80,23 @@
 #define RGB_ACTIVE 319    // (horizontal active)/2 - 1
 // #define RGB_ACTIVE 639 // change to this if 1 pixel/byte
 
+// Screen width/height
+#define _width 640
+
+
+#if VGA_USE_PIO_PROG == 5
+
+#define _height 240
+
+#else
+
+#define _height 480
+
+#endif
+
+
 // Length of the pixel array, and number of DMA transfers
-#define TXCOUNT 153600 // Total pixels/2 (since we have 2 pixels per byte)
+#define TXCOUNT (_width * _height) / 2 // Total pixels/2 (since we have 2 pixels per byte)
 
 // Pixel color array that is DMA's to the PIO machines and
 // a pointer to the ADDRESS of this color array.
@@ -108,7 +123,26 @@ uint32_t * sync_buffer_address_pointer = &sync_buffer[0] ;
 #if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
 
  // (16 bits (639) + 16 bits (2, 4-bit colors) + (20 * 32 = 640 bits)
-#define TXCOUNT_2 21
+
+
+#define WORDS_PER_LINE 21
+
+// any more than 48 and we get a weird vertical scrolling side-effet
+// suggest that this is ram overflow 
+
+
+#if VGA_USE_PIO_PROG == 5
+
+#define NO_OF_LINES 480
+
+#else
+
+#define NO_OF_LINES 48
+
+#endif
+
+
+#define TXCOUNT_2 WORDS_PER_LINE * NO_OF_LINES
 
 uint32_t vga_1bit_data_array[TXCOUNT_2];
 uint32_t * address_pointer_2 = &vga_1bit_data_array[0] ;
@@ -143,10 +177,6 @@ unsigned short cursor_y, cursor_x, textsize ;
 char textcolor, textbgcolor, wrap;
 
 unsigned char str_cursor_x;
-
-// Screen width/height
-#define _width 640
-#define _height 480
 
 
 #define LED_PIN PICO_DEFAULT_LED_PIN
@@ -191,6 +221,12 @@ void __not_in_flash_func(dma_handler)() {
 
 #endif
 
+
+void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour) {
+    if ((line < 0) || (line >= NO_OF_LINES)) 
+        return;
+     vga_1bit_data_array[line * WORDS_PER_LINE] = (((fore_colour << 4) | (back_colour)) << 16) | (639);
+}
 
 void initVGA() {
         // Choose which PIO instance to use (there are two instances, each with 4 state machines)
@@ -607,14 +643,41 @@ void initVGA() {
 #if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
 
 // vga_1bit_data_array[0] = (((WHITE << 4) | BLACK) << 16) | (639);
-vga_1bit_data_array[0] = (((YELLOW << 4) | MAGENTA) << 16) | (639);
+
+// vga_1bit_data_array[0] = (((YELLOW << 4) | MAGENTA) << 16) | (639);
+// vga_1bit_data_array[WORDS_PER_LINE] = (((BLUE << 4) | WHITE) << 16) | (639);
+
+
+for (int y = 0; y < NO_OF_LINES; y++) {
+    // vga_1bit_data_array[y * WORDS_PER_LINE] = (((BLUE << 4) | (y & 0x0f)) << 16) | (639);
+    char fore_colour;
+    char back_colour;
+      
+    if (((y >= 55) && (y < 65)) || (y >= 469)) {
+        fore_colour = WHITE;
+        back_colour = DARK_BLUE;
+    } else {
+        fore_colour = YELLOW;
+        back_colour = BLACK;
+    }
+
+    // vga_1bit_data_array[y * WORDS_PER_LINE] = (((fore_colour << 4) | (back_colour)) << 16) | (639);
+    set_line_colors(y, back_colour, fore_colour);
+}
+
+
 // vga_1bit_data_array[1] = 0b10101010110011001111000011111111;
 // vga_1bit_data_array[1] = 0xffffffff;
 
-for (int i = 1; i< TXCOUNT_2; i++) {
-    // vga_1bit_data_array[i] = 0xf0f0f0f0;
-    vga_1bit_data_array[i] = 0b10101010110011001111000011111111;
+// colour palette
 
+// pixels
+for (int y = 0; y < NO_OF_LINES; y++) {
+    for (int x = 1; x < WORDS_PER_LINE; x ++) {
+    // vga_1bit_data_array[i] = 0xf0f0f0f0;
+        // vga_1bit_data_array[(y * WORDS_PER_LINE) + x] = 0b10101010110011001111000011111111;
+        vga_1bit_data_array[(y * WORDS_PER_LINE) + x] = 0;
+    }
 }
 
 
@@ -796,21 +859,73 @@ void drawPixel(short x, short y, char color) {
     // if (y < 0) y = 0 ;
     // if (y > 479) y = 479 ;
 
-    if ((x > 639) || (x < 0) || (y > 479) || (y < 0))
+    if ((x >= _width) || (x < 0) || (y < 0))
         return;
 
-    // Which pixel is it?
-    int pixel = ((640 * y) + x) ;
+    if (y < _height) {
 
-    // Is this pixel stored in the first 4 bits
-    // of the vga data array index, or the second
-    // 4 bits? Check, then mask.
-    if (pixel & 1) {
-        vga_data_array[pixel>>1] = (vga_data_array[pixel>>1] & TOPMASK) | (color << 4) ;
+        // Which pixel is it?
+        int pixel = ((_width * y) + x) ;
+
+        // Is this pixel stored in the first 4 bits
+        // of the vga data array index, or the second
+        // 4 bits? Check, then mask.
+        if (pixel & 1) {
+            vga_data_array[pixel>>1] = (vga_data_array[pixel>>1] & TOPMASK) | (color << 4) ;
+        }
+        else {
+            vga_data_array[pixel>>1] = (vga_data_array[pixel>>1] & BOTTOMMASK) | (color) ;
+        }
     }
-    else {
-        vga_data_array[pixel>>1] = (vga_data_array[pixel>>1] & BOTTOMMASK) | (color) ;
+
+#if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
+    
+    #define LINES_TOP 0
+
+    if ((y < LINES_TOP) || (y >= LINES_TOP + NO_OF_LINES))
+        return;
+
+    // calculate the word index
+
+    // y is between LINES_TOP and LINES_TOP + NO_OF_LINES - 1
+    // convert it to 0 and NO_OF_LINES - 1
+    
+    int wi = (y - LINES_TOP) * WORDS_PER_LINE;
+
+    // add the x offset plus the number of words before the data (currently one)
+
+    wi = wi + (x / 32) + 1;
+
+    // we're now pointing at the correct word
+    // calculate the bit index 0 - 31
+    int bi = x & 0x1f;
+
+    bool on = false;
+    if (y < 50) {
+        if ((color != WHITE) && (color != BLACK)) {
+          on = true;
+        }
+
+    } else {
+        if (color == WHITE) {
+        on = true;
+        } 
+        else if ((y < 55) || ((y >= 65) && (y < 469))) {
+            if (color != BLACK) {
+                on = true;
+            }
+        }
     }
+
+
+    if (on) {
+        vga_1bit_data_array[wi] |= (1u << bi);
+    } else {
+        vga_1bit_data_array[wi] &= ~(1u << bi);
+    }
+
+#endif
+
 }
 
 void drawVLine(short x, short y, short h, char color) {
@@ -1138,11 +1253,11 @@ void fillRect(short x, short y, short w, short h, char color) {
 // Draw a character
 void drawChar(short x, short y, unsigned char c, char color, char bg, unsigned char size) {
     char i, j;
-  if((x >= _width)            || // Clip right
-     (y >= _height)           || // Clip bottom
-     ((x + 6 * size - 1) < 0) || // Clip left
-     ((y + 8 * size - 1) < 0))   // Clip top
-    return;
+  // if((x >= _width)            || // Clip right
+  //    (y >= _height)           || // Clip bottom
+  //    ((x + 6 * size - 1) < 0) || // Clip left
+  //    ((y + 8 * size - 1) < 0))   // Clip top
+  //   return;
 
   for (i=0; i<6; i++ ) {
     unsigned char line;

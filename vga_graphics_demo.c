@@ -548,6 +548,10 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
         setTextColor(line_col);
 
+        for (uint16_t l = 0; l < trace_height; l++){
+            set_line_colors(y + l,  BLACK, line_col);
+        }
+
         int last_i = 0;
         int cursor_x = 0;
 

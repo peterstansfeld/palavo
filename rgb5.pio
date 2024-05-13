@@ -38,12 +38,12 @@ test_osre:
 
 public start:
 ;    set x, 19 [5]                   ; load x with 19 repeats (20 loops) and wait for the last pixel
-    out x, 16 [7]                    ; load x with 639 repeats (640 loops) and wait for the last pixel
+    out x, 16 [7]                   ; load x with 639 repeats (640 loops) and wait for the last pixel
     set pins, 0                     ; blank the colour pins
 
     wait 1 irq 5 [0]                ; wait for vsync active mode
 
-    set y, 14 [9]                   ; load a delay counter
+    set y, 14 [13]                  ; load a delay counter
 delay_loop:
     jmp y-- delay_loop [24]         ; delay, delay, delay
 
@@ -62,7 +62,7 @@ get_bit:
 
 
 % c-sdk {
-static inline void rgb5_program_init(PIO pio, uint sm, uint offset, uint pin /*, uint sidepin*/) {
+static inline void rgb5_program_init(PIO pio, uint sm, uint offset, uint pin) {
 
     // creates state machine configuration object c, sets
     // to default configurations. I believe this function is auto-generated
@@ -75,9 +75,6 @@ static inline void rgb5_program_init(PIO pio, uint sm, uint offset, uint pin /*,
     sm_config_set_set_pins(&c, pin, 4);
     sm_config_set_out_pins(&c, pin, 4);
 
-    // sm_config_set_sideset_pins(&c, sidepin);
-
-
     // Set clock division (Commented out, this one runs at full speed)
     // sm_config_set_clkdiv(&c, 5) ;
 
@@ -87,46 +84,17 @@ static inline void rgb5_program_init(PIO pio, uint sm, uint offset, uint pin /*,
     // shift ISR to the right, disable autopush, and set the push threshold set to 32
     sm_config_set_in_shift(&c, true, false, 32);
 
-    // The above, as well as commenting out the pull instruction, didn't quite
-    // work as expected because, I think, the osr is not loaded on startup and
-    // the memory is laggging behind behind constantly
-
     // Set this pin's GPIO function (connect PIO to the pad)
     pio_gpio_init(pio, pin);
     pio_gpio_init(pio, pin+1);
     pio_gpio_init(pio, pin+2);
     pio_gpio_init(pio, pin+3);
 
-    // maybe this is required?  
-    // pio_gpio_init(pio, sidepin);
-    // pio_sm_set_consecutive_pindirs(pio, sm, sidepin, 1, true);
-
-
-
     // Set the pin direction to output at the PIO (3 pins)
     pio_sm_set_consecutive_pindirs(pio, sm, pin, 4, true);
 
-    // Set the pin direction to output at the PIO (3 pins)
-    // pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
-
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset + rgb5_offset_start, &c);
-
-
-    // these instructions have been moved from vga_graphics.c
-
-    // not sure we need to do all this to trigger auto-pull  
-    pio_sm_put_blocking(pio, sm, 319); // value to store RGB_ACTIVE in isr as a horizontal pixel pair counter
-    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
-    pio_sm_exec(pio, sm, pio_encode_out(pio_isr, 32)); // trigger auto-pull
-
-    /*
-    pio_sm_put_blocking(pio, sm, 480 - 1); // value to store in y as a line counter
-    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
-    pio_sm_exec(pio, sm, pio_encode_out(pio_y, 32)); // trigger auto-pull
-*/
-    // end of moved instructions
-
 
     // Set the state machine running (commented out, I'll start this in the C)
     // pio_sm_set_enabled(pio, sm, true);
