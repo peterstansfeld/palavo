@@ -144,7 +144,7 @@ uint32_t * sync_buffer_address_pointer = &sync_buffer[0] ;
 
 #define TXCOUNT_2 WORDS_PER_LINE * NO_OF_LINES
 
-uint32_t vga_1bit_data_array[TXCOUNT_2];
+uint32_t vga_1bit_data_array[TXCOUNT_2] __attribute__ ((aligned(sizeof(uint32_t))));
 uint32_t * address_pointer_2 = &vga_1bit_data_array[0] ;
 
 

@@ -7,6 +7,25 @@
 ;.side_set 1 ;opt
 .origin 0                           ; we modify the PC, which needs absolute addresses
 
+
+;#if SYS_CLOCK_FREQ_KHZ == 125000u
+
+.define DELAY_LOOPS 6
+.define SET_DELAY_LOOPS_DELAY 18
+.define DELAY_LOOP_DELAY 24
+.define GET_BIT_DELAY 0
+.define BLANK_DELAY 2
+
+
+;#if SYS_CLOCK_FREQ_KHZ == 250000u
+
+; .define DELAY_LOOPS 14
+; .define SET_DELAY_LOOPS_DELAY 13
+; .define DELAY_LOOP_DELAY 24
+; .define GET_BIT_DELAY 5
+; .define BLANK_DELAY 7
+
+
 ;pull block                         ; Pull from FIFO to OSR (only once)
 ;mov y, osr                         ; Copy value from OSR to y scratch register
 
@@ -15,15 +34,15 @@
 ; ---- here's a 2-bit (2 colours per line) version ----
 
 lut0:
-    mov isr, y [1]                  ; put the 2 4-bit colours in the ISR
-;    jmp set_rgb_pins                ; use wrap instead
-.wrap
+;    mov isr, y [1]                  ; put the 2 4-bit colours in the ISR
+    jmp set_rgb_pins                ; use wrap instead
+;.wrap
 
 lut1:
-    mov isr, y                      ; put the 2 4-bit colours in the ISR
+;    mov isr, y                      ; put the 2 4-bit colours in the ISR
     in null, 4                      ; shift the ISR 4 places to the right
 
-.wrap_target
+;.wrap_target
 
 set_rgb_pins:
     mov pins, isr                   ; put the 4 colour bits on the colour pins
@@ -38,22 +57,28 @@ test_osre:
 
 public start:
 ;    set x, 19 [5]                   ; load x with 19 repeats (20 loops) and wait for the last pixel
-    out x, 16 [7]                   ; load x with 639 repeats (640 loops) and wait for the last pixel
+
+; 250 MHz
+    out x, 16 [BLANK_DELAY]                   ; load x with 639 repeats (640 loops) and wait for the last pixel
+
+; 125 MHz
+;    out x, 16 [2]                   ; load x with 639 repeats (640 loops) and wait for the last pixel
+
     set pins, 0                     ; blank the colour pins
 
     wait 1 irq 5 [0]                ; wait for vsync active mode
 
 ; delay for SYS_CLOCK_FREQ_KHZ=250000u
 
-;    set y, 14 [13]                  ; load a delay counter
-;delay_loop:
-;    jmp y-- delay_loop [24]         ; delay, delay, delay
+    set y, DELAY_LOOPS [SET_DELAY_LOOPS_DELAY]    ; load a delay counter
+delay_loop:
+    jmp y-- delay_loop [DELAY_LOOP_DELAY]         ; delay, delay, delay
 
 ; delay for SYS_CLOCK_FREQ_KHZ=125000u
 
-    set y, 3 [8]                  ; load a delay counter
-delay_loop:
-    jmp y-- delay_loop [24]         ; delay, delay, delay
+;    set y, 3 [8]                  ; load a delay counter
+;delay_loop:
+;    jmp y-- delay_loop [24]         ; delay, delay, delay
 
 
 get_colours:
@@ -68,10 +93,11 @@ get_bit:
 
 
 ; SYS_CLOCK_FREQ_KHZ=250000u
-;    out PC, 1 [5]                   ; jump to the address stored in bit 0 of the OSR, ie lut0 or lut1
+    mov isr, y                      ; put the 2 4-bit colours in the ISR
+    out PC, 1 [GET_BIT_DELAY]       ; jump to the address stored in bit 0 of the OSR, ie lut0 or lut1
 
 ; SYS_CLOCK_FREQ_KHZ=125000u
-    out PC, 1 [0]                   ; jump to the address stored in bit 0 of the OSR, ie lut0 or lut1
+;    out PC, 1 [0]                   ; jump to the address stored in bit 0 of the OSR, ie lut0 or lut1
 
 
 ;get_bit_with_pre_delay:

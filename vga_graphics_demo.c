@@ -1722,8 +1722,8 @@ int main() {
 
 //    drawVLine(Vline_x, 300, (Vline_x>>2), color_index);
 
-    drawHLine(0, 0, 16, WHITE);
-    drawVLine(0, 0, 16, WHITE);
+    drawHLine(0, 0, 16, GREEN);
+    drawVLine(0, 0, 16, GREEN);
 //    drawVLine(2, 0, 16, WHITE);
 
 //    drawVLine(9, 0, 16, WHITE);
@@ -1734,8 +1734,8 @@ int main() {
     drawHLine(0, SCREEN_HEIGHT - 1, 16, WHITE);
     drawVLine(0, SCREEN_HEIGHT - 16, 16, WHITE);
 
-    drawHLine(SCREEN_WIDTH - 16, 0, 16, WHITE);
-    drawVLine(639, 0, 16, WHITE);
+    drawHLine(SCREEN_WIDTH - 16, 0, 16, GREEN);
+    drawVLine(639, 0, 16, GREEN);
 
     drawVLine(639, SCREEN_HEIGHT - 16, 16, WHITE);
     drawHLine(SCREEN_WIDTH - 16, SCREEN_HEIGHT - 1, 16, WHITE);
