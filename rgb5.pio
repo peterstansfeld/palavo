@@ -43,9 +43,18 @@ public start:
 
     wait 1 irq 5 [0]                ; wait for vsync active mode
 
-    set y, 14 [13]                  ; load a delay counter
+; delay for SYS_CLOCK_FREQ_KHZ=250000u
+
+;    set y, 14 [13]                  ; load a delay counter
+;delay_loop:
+;    jmp y-- delay_loop [24]         ; delay, delay, delay
+
+; delay for SYS_CLOCK_FREQ_KHZ=125000u
+
+    set y, 3 [8]                  ; load a delay counter
 delay_loop:
     jmp y-- delay_loop [24]         ; delay, delay, delay
+
 
 get_colours:
 ;    pull                            ; get 32 bits (colour palette for this line) from the TX FIFO
@@ -54,8 +63,16 @@ get_colours:
 ; get_word:
 ;     pull                            ; get 32 bits from the TX FIFO
 get_bit:
-    out isr, 1                      ; put the 1-bit pixel index (0 or 1) in the ISR
-    mov PC, isr [4]                 ; jump to the address stored in the ISR, ie lut0 or lut1
+;    out isr, 1                      ; put the 1-bit pixel index (0 or 1) in the ISR
+;    mov PC, isr [4]                 ; jump to the address stored in the ISR, ie lut0 or lut1
+
+
+; SYS_CLOCK_FREQ_KHZ=250000u
+;    out PC, 1 [5]                   ; jump to the address stored in bit 0 of the OSR, ie lut0 or lut1
+
+; SYS_CLOCK_FREQ_KHZ=125000u
+    out PC, 1 [0]                   ; jump to the address stored in bit 0 of the OSR, ie lut0 or lut1
+
 
 ;get_bit_with_pre_delay:
 ;    jmp get_bit [1]                 ; burn two clock cycles (to make up for the lack of the 'jmp x--' and 'pull' instructions)
