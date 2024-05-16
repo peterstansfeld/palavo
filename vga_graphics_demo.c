@@ -549,7 +549,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
         setTextColor(line_col);
 
         for (uint16_t l = 0; l < trace_height; l++){
-            set_line_colors(y + l,  BLACK, line_col);
+            set_line_colors(y + l,  BLACK, line_col, WHITE, LIGHT_BLUE);
         }
 
         int last_i = 0;
@@ -619,7 +619,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
         }
 
-        // last_i is now the index if the previous off-screen edge, or the beginning of the samples
+        // last_i is now the index of the previous off-screen edge, or the beginning of the samples
 
         // make any needed scale adjustments
 
@@ -681,7 +681,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                             if (cursor_x < 0) {
                                 cursor_x = 0;
                                 if (cursor_x + str_width >= x) {
-                                    cursor_x = x - str_width - 1;
+                                    cursor_x = x - str_width;
                                 }
                             }
 
@@ -691,10 +691,10 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                             }
                         }
                     }
-                    last_sample = sample;
-                    last_x = x;
-                    last_i = i;
                 }
+                last_sample = sample;
+                last_x = x;
+                last_i = i;
 
             } else {
                 if (x != last_pixel_x) {
@@ -1656,9 +1656,6 @@ int main() {
 
     stdio_init_all();
 
-    printf("Initialising VGA...");
-
-
     uart_init(UART_ID, BAUD_RATE);
 
     // Set the TX and RX pins by using the function select on the GPIO
@@ -1671,7 +1668,14 @@ int main() {
     gpio_set_dir(LED_PIN, GPIO_OUT); // set LED_PIN GPIO to an output
     gpio_put(LED_PIN, 1); // set LED_PIN
 
+
+#ifdef SYS_CLOCK_FREQ_KHZ
+    int sys_clk_freq_khz = SYS_CLOCK_FREQ_KHZ;
+    uart_putcf(UART_ID, "SYS_CLOCK_FREQ_KHZ: %d\n", sys_clk_freq_khz);
+#endif
+
     // Initialize the VGA screen
+    uart_puts(UART_ID, "Initialising VGA...\n");
     initVGA() ;
 
     // uart_puts(UART_ID, help_strings);

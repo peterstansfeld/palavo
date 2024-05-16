@@ -1,5 +1,5 @@
-#add_compile_definitions(SYS_CLOCK_FREQ_KHZ=250000u)
-add_compile_definitions(SYS_CLOCK_FREQ_KHZ=125000u)
+# add_compile_definitions(SYS_CLOCK_FREQ_KHZ=250000u)
+# add_compile_definitions(SYS_CLOCK_FREQ_KHZ=125000u)
 
 add_executable(graphics_test)
 

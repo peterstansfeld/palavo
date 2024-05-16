@@ -9,6 +9,9 @@
 
 #define VGA_USE_PIO_PROG 5
 
+// #define SYS_CLOCK_FREQ_KHZ 125000u
+
+
 
 // VGA_TEST_PIO_PROG defines which VGA driver should be used to drive the VGA
 // test pins on HSYNC2, VSYNC2, LO_GRN2, etc.
@@ -31,6 +34,12 @@
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
 #include "hardware/dma.h"
+
+// Header file - move this to before the *.pio.h files so that they can access
+// SYS_CLOCK_FREQ_KHZ
+
+#include "vga16_graphics.h"
+
 // #include "hardware/irq.h"
 
 // Our assembled programs:
@@ -60,10 +69,12 @@
 #include "hsync5.pio.h"
 #include "rgb5.pio.h"
 
+#if SYS_CLOCK_FREQ_KHZ == 250000u
+#define USE_4_BIT_RGB5_PIO
 #endif
 
-// Header file
-#include "vga16_graphics.h"
+#endif
+
 // Font file
 #include "glcdfont.c"
 #include "font_rom_brl4.h"
@@ -86,7 +97,15 @@
 
 #if VGA_USE_PIO_PROG == 5
 
+#ifdef USE_4_BIT_RGB5_PIO
+
+#define _height 120
+
+#else
+
 #define _height 240
+
+#endif
 
 #else
 
@@ -125,7 +144,15 @@ uint32_t * sync_buffer_address_pointer = &sync_buffer[0] ;
  // (16 bits (639) + 16 bits (2, 4-bit colors) + (20 * 32 = 640 bits)
 
 
-#define WORDS_PER_LINE 21
+#ifdef USE_4_BIT_RGB5_PIO
+
+#define WORDS_PER_LINE (1 + (20 * 2))
+
+#else
+
+#define WORDS_PER_LINE (1 + 20)
+
+#endif
 
 // any more than 48 and we get a weird vertical scrolling side-effet
 // suggest that this is ram overflow 
@@ -137,14 +164,22 @@ uint32_t * sync_buffer_address_pointer = &sync_buffer[0] ;
 
 #else
 
+#ifdef USE_4_BIT_RGB5_PIO
+
+#define NO_OF_LINES 24
+
+#else
+
 #define NO_OF_LINES 48
+
+#endif
 
 #endif
 
 
 #define TXCOUNT_2 WORDS_PER_LINE * NO_OF_LINES
 
-uint32_t vga_1bit_data_array[TXCOUNT_2] __attribute__ ((aligned(sizeof(uint32_t))));
+uint32_t vga_1bit_data_array[TXCOUNT_2];
 uint32_t * address_pointer_2 = &vga_1bit_data_array[0] ;
 
 
@@ -222,10 +257,10 @@ void __not_in_flash_func(dma_handler)() {
 #endif
 
 
-void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour) {
+void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour, uint8_t colour_2, uint8_t colour_3) {
     if ((line < 0) || (line >= NO_OF_LINES)) 
         return;
-     vga_1bit_data_array[line * WORDS_PER_LINE] = (((fore_colour << 4) | (back_colour)) << 16) | (639);
+     vga_1bit_data_array[line * WORDS_PER_LINE] = (((colour_3 << 12) | (colour_2 << 8) | (fore_colour << 4) | (back_colour)) << 16) | (639);
 }
 
 void initVGA() {
@@ -297,7 +332,12 @@ void initVGA() {
     uint hsync5_sm = 0;
     uint rgb5_sm = 1;
 
+#if SYS_CLOCK_FREQ_KHZ == 125000u
     uint rgb5_offset = pio_add_program(pio_2, &rgb5_program);
+#elif SYS_CLOCK_FREQ_KHZ == 250000u
+    uint rgb5_offset = pio_add_program(pio_2, &rgb5_250_mhz_program);
+#endif
+
     uint hsync5_offset = pio_add_program(pio_2, &hsync5_program);
 
 
@@ -360,7 +400,12 @@ void initVGA() {
 
     #elif VGA_USE_PIO_PROG == 5
       hsync5_program_init(pio_2, hsync5_sm, hsync5_offset, HSYNC);
+
+#if SYS_CLOCK_FREQ_KHZ == 125000u
       rgb5_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN);
+#elif SYS_CLOCK_FREQ_KHZ == 250000u
+      rgb5_250_mhz_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN);
+#endif
 
     #endif
 
@@ -662,7 +707,7 @@ for (int y = 0; y < NO_OF_LINES; y++) {
     }
 
     // vga_1bit_data_array[y * WORDS_PER_LINE] = (((fore_colour << 4) | (back_colour)) << 16) | (639);
-    set_line_colors(y, back_colour, fore_colour);
+    set_line_colors(y, back_colour, fore_colour, WHITE, LIGHT_BLUE);
 }
 
 
@@ -894,11 +939,32 @@ void drawPixel(short x, short y, char color) {
 
     // add the x offset plus the number of words before the data (currently one)
 
+    #ifdef USE_4_BIT_RGB5_PIO
+    
+    wi = wi + (x / 16) + 1;
+
+    #else
+
     wi = wi + (x / 32) + 1;
+
+    #endif
 
     // we're now pointing at the correct word
     // calculate the bit index 0 - 31
+
+    #ifdef USE_4_BIT_RGB5_PIO
+
+    // calculate the bits index 0, 2, 4 - 26, 28, 30
+
+    int bi = (x & 0x0f) << 1;
+    
+    #else
+
+    // calculate the bit index 0 - 31
+
     int bi = x & 0x1f;
+    
+    #endif
 
     bool on = false;
     if (y < 50) {
@@ -917,12 +983,27 @@ void drawPixel(short x, short y, char color) {
         }
     }
 
+    #ifdef USE_4_BIT_RGB5_PIO
+    uint32_t col = vga_1bit_data_array[wi];
+    if (on) {
+        uint8_t col_index = 1;
+        if (color == LIGHT_BLUE) {
+            col_index = 3;
+        }
+        vga_1bit_data_array[wi] = col & ~(3u << bi) | (col_index << bi);
+    } else {
+        vga_1bit_data_array[wi] = col & ~(3u << bi);
+    }
+
+    #else
 
     if (on) {
         vga_1bit_data_array[wi] |= (1u << bi);
     } else {
         vga_1bit_data_array[wi] &= ~(1u << bi);
     }
+
+    #endif
 
 #endif
 

@@ -16,92 +16,176 @@
 .define GET_BIT_DELAY 0
 .define BLANK_DELAY 2
 
-
-;#if SYS_CLOCK_FREQ_KHZ == 250000u
+;#elif SYS_CLOCK_FREQ_KHZ == 250000u
 
 ; .define DELAY_LOOPS 14
 ; .define SET_DELAY_LOOPS_DELAY 13
 ; .define DELAY_LOOP_DELAY 24
+
+; ; #if COLOURS_PER_LINE == 2
 ; .define GET_BIT_DELAY 5
+; ; #elif COLOURS_PER_LINE == 4
+; .define GET_BIT_DELAY 2
+; ; #endif
 ; .define BLANK_DELAY 7
 
-
-;pull block                         ; Pull from FIFO to OSR (only once)
-;mov y, osr                         ; Copy value from OSR to y scratch register
-
-;Would need to increase the clock frequency
+;#endif
 
 ; ---- here's a 2-bit (2 colours per line) version ----
 
-lut0:
-;    mov isr, y [1]                  ; put the 2 4-bit colours in the ISR
-    jmp set_rgb_pins                ; use wrap instead
-;.wrap
+;#if COLOURS_PER_LINE == 2
 
-lut1:
-;    mov isr, y                      ; put the 2 4-bit colours in the ISR
+jmp_table_0:
+    jmp set_rgb_pins                ; can't use wrap
+
+jmp_table_1:
     in null, 4                      ; shift the ISR 4 places to the right
 
-;.wrap_target
+;#elif COLOURS_PER_LINE == 4
+
+; jmp_table_0:
+;     jmp set_rgb_pins [2]            ; use wrap instead
+
+; jmp_table_1:
+;     in null, 4 [2]                     ; shift the ISR 4 places to the right
+; .wrap
+
+; jmp_table_2:
+;     jmp jmp_table_2a
+
+; jmp_table_3:
+;     in null, 12 [2]                  ; shift the ISR 12 places to the right
+
+; .wrap_target
+
+;#endif
 
 set_rgb_pins:
     mov pins, isr                   ; put the 4 colour bits on the colour pins
 
-test_osre:
-;    jmp !osre get_bit_with_pre_delay
-; OSR is empty, which means we've set all 32 1-bit values from the pull'ed word of pixels
-;    jmp x-- get_word
+test_end_of_line:
     jmp x-- get_bit
-; X is zero, which means we've out'ed all (32 * 20) = 640 1-bit values from the fifo
+; X is zero, which means we've out'ed all 640 1-bit values from the TX FIFO
 
 
 public start:
-;    set x, 19 [5]                   ; load x with 19 repeats (20 loops) and wait for the last pixel
-
-; 250 MHz
-    out x, 16 [BLANK_DELAY]                   ; load x with 639 repeats (640 loops) and wait for the last pixel
-
-; 125 MHz
-;    out x, 16 [2]                   ; load x with 639 repeats (640 loops) and wait for the last pixel
-
+    out x, 16 [BLANK_DELAY]         ; load x with 639 repeats (640 loops) and wait for the last pixel
     set pins, 0                     ; blank the colour pins
 
     wait 1 irq 5 [0]                ; wait for vsync active mode
-
-; delay for SYS_CLOCK_FREQ_KHZ=250000u
 
     set y, DELAY_LOOPS [SET_DELAY_LOOPS_DELAY]    ; load a delay counter
 delay_loop:
     jmp y-- delay_loop [DELAY_LOOP_DELAY]         ; delay, delay, delay
 
-; delay for SYS_CLOCK_FREQ_KHZ=125000u
+get_colours:
+    out y, 16                       ; save the 2 or 4, 4-bit colours for this line
 
-;    set y, 3 [8]                  ; load a delay counter
-;delay_loop:
-;    jmp y-- delay_loop [24]         ; delay, delay, delay
+get_bit:
+    mov isr, y                      ; put the 4-bit colours in the ISR
+    out PC, 1 [GET_BIT_DELAY]       ; jump to the address stored in bit 0 of the OSR, ie jmp_table_0 or jmp_table_1
 
+;#if COLOURS_PER_LINE == 4
+
+; jmp_table_2a:
+;     in null, 8                      ; shift the ISR 8 places to the right
+;     jmp set_rgb_pins
+
+;#endif
+
+
+.program rgb5_250_mhz
+;.side_set 1 ;opt
+.origin 0                           ; we modify the PC, which needs absolute addresses
+
+
+;#if SYS_CLOCK_FREQ_KHZ == 125000u
+
+; .define DELAY_LOOPS 6
+; .define SET_DELAY_LOOPS_DELAY 18
+; .define DELAY_LOOP_DELAY 24
+; .define GET_BIT_DELAY 0
+; .define BLANK_DELAY 2
+
+;#elif SYS_CLOCK_FREQ_KHZ == 250000u
+
+.define DELAY_LOOPS 14
+.define SET_DELAY_LOOPS_DELAY 13
+.define DELAY_LOOP_DELAY 24
+
+; #if COLOURS_PER_LINE == 2
+.define GET_BIT_DELAY 5
+; #elif COLOURS_PER_LINE == 4
+; .define GET_BIT_DELAY 2
+; #endif
+.define BLANK_DELAY 7
+
+;#endif
+
+; ---- here's a 2-bit (2 colours per line) version ----
+
+;#if COLOURS_PER_LINE == 2
+
+; jmp_table_0:
+;     jmp set_rgb_pins                ; can't use wrap
+
+; jmp_table_1:
+;     in null, 4                      ; shift the ISR 4 places to the right
+
+;#elif COLOURS_PER_LINE == 4
+
+jmp_table_0:
+    jmp set_rgb_pins [2]            ; use wrap instead
+
+jmp_table_1:
+    in null, 4 [2]                     ; shift the ISR 4 places to the right
+.wrap
+
+jmp_table_2:
+    jmp jmp_table_2a
+
+jmp_table_3:
+    in null, 12 [2]                  ; shift the ISR 12 places to the right
+
+.wrap_target
+
+;#endif
+
+set_rgb_pins:
+    mov pins, isr                   ; put the 4 colour bits on the colour pins
+
+test_end_of_line:
+    jmp x-- get_bit
+; X is zero, which means we've out'ed all 640 1-bit values from the TX FIFO
+
+
+public start:
+    out x, 16 [BLANK_DELAY]         ; load x with 639 repeats (640 loops) and wait for the last pixel
+    set pins, 0                     ; blank the colour pins
+
+    wait 1 irq 5 [0]                ; wait for vsync active mode
+
+    set y, DELAY_LOOPS [SET_DELAY_LOOPS_DELAY]    ; load a delay counter
+delay_loop:
+    jmp y-- delay_loop [DELAY_LOOP_DELAY]         ; delay, delay, delay
 
 get_colours:
-;    pull                            ; get 32 bits (colour palette for this line) from the TX FIFO
-    out y, 16                       ; save the 2, 4-bit colours for this line
+    out y, 16                       ; save the 2 or 4, 4-bit colours for this line
 
-; get_word:
-;     pull                            ; get 32 bits from the TX FIFO
 get_bit:
-;    out isr, 1                      ; put the 1-bit pixel index (0 or 1) in the ISR
-;    mov PC, isr [4]                 ; jump to the address stored in the ISR, ie lut0 or lut1
+    mov isr, y                      ; put the 4-bit colours in the ISR
+;#if COLOURS_PER_LINE == 2
+    ; out PC, 1 [GET_BIT_DELAY]       ; jump to the address stored in bit 0 of the OSR, ie jmp_table_0 or jmp_table_1
 
+;elif COLOURS_PER_LINE == 4
+    out PC, 2 [GET_BIT_DELAY-2]       ; jump to the address stored in bit 0 of the OSR, ie jmp_table_0 or jmp_table_1
 
-; SYS_CLOCK_FREQ_KHZ=250000u
-    mov isr, y                      ; put the 2 4-bit colours in the ISR
-    out PC, 1 [GET_BIT_DELAY]       ; jump to the address stored in bit 0 of the OSR, ie lut0 or lut1
+jmp_table_2a:
+    in null, 8                      ; shift the ISR 8 places to the right
+    jmp set_rgb_pins
 
-; SYS_CLOCK_FREQ_KHZ=125000u
-;    out PC, 1 [0]                   ; jump to the address stored in bit 0 of the OSR, ie lut0 or lut1
+;#endif
 
-
-;get_bit_with_pre_delay:
-;    jmp get_bit [1]                 ; burn two clock cycles (to make up for the lack of the 'jmp x--' and 'pull' instructions)
 
 
 % c-sdk {
@@ -142,4 +226,44 @@ static inline void rgb5_program_init(PIO pio, uint sm, uint offset, uint pin) {
     // Set the state machine running (commented out, I'll start this in the C)
     // pio_sm_set_enabled(pio, sm, true);
 }
+
+
+static inline void rgb5_250_mhz_program_init(PIO pio, uint sm, uint offset, uint pin) {
+
+    // creates state machine configuration object c, sets
+    // to default configurations. I believe this function is auto-generated
+    // and gets a name of <program name>_program_get_default_config
+    // Yes, page 40 of SDK guide
+    pio_sm_config c = rgb5_250_mhz_program_get_default_config(offset);
+
+    // Map the state machine's SET and OUT pin group to three pins, the `pin`
+    // parameter to this function is the lowest one. These groups overlap.
+    sm_config_set_set_pins(&c, pin, 4);
+    sm_config_set_out_pins(&c, pin, 4);
+
+    // Set clock division (Commented out, this one runs at full speed)
+    // sm_config_set_clkdiv(&c, 5) ;
+
+    // shift OSR to the right, enable autopull, and set the pull threshold set to 32
+    sm_config_set_out_shift(&c, true, true, 32);
+
+    // shift ISR to the right, disable autopush, and set the push threshold set to 32
+    sm_config_set_in_shift(&c, true, false, 32);
+
+    // Set this pin's GPIO function (connect PIO to the pad)
+    pio_gpio_init(pio, pin);
+    pio_gpio_init(pio, pin+1);
+    pio_gpio_init(pio, pin+2);
+    pio_gpio_init(pio, pin+3);
+
+    // Set the pin direction to output at the PIO (3 pins)
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 4, true);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset + rgb5_offset_start, &c);
+
+    // Set the state machine running (commented out, I'll start this in the C)
+    // pio_sm_set_enabled(pio, sm, true);
+}
+
 %}
