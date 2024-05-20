@@ -120,11 +120,13 @@ get_bit:
 ; #endif
 .define BLANK_DELAY 7
 
+.define public BITS_PER_COLOUR 1
+
 ;#endif
 
 ; ---- here's a 2-bit (2 colours per line) version ----
 
-;#if COLOURS_PER_LINE == 2
+;#if BITS_PER_COLOUR == 1
 
 ; jmp_table_0:
 ;     jmp set_rgb_pins                ; can't use wrap
@@ -132,7 +134,7 @@ get_bit:
 ; jmp_table_1:
 ;     in null, 4                      ; shift the ISR 4 places to the right
 
-;#elif COLOURS_PER_LINE == 4
+;#elif BITS_PER_COLOUR == 2
 
 jmp_table_0:
     jmp set_rgb_pins [2]            ; use wrap instead
@@ -174,11 +176,9 @@ get_colours:
 
 get_bit:
     mov isr, y                      ; put the 4-bit colours in the ISR
-;#if COLOURS_PER_LINE == 2
-    ; out PC, 1 [GET_BIT_DELAY]       ; jump to the address stored in bit 0 of the OSR, ie jmp_table_0 or jmp_table_1
+    out PC, BITS_PER_COLOUR [GET_BIT_DELAY-2]       ; jump to the address stored in bit(s) 0 (and 1) of the OSR, ie jmp_table_0 or jmp_table_1 (or jmp_table_2 or jmp_table_3)
 
-;elif COLOURS_PER_LINE == 4
-    out PC, 2 [GET_BIT_DELAY-2]       ; jump to the address stored in bit 0 of the OSR, ie jmp_table_0 or jmp_table_1
+;#if BITS_PER_COLOUR == 2
 
 jmp_table_2a:
     in null, 8                      ; shift the ISR 8 places to the right

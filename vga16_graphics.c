@@ -69,8 +69,23 @@
 #include "hsync5.pio.h"
 #include "rgb5.pio.h"
 
+
+
+
+
 #if SYS_CLOCK_FREQ_KHZ == 250000u
-#define USE_4_BIT_RGB5_PIO
+// #define USE_4_BIT_RGB5_PIO
+
+#ifdef USE_4_BIT_RGB5_PIO 
+
+#if rgb5_250_mhz_BITS_PER_COLOUR != 2
+    #error In rgb5.pio BITS_PER_COLOUR needs to be 2.
+#endif
+
+#elif rgb5_250_mhz_BITS_PER_COLOUR != 1
+    #error In rgb5.pio BITS_PER_COLOUR needs to be 1.
+#endif
+
 #endif
 
 #endif
@@ -103,7 +118,8 @@
 
 #else
 
-#define _height 240
+// #define _height 240
+#define _height 48
 
 #endif
 
@@ -211,7 +227,7 @@ uint32_t * address_pointer_2 = &vga_1bit_data_array[0] ;
 unsigned short cursor_y, cursor_x, textsize ;
 char textcolor, textbgcolor, wrap;
 
-unsigned char str_cursor_x;
+uint16_t str_cursor_x;
 
 
 #define LED_PIN PICO_DEFAULT_LED_PIN
@@ -702,7 +718,7 @@ for (int y = 0; y < NO_OF_LINES; y++) {
         fore_colour = WHITE;
         back_colour = DARK_BLUE;
     } else {
-        fore_colour = YELLOW;
+        fore_colour = WHITE;
         back_colour = BLACK;
     }
 
@@ -968,7 +984,8 @@ void drawPixel(short x, short y, char color) {
 
     bool on = false;
     if (y < 50) {
-        if ((color != WHITE) && (color != BLACK)) {
+        // if ((color != WHITE) && (color != BLACK)) {
+        if (color == WHITE) {
           on = true;
         }
 
@@ -984,15 +1001,15 @@ void drawPixel(short x, short y, char color) {
     }
 
     #ifdef USE_4_BIT_RGB5_PIO
-    uint32_t col = vga_1bit_data_array[wi];
+    vga_1bit_data_array[wi] &= ~(3u << bi);
     if (on) {
         uint8_t col_index = 1;
         if (color == LIGHT_BLUE) {
             col_index = 3;
         }
-        vga_1bit_data_array[wi] = col & ~(3u << bi) | (col_index << bi);
-    } else {
-        vga_1bit_data_array[wi] = col & ~(3u << bi);
+        vga_1bit_data_array[wi] |= (col_index << bi);
+    // } else {
+    //     vga_1bit_data_array[wi] = col & ~(3u << bi);
     }
 
     #else
@@ -1018,26 +1035,41 @@ void drawVLine(short x, short y, short h, char color) {
 void drawHLine(short x, short y, short w, char color) {
 
 #ifdef SPEED_UP_GRAPHICS
-    if ((x >= _width) || (x < 0) || (y > _height)) {
-        return;
-    }
-    if (x + w > _width) {
-        w = _width - x;
-    }
 
-    if (x & 1) {
-        drawPixel(x, y, color);
-        x++;
-        w--;
-        // if (x )
-    }
+    if ((x < _width) && (y >= 0) && (y < _height)) {
 
-    if (w & 1) {
-        drawPixel(x + w - 1, y, color);
-        w--;
-    }
+        if (x < 0) {
+            w += x; // decrease w
+            x = 0;
+        }
 
-    memset(&vga_data_array[(y * (_width / 2)) + (x / 2)], (color << 4) | color, w / 2);
+        if (x + w > _width) {
+            w = _width - x;
+        }
+
+        if (x & 1) {
+            drawPixel(x, y, color);
+            x++;
+            w--;
+            // if (x )
+        }
+
+        if (w & 1) {
+            drawPixel(x + w - 1, y, color);
+            w--;
+        }
+
+        memset(&vga_data_array[(y * (_width / 2)) + (x / 2)], (color << 4) | color, w / 2);
+
+#if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
+
+
+
+
+
+#endif
+
+    }
 
 #else
     for (short i=x; i<(x+w); i++) {
@@ -1303,30 +1335,63 @@ void fillRect(short x, short y, short w, short h, char color) {
 
 #ifdef SPEED_UP_GRAPHICS
 
-    if (y >= _height) {
-        return;
-    }
-    
-    if (y + h > _height) {
-        h = _height - y;
-    }
+    // if (y >= _height) {
+    //     return;
+    // }
 
-    if ((x == 0) && (w == _width)) {
-        memset(&vga_data_array[y * (_width / 2)], (color << 4) | color, h * (_width / 2));
-    } else {
 
-        for (int i = 0; i < h; i++) {
-            drawHLine(x, y + i, w, color);
+      if ((x < _width) && (y < _height)) {
+
+          // The commented out stuff below is checked during drawHLine
+          if (x < 0) {
+              w += x; // decrease w
+              x = 0;
+          }
+
+          if (x + w > _width) {
+              w = _width - x;
+          }
+
+          if (y < 0) {
+              h += y; // decrease h
+              y = 0;
+          }
+
+          if (y + h > _height) {
+              h = _height - y;
+          }
+
+          if ((x == 0) && (w == _width)) {
+              memset(&vga_data_array[y * (_width / 2)], (color << 4) | color, h * (_width / 2));
+
+
+// #if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
+//         memset(&vga_1bit_data_array[(y * WORDS_PER_LINE) + 1], 0, h * (_width / 2));
+
+//             for (int x = 1; x < WORDS_PER_LINE; x ++) {
+//     // vga_1bit_data_array[i] = 0xf0f0f0f0;
+//         // vga_1bit_data_array[(y * WORDS_PER_LINE) + x] = 0b10101010110011001111000011111111;
+//         vga_1bit_data_array[(y * WORDS_PER_LINE) + x] = 0;
+//     }
+
+// #endif
+
+          } else {
+
+            for (int i = 0; i < h; i++) {
+                drawHLine(x, y + i, w, color);
+            }
         }
     }
 
+
 #else
 
-  for(int i=x; i<(x+w); i++) {
-    for(int j=y; j<(y+h); j++) {
-        drawPixel(i, j, color);
+    for(int i=x; i<(x+w); i++) {
+      for(int j=y; j<(y+h); j++) {
+          drawPixel(i, j, color);
+      }
     }
-  }
 
 #endif
 }
@@ -1406,10 +1471,16 @@ inline void setTextWrap(char w) {
   wrap = w;
 }
 
+uint16_t text_padding;
+
+void set_text_padding(uint16_t padding) {
+    text_padding = padding;
+}
+
 
 void tft_write(unsigned char c){
   if (c == '\n') {
-    cursor_y += textsize*8;
+    cursor_y += textsize * (8 + text_padding);
     cursor_x  = str_cursor_x;
   } else if (c == '\r') {
     // skip em

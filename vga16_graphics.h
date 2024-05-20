@@ -25,8 +25,8 @@
 
 #include <stdint.h>
 
-// #define SYS_CLOCK_FREQ_KHZ 125000u
-#define SYS_CLOCK_FREQ_KHZ 250000u
+#define SYS_CLOCK_FREQ_KHZ 125000u
+// #define SYS_CLOCK_FREQ_KHZ 250000u
 
 // Give the I/O pins that we're using some names that make sense - usable in main()
  enum vga_pins {HSYNC=16, VSYNC, LO_GRN, HI_GRN, BLUE_PIN, RED_PIN} ;
@@ -42,7 +42,7 @@ enum colors {BLACK, DARK_GREEN, MED_GREEN, GREEN,
 // VGA primitives - usable in main
 // void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour);
 void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour, uint8_t colour_2, uint8_t colour_3);
-
+void set_text_padding(uint16_t padding);
 
 void initVGA(void) ;
 void drawPixel(short x, short y, char color) ;

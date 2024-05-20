@@ -42,11 +42,11 @@
 
 ; psuedo code
 ; for (i = repeat_count; i >= 0; i--) {
-;     vsync & hsync GPIO pins = vsync & hsync respectively
+;     vsync & hsync GPIO pins = vsync0 & hsync0 respectively
 ;     wait for delay0 + 1 cycle(s)
-;     vsync & hsync GPIO pins = vsync2 & hsync2 respectively
+;     vsync & hsync GPIO pins = vsync1 & hsync1 respectively
 ;     if (rgb_flag) {
-;         set IRQ to trigger pixel data in `rgb4.pio` 
+;         set IRQ to trigger pixel data in `rgb5.pio` 
 ;     }
 ;     wait for delay1 + 1 cycle(s)
 ; }
@@ -64,7 +64,7 @@ delay_loop0:
     jmp x-- delay_loop0         ; perform the delay
 
     out x, 1                    ; load rgb_flag into X
-    out pins, 2                 ; set vsync2 & hsync2
+    out pins, 2                 ; set vsync & hsync
     jmp !x, load_delay_cycles   ; skip next line if rgb_flag == 0
     irq 5                       ; set IRQ to trigger pixel data in `rgb4.pio`
 load_delay_cycles:

@@ -70,7 +70,7 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 #define SCREEN_HEIGHT 480
 
 const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
-const uint CAPTURE_PIN_COUNT = 4;
+const uint CAPTURE_PIN_COUNT = 6;
 const uint CAPTURE_TRIGGER_PIN = VSYNC; // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
 const uint CAPTURE_N_SAMPLES = SCREEN_WIDTH * 96; // enough for 48 screen width's worth of data
 const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 1 * 5 * 1; /*271.267*/ // was 5 * 4
@@ -1407,17 +1407,17 @@ uint check_keyboard() {
                     break;
 
                 case 'c':
-                case 'C':
+                // case 'C':
                     ui_command = UIC_C;
                     break;
 
                 case 'z':
-                case 'Z':
+                // case 'Z':
                     ui_command = UIC_Z;
                     break;
 
                 case 'm':
-                case 'M':
+                // case 'M':
                     ui_command = UIC_M;
                     break;
 
@@ -1426,7 +1426,7 @@ uint check_keyboard() {
                     break;
 
                 case 'h':
-                case 'H':
+                // case 'H':
                     ui_command = UIC_H;
                     break;
 
@@ -1442,15 +1442,26 @@ uint check_keyboard() {
 
 
 void draw_minimap_indicator() {
+
+    static int prev_mini_x = 0;
+    static int prev_mini_w = 0;
+
     int mini_x = (g_scrollx * SCREEN_WIDTH) / g_capture_n_samples;
     int mini_w = (mag_factor(SCREEN_WIDTH * SCREEN_WIDTH) / g_capture_n_samples) + 1; // add one to round up and/or ensure a visible indicator
 
+    uint y = MINIMAP_BOTTOM - ((MINIMAP_HEIGHT + MINIMAP_PADDING) * g_no_of_captured_pins) - 3;
 
-    uint y = MINIMAP_BOTTOM - ((MINIMAP_HEIGHT + MINIMAP_PADDING) * g_no_of_captured_pins) - 2;
+    set_line_colors(y, BLACK, WHITE, 0, 0);
+    set_line_colors(y + 1, BLACK, WHITE, 0, 0);
 
+    // drawHLine(0, y, SCREEN_WIDTH, BLACK);
+    // drawHLine(mini_x, y, mini_w, WHITE);
 
-    drawHLine(0, y, SCREEN_WIDTH, BLACK);
-    drawHLine(mini_x, y, mini_w, WHITE);
+    drawRect(prev_mini_x, y, prev_mini_w, 2, BLACK);
+    drawRect(mini_x, y, mini_w, 2, WHITE);
+
+    prev_mini_x = mini_x;
+    prev_mini_w = mini_w;
 
     // uart_putcf(UART_ID, "mini_x: %d; ", mini_x);
     // uart_putcf(UART_ID, "mini_w: %d\n", mini_w);
@@ -1625,9 +1636,15 @@ bool showing_help_window = false;
 
 void show_help_window() {
     fillRect(HELP_WINDOW_LEFT, HELP_WINDOW_TOP, HELP_WINDOW_WIDTH, HELP_WINDOW_HEIGHT, LIGHT_BLUE);
+
+    for (int y = 0; y < HELP_WINDOW_HEIGHT; y++) {
+        set_line_colors(HELP_WINDOW_TOP + y, BLACK, LIGHT_BLUE, 0, 0);
+    }
+
     setTextSize(1);
     setTextColor(BLACK);
     setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + FONT_HEIGHT);
+    set_text_padding(0);
     writeString(help_strings);
 
     uart_puts(UART_ID, "\n");
@@ -1722,12 +1739,12 @@ int main() {
     // Draw some filled rectangles
     fillRect(64, 0, 176, 50, BLUE); // blue box
     fillRect(250, 0, 176, 50, RED); // red box:
-    fillRect(435, 0, 176, 50, GREEN); // green box
+    fillRect(435, 0, 176, 50, MED_GREEN); // green box
 
 //    drawVLine(Vline_x, 300, (Vline_x>>2), color_index);
 
-    drawHLine(0, 0, 16, GREEN);
-    drawVLine(0, 0, 16, GREEN);
+    drawHLine(0, 0, 16, WHITE);
+    drawVLine(0, 0, 16, WHITE);
 //    drawVLine(2, 0, 16, WHITE);
 
 //    drawVLine(9, 0, 16, WHITE);
@@ -1738,8 +1755,8 @@ int main() {
     drawHLine(0, SCREEN_HEIGHT - 1, 16, WHITE);
     drawVLine(0, SCREEN_HEIGHT - 16, 16, WHITE);
 
-    drawHLine(SCREEN_WIDTH - 16, 0, 16, GREEN);
-    drawVLine(639, 0, 16, GREEN);
+    drawHLine(SCREEN_WIDTH - 16, 0, 16, WHITE);
+    drawVLine(639, 0, 16, WHITE);
 
     drawVLine(639, SCREEN_HEIGHT - 16, 16, WHITE);
     drawHLine(SCREEN_WIDTH - 16, SCREEN_HEIGHT - 1, 16, WHITE);
@@ -1773,18 +1790,43 @@ int main() {
     // }
 
     // Write some text
+
+char* left_rect_text =
+    // "Raspberry Pi Pico Test\n"
+    // "Graphics primitives demo\n"
+    // "Hunter Adams\n"
+    // "vha3@cornell.edu\n"
+    // "4-bit mod by Bruce Land";
+
+    "PLATYPUS\n"
+    "Pico Logic Analyser\n"
+    "for Testing Your\n"
+    "PIO something something\n"
+    "Peter Stansfeld";
+
+    // "PLATYPI\n"
+    // "Pico Logic Analyser\n"
+    // "for Testing Your\n"
+    // "PIO Ideas\n"
+    // "Peter Stansfeld";
+
+char* right_rect_text =
+
+    "Inspired by and using\n"
+    "Graphics primitives demo\n"
+    "Hunter Adams\n"
+    "vha3@cornell.edu\n"
+    "4-bit mod by Bruce Land";
+
     setTextColor(WHITE) ;
+    set_text_padding(2);
     setCursor(65, 0) ;
-    setTextSize(1) ;
-    writeString("Raspberry Pi Pico") ;
-    setCursor(65, 10) ;
-    writeString("Graphics primitives demo") ;
-    setCursor(65, 20) ;
-    writeString("Hunter Adams") ;
-    setCursor(65, 30) ;
-    writeString("vha3@cornell.edu") ;
-    setCursor(65, 40) ;
-    writeString("4-bit mod by Bruce Land") ;
+
+    writeString(left_rect_text);
+
+    setCursor(435, 0);
+    writeString(right_rect_text);
+
     setCursor(250, 0) ;
     setTextSize(2) ;
     writeString("Time Elapsed:") ;
@@ -1870,12 +1912,20 @@ int main() {
 
                     case UIC_RIGHT:
                         writeString("scroll right");
-                        plot_required = set_scroll_x(g_scrollx + 1);
+                        int scroll_inc = 1;
+                        if (g_mag < 0) {
+                            scroll_inc = abs(g_mag) + 1;
+                        }
+                        plot_required = set_scroll_x(g_scrollx + scroll_inc);
                         break;
 
                     case UIC_LEFT:
                         writeString("scroll left");
-                        plot_required = set_scroll_x(MAX(g_scrollx - 1, 0));
+                        int scroll_dec = 1;
+                        if (g_mag < 0) {
+                            scroll_dec = abs(g_mag) + 1;
+                        }
+                        plot_required = set_scroll_x(MAX(g_scrollx - scroll_dec, 0));
                         break;
 
                     case UIC_PAGE_UP:
