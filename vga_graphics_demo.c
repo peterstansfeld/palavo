@@ -1457,8 +1457,8 @@ void draw_minimap_indicator() {
     // drawHLine(0, y, SCREEN_WIDTH, BLACK);
     // drawHLine(mini_x, y, mini_w, WHITE);
 
-    drawRect(prev_mini_x, y, prev_mini_w, 2, BLACK);
-    drawRect(mini_x, y, mini_w, 2, WHITE);
+    fillRect(prev_mini_x, y, prev_mini_w, 2, BLACK);
+    fillRect(mini_x, y, mini_w, 2, WHITE);
 
     prev_mini_x = mini_x;
     prev_mini_w = mini_w;
@@ -1637,8 +1637,12 @@ bool showing_help_window = false;
 void show_help_window() {
     fillRect(HELP_WINDOW_LEFT, HELP_WINDOW_TOP, HELP_WINDOW_WIDTH, HELP_WINDOW_HEIGHT, LIGHT_BLUE);
 
-    for (int y = 0; y < HELP_WINDOW_HEIGHT; y++) {
-        set_line_colors(HELP_WINDOW_TOP + y, BLACK, LIGHT_BLUE, 0, 0);
+    // for (int y = 0; y < HELP_WINDOW_HEIGHT; y++) {
+    //     set_line_colors(HELP_WINDOW_TOP + y, BLACK, LIGHT_BLUE, 0, 0);
+    // }
+
+    for (int y = PLOT_TOP; y <= MINIMAP_BOTTOM; y++) {
+        set_line_colors(y, BLACK, LIGHT_BLUE, 0, 0);
     }
 
     setTextSize(1);
@@ -1875,12 +1879,13 @@ char* right_rect_text =
         if (ui_command) {
 
             bool plot_required = false;
-
+            bool mini_map_redraw_required = false;
             if (showing_help_window) {
                 // if (ui_command == UIC_ESC) {
                     // writeString("esc");
                     close_help_window();
                     plot_required = true;
+                    mini_map_redraw_required = true;
                 // }
 
             } else {
@@ -2019,12 +2024,13 @@ char* right_rect_text =
                         // strangely removing the line with the *** aove seems to have fixed it. Hmm...
 
 
-                        plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
+                        // plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
 
                         set_scroll_x(0);
 
                         plot_required = true;
 
+                        mini_map_redraw_required = true;
                         break;
 
                     case UIC_DOWN:
@@ -2148,6 +2154,11 @@ char* right_rect_text =
             if (plot_required) {
                 plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, true);
             }
+
+            if (mini_map_redraw_required){
+                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
+            }
+
 
         } else {
             // A brief nap

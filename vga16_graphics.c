@@ -1,5 +1,5 @@
 
-// #define SPEED_UP_GRAPHICS
+#define SPEED_UP_GRAPHICS
 
 // VGA_USE_PIO_PROG defines which VGA driver should be used to drive the VGA port
 
@@ -908,6 +908,30 @@ for (int y = 0; y < NO_OF_LINES; y++) {
 }
 
 
+bool get_1bit_color(short y, char color) {
+
+    bool on = false;
+    if (y < 50) {
+        // if ((color != WHITE) && (color != BLACK)) {
+        if (color == WHITE) {
+          on = true;
+        }
+
+    } else {
+        if (color == WHITE) {
+        on = true;
+        } 
+        else if ((y < 55) || ((y >= 65) && (y < 469))) {
+            if (color != BLACK) {
+                on = true;
+            }
+        }
+    }
+    return on;
+}
+
+
+
 // A function for drawing a pixel with a specified color.
 // Note that because information is passed to the PIO state machines through
 // a DMA channel, we only need to modify the contents of the array and the
@@ -979,26 +1003,10 @@ void drawPixel(short x, short y, char color) {
     // calculate the bit index 0 - 31
 
     int bi = x & 0x1f;
-    
+
     #endif
 
-    bool on = false;
-    if (y < 50) {
-        // if ((color != WHITE) && (color != BLACK)) {
-        if (color == WHITE) {
-          on = true;
-        }
-
-    } else {
-        if (color == WHITE) {
-        on = true;
-        } 
-        else if ((y < 55) || ((y >= 65) && (y < 469))) {
-            if (color != BLACK) {
-                on = true;
-            }
-        }
-    }
+    bool on = get_1bit_color(y, color);
 
     #ifdef USE_4_BIT_RGB5_PIO
     vga_1bit_data_array[wi] &= ~(3u << bi);
@@ -1036,7 +1044,7 @@ void drawHLine(short x, short y, short w, char color) {
 
 #ifdef SPEED_UP_GRAPHICS
 
-    if ((x < _width) && (y >= 0) && (y < _height)) {
+    if ((x < _width) && (y >= 0)) {
 
         if (x < 0) {
             w += x; // decrease w
@@ -1047,25 +1055,86 @@ void drawHLine(short x, short y, short w, char color) {
             w = _width - x;
         }
 
-        if (x & 1) {
-            drawPixel(x, y, color);
-            x++;
-            w--;
-            // if (x )
-        }
+        if (y < _height) {
 
-        if (w & 1) {
-            drawPixel(x + w - 1, y, color);
-            w--;
-        }
+            if (x & 1) {
+                drawPixel(x, y, color);
+                x++;
+                w--;
+            }
 
-        memset(&vga_data_array[(y * (_width / 2)) + (x / 2)], (color << 4) | color, w / 2);
+            if (w & 1) {
+                drawPixel(x + w - 1, y, color);
+                w--;
+            }
+
+            memset(&vga_data_array[(y * (_width / 2)) + (x / 2)], (color << 4) | color, w / 2);
+
+        }
 
 #if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
 
+        if (y < NO_OF_LINES) {
 
+            bool on = get_1bit_color(y, color);
 
+            int bufIndex = (y * WORDS_PER_LINE) + 1 + (x / 32);
 
+            int pixels_to_preserve = x % 32;
+
+                // eg if x = 325, pixels_to_preserve = 5
+                // we need to preserve the first 5 pixels as they are and modify the remaining 32 - 5 = 27 pixels
+                // we need to point our
+
+                // however if the width, say 2, is less than the pixels to modify we need preserve the remaining pixels
+                // 27 - 2 = 25 of them
+
+            
+            if (pixels_to_preserve) {
+
+                x = (x + 32) & ~0x1f; // increment x to the next word boundary
+
+                uint32_t mask = 0xffffffff << (pixels_to_preserve);
+
+                int pixels_to_modify = 32 - pixels_to_preserve;
+
+                if (pixels_to_modify > w) {
+                    uint32_t leave_mask = 0xffffffff << (pixels_to_preserve + w);
+                    mask ^= leave_mask;
+                    w = 0;
+                } else {
+                    w -= pixels_to_modify;
+                }
+
+                if (on) {
+                    vga_1bit_data_array[bufIndex] |= mask;
+                } else {
+                    vga_1bit_data_array[bufIndex] &= ~mask;
+                }
+
+                bufIndex++;
+            }
+
+            if (w > 0) {
+                int words_remaining = w / 32;
+                if (words_remaining > 0) {
+                    memset(&vga_1bit_data_array[bufIndex], on ? 0xff : 0, words_remaining * sizeof(uint32_t));
+                }
+
+                bufIndex += words_remaining;
+
+            }
+            int bits_remaining = w % 32;
+
+            if (bits_remaining > 0) {
+                int mask = 0xffffffff >> (32 - bits_remaining);
+                if (on) {
+                    vga_1bit_data_array[bufIndex] |= mask;
+                } else {
+                    vga_1bit_data_array[bufIndex] &= ~mask;
+                }
+            }
+        }
 
 #endif
 
@@ -1340,7 +1409,7 @@ void fillRect(short x, short y, short w, short h, char color) {
     // }
 
 
-      if ((x < _width) && (y < _height)) {
+      if (x < _width) {
 
           // The commented out stuff below is checked during drawHLine
           if (x < 0) {
@@ -1352,17 +1421,57 @@ void fillRect(short x, short y, short w, short h, char color) {
               w = _width - x;
           }
 
-          if (y < 0) {
-              h += y; // decrease h
-              y = 0;
+          if (y < _height) {
+
+              if (y < 0) {
+                  h += y; // decrease h
+                  y = 0;
+              }
+
+              if (y + h > _height) {
+                  h = _height - y;
+              }
+
+              if ((x == 0) && (w == _width)) {
+                  memset(&vga_data_array[y * (_width / 2)], (color << 4) | color, h * (_width / 2));
+              } else{
+                  for (int i = 0; i < h; i++) {
+                      drawHLine(x, y + i, w, color);
+                  }
+              }
           }
 
-          if (y + h > _height) {
-              h = _height - y;
-          }
 
-          if ((x == 0) && (w == _width)) {
-              memset(&vga_data_array[y * (_width / 2)], (color << 4) | color, h * (_width / 2));
+#if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
+
+          if (y < NO_OF_LINES) {
+
+              if (y < 0) {
+                  h += y; // decrease h
+                  y = 0;
+              }
+
+              if (y + h > NO_OF_LINES) {
+                  h = NO_OF_LINES - y;
+              }
+
+              bool on = get_1bit_color(y, color);
+
+              if ((x == 0) && (w == _width)) {
+                  for (int i = 0; i < h; i++) {
+                      memset(&vga_1bit_data_array[((y + i) * WORDS_PER_LINE) + 1], on, (WORDS_PER_LINE - 1) * sizeof(uint32_t));
+                  }
+                  // drawHLine(x, y + i, w, color);
+              } else {
+                  for (int i = 0; i < h; i++) {
+                      drawHLine(x, y + i, w, color);
+
+                  }
+              }
+          }
+#endif
+
+            //  memset(&vga_1bit_data_array[(479 * WORDS_PER_LINE) + 1], 0xff, (WORDS_PER_LINE - 1) * sizeof(uint32_t));
 
 
 // #if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
@@ -1376,13 +1485,7 @@ void fillRect(short x, short y, short w, short h, char color) {
 
 // #endif
 
-          } else {
-
-            for (int i = 0; i < h; i++) {
-                drawHLine(x, y + i, w, color);
-            }
-        }
-    }
+      }
 
 
 #else
