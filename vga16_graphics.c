@@ -1094,12 +1094,12 @@ void drawHLine(short x, short y, short w, char color) {
 
                 x = (x + 32) & ~0x1f; // increment x to the next word boundary
 
-                uint32_t mask = 0xffffffff << (pixels_to_preserve);
+                uint32_t mask = UINT32_MAX << (pixels_to_preserve);
 
                 int pixels_to_modify = 32 - pixels_to_preserve;
 
                 if (pixels_to_modify > w) {
-                    uint32_t leave_mask = 0xffffffff << (pixels_to_preserve + w);
+                    uint32_t leave_mask = UINT32_MAX << (pixels_to_preserve + w);
                     mask ^= leave_mask;
                     w = 0;
                 } else {
@@ -1119,15 +1119,14 @@ void drawHLine(short x, short y, short w, char color) {
                 int words_remaining = w / 32;
                 if (words_remaining > 0) {
                     memset(&vga_1bit_data_array[bufIndex], on ? 0xff : 0, words_remaining * sizeof(uint32_t));
+                    bufIndex += words_remaining;
                 }
-
-                bufIndex += words_remaining;
 
             }
             int bits_remaining = w % 32;
 
             if (bits_remaining > 0) {
-                int mask = 0xffffffff >> (32 - bits_remaining);
+                uint32_t mask = UINT32_MAX >> (32 - bits_remaining);
                 if (on) {
                     vga_1bit_data_array[bufIndex] |= mask;
                 } else {
@@ -1459,7 +1458,7 @@ void fillRect(short x, short y, short w, short h, char color) {
 
               if ((x == 0) && (w == _width)) {
                   for (int i = 0; i < h; i++) {
-                      memset(&vga_1bit_data_array[((y + i) * WORDS_PER_LINE) + 1], on, (WORDS_PER_LINE - 1) * sizeof(uint32_t));
+                      memset(&vga_1bit_data_array[((y + i) * WORDS_PER_LINE) + 1], on ? 0xff : 0, (WORDS_PER_LINE - 1) * sizeof(uint32_t));
                   }
                   // drawHLine(x, y + i, w, color);
               } else {

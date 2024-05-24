@@ -467,6 +467,45 @@ void write_intf(const char *s, int c) {
 #define STATUSBAR_INFO_RIGHT STATUSBAR_INFO_LEFT + STATUSBAR_INFO_WIDTH
 #define STATUSBAR_INFO_COLOR STATUSBAR_COLOR
 
+// Plot colours:  HSYNC, VSYNC, LO_GREEN, HI_GREEN, BLUE & RED
+char colours[] = {YELLOW, ORANGE, MED_GREEN, GREEN, BLUE, RED, MAGENTA, CYAN};
+
+
+void set_plot_line_colors(uint pin_count) {
+
+    int trace_height = PLOT_HEIGHT;
+    int y_padding = PLOT_PADDING;
+    int y = PLOT_TOP;
+
+    for (int i= 0; i < 2; i++) {
+
+        for (int pin = 0; pin < pin_count; ++pin) {
+
+            char line_col = colours[pin];
+
+            for (uint16_t l = 0; l < trace_height; l++){
+                set_line_colors(y + l,  BLACK, line_col, 0, 0);
+            }
+
+            y += trace_height + y_padding;
+        }
+
+        trace_height = MINIMAP_HEIGHT;
+        y_padding = MINIMAP_PADDING;
+        // y = MINIMAP_TOP;
+        y = MINIMAP_BOTTOM - ((MINIMAP_HEIGHT + MINIMAP_PADDING) * pin_count);
+
+    }
+
+    y = MINIMAP_BOTTOM - ((MINIMAP_HEIGHT + MINIMAP_PADDING) * g_no_of_captured_pins) - 3;
+
+    set_line_colors(y, BLACK, WHITE, 0, 0);
+    set_line_colors(y + 1, BLACK, WHITE, 0, 0);
+
+}
+
+
+
 
 void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples, int magnification,
                         int scrollx, bool show_numbers) {
@@ -478,9 +517,6 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
     // Each FIFO record may be only partially filled with bits, depending on
     // whether pin_count is a factor of 32.
 
-
-    // Plot colours:  HSYNC, VSYNC, LO_GREEN, HI_GREEN, BLUE & RED
-    char colours[] = {YELLOW, ORANGE, MED_GREEN, GREEN, BLUE, RED, MAGENTA, CYAN};
 
     uint record_size_bits = bits_packed_per_word(pin_count);
 
@@ -547,10 +583,6 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
         int last_x = 0;
 
         setTextColor(line_col);
-
-        for (uint16_t l = 0; l < trace_height; l++){
-            set_line_colors(y + l,  BLACK, line_col, WHITE, LIGHT_BLUE);
-        }
 
         int last_i = 0;
         int cursor_x = 0;
@@ -1451,12 +1483,6 @@ void draw_minimap_indicator() {
 
     uint y = MINIMAP_BOTTOM - ((MINIMAP_HEIGHT + MINIMAP_PADDING) * g_no_of_captured_pins) - 3;
 
-    set_line_colors(y, BLACK, WHITE, 0, 0);
-    set_line_colors(y + 1, BLACK, WHITE, 0, 0);
-
-    // drawHLine(0, y, SCREEN_WIDTH, BLACK);
-    // drawHLine(mini_x, y, mini_w, WHITE);
-
     fillRect(prev_mini_x, y, prev_mini_w, 2, BLACK);
     fillRect(mini_x, y, mini_w, 2, WHITE);
 
@@ -1666,6 +1692,36 @@ void close_help_window() {
 }
 
 
+char* left_rect_text =
+    // "Raspberry Pi Pico Test\n"
+    // "Graphics primitives demo\n"
+    // "Hunter Adams\n"
+    // "vha3@cornell.edu\n"
+    // "4-bit mod by Bruce Land";
+
+    "PLATYPUS\n"
+    "Pico Logic Analyser\n"
+    "for Testing Your\n"
+    "PIO something something\n"
+    "Peter Stansfeld\n";
+
+    // "PLATYPI\n"
+    // "Pico Logic Analyser\n"
+    // "for Testing Your\n"
+    // "PIO Ideas\n"
+    // "Peter Stansfeld";
+
+char* right_rect_text =
+
+    "Inspired by and using\n"
+    "Graphics primitives demo\n"
+    "Hunter Adams\n"
+    "vha3@cornell.edu\n"
+    "4-bit mod by Bruce Land\n";
+
+char * start_help_text = "Press h for help.\n";
+
+
 int main() {
 
     // Initialize stdio
@@ -1689,6 +1745,10 @@ int main() {
     gpio_set_dir(LED_PIN, GPIO_OUT); // set LED_PIN GPIO to an output
     gpio_put(LED_PIN, 1); // set LED_PIN
 
+    uart_puts(UART_ID, "\n\n");
+    uart_puts(UART_ID, left_rect_text);
+    uart_puts(UART_ID, "\n");
+    uart_puts(UART_ID, right_rect_text);
 
 #ifdef SYS_CLOCK_FREQ_KHZ
     int sys_clk_freq_khz = SYS_CLOCK_FREQ_KHZ;
@@ -1795,33 +1855,6 @@ int main() {
 
     // Write some text
 
-char* left_rect_text =
-    // "Raspberry Pi Pico Test\n"
-    // "Graphics primitives demo\n"
-    // "Hunter Adams\n"
-    // "vha3@cornell.edu\n"
-    // "4-bit mod by Bruce Land";
-
-    "PLATYPUS\n"
-    "Pico Logic Analyser\n"
-    "for Testing Your\n"
-    "PIO something something\n"
-    "Peter Stansfeld";
-
-    // "PLATYPI\n"
-    // "Pico Logic Analyser\n"
-    // "for Testing Your\n"
-    // "PIO Ideas\n"
-    // "Peter Stansfeld";
-
-char* right_rect_text =
-
-    "Inspired by and using\n"
-    "Graphics primitives demo\n"
-    "Hunter Adams\n"
-    "vha3@cornell.edu\n"
-    "4-bit mod by Bruce Land";
-
     setTextColor(WHITE) ;
     set_text_padding(2);
     setCursor(65, 0) ;
@@ -1835,6 +1868,11 @@ char* right_rect_text =
     setTextSize(2) ;
     writeString("Time Elapsed:") ;
 
+
+    clear_statusbar_hint(); // set the cursor etc.
+    writeString(start_help_text);
+    uart_puts(UART_ID, start_help_text);
+
     // Setup a 1Hz timer
     struct repeating_timer timer;
     add_repeating_timer_ms(-1000, repeating_timer_callback, NULL, &timer);
@@ -1844,6 +1882,9 @@ char* right_rect_text =
 
     logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, g_trigger_pin_base, g_trigger_type);
 
+    set_plot_line_colors(g_no_of_captured_pins);
+
+
     // print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
     plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, true);
 
@@ -1851,10 +1892,6 @@ char* right_rect_text =
     plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
 
     draw_minimap_indicator();
-
-    show_help_window();
-
-    // fillRect(0, 0, 640, 480, WHITE); // green box
 
     while(true) {
 
@@ -1884,8 +1921,8 @@ char* right_rect_text =
                 // if (ui_command == UIC_ESC) {
                     // writeString("esc");
                     close_help_window();
+                    set_plot_line_colors(g_no_of_captured_pins);
                     plot_required = true;
-                    mini_map_redraw_required = true;
                 // }
 
             } else {
@@ -2027,6 +2064,8 @@ char* right_rect_text =
                         // plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
 
                         set_scroll_x(0);
+
+                        set_plot_line_colors(g_no_of_captured_pins);
 
                         plot_required = true;
 
