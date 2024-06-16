@@ -711,19 +711,20 @@ void initVGA() {
 
 for (int y = 0; y < NO_OF_LINES; y++) {
     // vga_1bit_data_array[y * WORDS_PER_LINE] = (((BLUE << 4) | (y & 0x0f)) << 16) | (639);
-    char fore_colour;
-    char back_colour;
+    // char fore_colour;
+    // char back_colour;
       
-    if (((y >= 55) && (y < 65)) || (y >= 469)) {
-        fore_colour = WHITE;
-        back_colour = DARK_BLUE;
-    } else {
-        fore_colour = WHITE;
-        back_colour = BLACK;
-    }
+    // if (((y >= 55) && (y < 65)) || (y >= 469)) {
+    //     fore_colour = WHITE;
+    //     back_colour = DARK_BLUE;
+    // } else {
+    //     fore_colour = WHITE;
+    //     back_colour = BLACK;
+    // }
 
     // vga_1bit_data_array[y * WORDS_PER_LINE] = (((fore_colour << 4) | (back_colour)) << 16) | (639);
-    set_line_colors(y, back_colour, fore_colour, WHITE, LIGHT_BLUE);
+    // set_line_colors(y, back_colour, fore_colour, WHITE, LIGHT_BLUE);
+    set_line_colors(y, BLACK, WHITE, WHITE, LIGHT_BLUE);
 }
 
 
@@ -909,25 +910,7 @@ for (int y = 0; y < NO_OF_LINES; y++) {
 
 
 bool get_1bit_color(short y, char color) {
-
-    bool on = false;
-    if (y < 50) {
-        // if ((color != WHITE) && (color != BLACK)) {
-        if (color == WHITE) {
-          on = true;
-        }
-
-    } else {
-        if (color == WHITE) {
-        on = true;
-        } 
-        else if ((y < 55) || ((y >= 65) && (y < 469))) {
-            if (color != BLACK) {
-                on = true;
-            }
-        }
-    }
-    return on;
+    return color != BLACK;
 }
 
 

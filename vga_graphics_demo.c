@@ -376,6 +376,17 @@ void write_intf(const char *s, int c) {
 #define FONT_WIDTH 6
 #define FONT_HEIGHT 8
 
+// Colours for the filled rectangles
+
+// #define LEFT_BOX_COLOR BLUE
+// #define MIDDLE_BOX_COLOR RED
+// #define RIGHT_BOX_COLOR MED_GREEN
+
+#define LEFT_BOX_COLOR BLACK
+#define MIDDLE_BOX_COLOR BLACK
+#define RIGHT_BOX_COLOR BLACK
+
+// Toolbar defines
 #define TOOLBAR_LEFT 1
 #define TOOLBAR_WIDTH SCREEN_WIDTH - (2 * TOOLBAR_LEFT)
 #define TOOLBAR_HEIGHT 10
@@ -383,7 +394,8 @@ void write_intf(const char *s, int c) {
 #define TOOLBAR_TOP 55
 #define TOOLBAR_TEXT_PADDING 1
 
-#define TOOLBAR_COLOR DARK_BLUE
+// #define TOOLBAR_COLOR DARK_BLUE
+#define TOOLBAR_COLOR BLACK
 #define TOOLBAR_ITEM_PADDING 0
 
 // #define TOOLBAR_HINT_WIDTH (TOOLBAR_WIDTH) / 3
@@ -452,7 +464,8 @@ void write_intf(const char *s, int c) {
 
 // #define STATUSBAR_TOP 55
 #define STATUSBAR_TEXT_PADDING 1
-#define STATUSBAR_COLOR DARK_BLUE
+// #define STATUSBAR_COLOR DARK_BLUE
+#define STATUSBAR_COLOR BLACK
 #define STATUSBAR_ITEM_PADDING 0
 
 // #define STATUSBAR_HINT_WIDTH (TOOLBAR_WIDTH) / 3
@@ -1135,7 +1148,7 @@ void draw_hint(char *s) {
 
 
 void draw_setting_helper(uint left, uint8_t label_len, uint8_t str_len) {
-    fillRect(left + (FONT_WIDTH * label_len), TOOLBAR_TOP, (FONT_WIDTH * str_len), TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    fillRect(left + (FONT_WIDTH * label_len), TOOLBAR_TOP, (FONT_WIDTH * str_len), FONT_HEIGHT + 1, TOOLBAR_COLOR);
     setCursor(left + (FONT_WIDTH * label_len), TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
     setTextColor(WHITE);
     setTextSize(1);
@@ -1239,7 +1252,8 @@ void draw_settings() {
 
 
 void draw_toolbar() {
-    fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    // fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_WIDTH, TOOLBAR_HEIGHT, BLACK);
     setTextColor(WHITE);
     setCursor(CHANNEL_NO_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
     setTextSize(1);
@@ -1257,7 +1271,8 @@ void set_toolbar_text() {
 
 void clear_toolbar_hint() {
     set_toolbar_text();
-    fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_HINT_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    // fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_HINT_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_HINT_WIDTH, TOOLBAR_HEIGHT, BLACK);
     setCursor(2, SCREEN_HEIGHT - 1 - 8);
     setTextColor(WHITE);
     setTextSize(1);
@@ -1638,12 +1653,13 @@ char* help_strings =
     "  on the selected channel (ch)\n"
     "PGUP / PGDN to scroll one page left / right\n"
     "HOME / END to scroll to the beginning / end\n"
+    "\n"
     "TAB / SHIFT-TAB to select the next / previous setting\n"
     "UP / DOWN to increase / decrease the selected setting\n"
     "c to capture a sample using the settings\n"
     "z to zoom to fit all the samples on one page\n"
     "+ / - to zoom in / out\n"
-    "= to zoom to 1:1\n"
+    "= to set zoom to 1:1\n"
     "m to measure VGA timings\n"
     "h to show this help window\n"
     "SPACE to play / pause graphics demo\n"
@@ -1654,8 +1670,9 @@ char* help_strings =
 
 bool showing_help_window = false;
 
+#define HELP_WINDOW_PADDING 2
 #define HELP_WINDOW_WIDTH (56 + 2) * FONT_WIDTH
-#define HELP_WINDOW_HEIGHT (18 + 2) * FONT_HEIGHT
+#define HELP_WINDOW_HEIGHT (19 + 2) * (FONT_HEIGHT + HELP_WINDOW_PADDING)
 #define HELP_WINDOW_TOP (SCREEN_HEIGHT - HELP_WINDOW_HEIGHT) / 2
 #define HELP_WINDOW_LEFT (SCREEN_WIDTH - HELP_WINDOW_WIDTH) / 2 
 
@@ -1667,14 +1684,15 @@ void show_help_window() {
     //     set_line_colors(HELP_WINDOW_TOP + y, BLACK, LIGHT_BLUE, 0, 0);
     // }
 
-    for (int y = PLOT_TOP; y <= MINIMAP_BOTTOM; y++) {
-        set_line_colors(y, BLACK, LIGHT_BLUE, 0, 0);
+    for (int y = 0; y <= SCREEN_HEIGHT; y++) {
+        // set_line_colors(y, BLACK, LIGHT_BLUE, 0, 0);
+        set_line_colors(y, BLACK, WHITE, 0, 0);
     }
 
     setTextSize(1);
     setTextColor(BLACK);
     setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + FONT_HEIGHT);
-    set_text_padding(0);
+    set_text_padding(HELP_WINDOW_PADDING);
     writeString(help_strings);
 
     uart_puts(UART_ID, "\n");
@@ -1685,9 +1703,31 @@ void show_help_window() {
 }
 
 
+void init_line_colours() {
+    for (int y = 0; y < SCREEN_HEIGHT; y++) {
+        // vga_1bit_data_array[y * WORDS_PER_LINE] = (((BLUE << 4) | (y & 0x0f)) << 16) | (639);
+        char fore_colour;
+        char back_colour;
+        
+        if (((y >= TOOLBAR_TOP) && (y <= TOOLBAR_TOP + TOOLBAR_HEIGHT)) || (y >= STATUSBAR_TOP)) {
+            fore_colour = WHITE;
+            back_colour = DARK_BLUE;
+        } else {
+            fore_colour = WHITE;
+            back_colour = BLACK;
+        }
+
+        // vga_1bit_data_array[y * WORDS_PER_LINE] = (((fore_colour << 4) | (back_colour)) << 16) | (639);
+        set_line_colors(y, back_colour, fore_colour, WHITE, LIGHT_BLUE);
+    }
+}
+
+
 void close_help_window() {
     fillRect(HELP_WINDOW_LEFT, HELP_WINDOW_TOP, HELP_WINDOW_WIDTH, HELP_WINDOW_HEIGHT, BLACK);
     uart_puts(UART_ID, "Help window closed\n");
+    init_line_colours();
+    set_plot_line_colors(g_no_of_captured_pins);
     showing_help_window = false;
 }
 
@@ -1758,6 +1798,7 @@ int main() {
     // Initialize the VGA screen
     uart_puts(UART_ID, "Initialising VGA...\n");
     initVGA() ;
+    init_line_colours();
 
     // uart_puts(UART_ID, help_strings);
 
@@ -1801,9 +1842,9 @@ int main() {
 
 
     // Draw some filled rectangles
-    fillRect(64, 0, 176, 50, BLUE); // blue box
-    fillRect(250, 0, 176, 50, RED); // red box:
-    fillRect(435, 0, 176, 50, MED_GREEN); // green box
+    fillRect(64, 0, 176, 50, LEFT_BOX_COLOR); // blue box
+    fillRect(250, 0, 176, 50, MIDDLE_BOX_COLOR); // red box:
+    fillRect(435, 0, 176, 50, RIGHT_BOX_COLOR); // green box
 
 //    drawVLine(Vline_x, 300, (Vline_x>>2), color_index);
 
@@ -1859,7 +1900,85 @@ int main() {
     set_text_padding(2);
     setCursor(65, 0) ;
 
-    writeString(left_rect_text);
+    // writeString(left_rect_text);
+
+
+    // #define LOGO_Y_CENTRE 20
+
+    void logo(int x, int y) {
+
+        #define LOGO_WIDTH 4 
+
+        void logo_o(int x, int y) {
+            fillCircle(x, y, 8, WHITE);
+            fillCircle(x, y, 8 - LOGO_WIDTH, BLACK);
+        }
+
+        void logo_a(int x, int y) {
+            logo_o(x, y);
+            fillRect(x + 5, y, LOGO_WIDTH, 9, WHITE);
+        }
+
+        // p
+
+        logo_o(x + 8, y);
+        fillRect(x, y, LOGO_WIDTH, 12, WHITE);
+
+        // x is 61
+
+        x += 16;
+
+        // x is 77
+
+
+        // a
+        logo_a(x + 8 + 3, y);
+        x += 3 + 16;
+
+        // x is 96
+
+        // l
+        fillRect(x + 4, y - 7 - 4, LOGO_WIDTH, 20, WHITE);
+        x += 4;
+
+        // x is 100
+
+        // t
+        // fillRect(96 + 8 + 1, 20 - 7 - 4, 4, 20, WHITE);
+        // fillRect(96 + 8 + 1 + 4, 20 - 7 , 4, 4, WHITE);
+
+        // a
+
+        logo_a(x + 8 + 6, y);
+
+        x += 6 + 16;
+
+        // x is 122
+
+        // v
+
+        for (int i = 0; i < LOGO_WIDTH; i++) {
+            // drawLine(O_X + V_SHIFT_X + 10 + i, LOGO_Y_CENTRE - 8, O_X + V_SHIFT_X + 16 + i, LOGO_Y_CENTRE + 8, WHITE);
+            drawLine(x + 1 + i, y - 8, x + 1 + 6 + i, y + 8, WHITE);
+            // drawLine(O_X + V_SHIFT_X + 10 + 12 + i, LOGO_Y_CENTRE - 8, O_X + V_SHIFT_X + 16 + i, LOGO_Y_CENTRE + 8, WHITE);
+            drawLine(x + 1 + 12 + i, y - 8, x + 1 + 6 + i, y + 8, WHITE);
+        }
+
+        x += 1 + 12; 
+
+        // x is 135
+
+        // o
+        logo_o(x + 2 + 10, y);
+
+    }
+
+    logo(66, 14);
+
+    // logo(200, 0);
+
+    // logo(440, 30);
+
 
     setCursor(435, 0);
     writeString(right_rect_text);
@@ -1903,7 +2022,7 @@ int main() {
         if (time_accum != time_accum_old) {
             setTextColor(WHITE) ;
             time_accum_old = time_accum ;
-            fillRect(250, 20, 176, 30, RED); // red box
+            fillRect(250, 20, 176, 30, MIDDLE_BOX_COLOR); // red box
             sprintf(timetext, "%d", time_accum) ;
             setCursor(250, 20) ;
             setTextSize(2) ;
@@ -1921,7 +2040,6 @@ int main() {
                 // if (ui_command == UIC_ESC) {
                     // writeString("esc");
                     close_help_window();
-                    set_plot_line_colors(g_no_of_captured_pins);
                     plot_required = true;
                 // }
 
