@@ -1124,6 +1124,7 @@ enum UI_COMMANDS {
     UIC_M,
     UIC_C,
     UIC_H,
+    UIC_A,
     UIC_SPACEBAR,
     UIC_UP,
     UIC_DOWN,
@@ -1477,6 +1478,11 @@ uint check_keyboard() {
                     ui_command = UIC_H;
                     break;
 
+                case 'a':
+                // case 'A':
+                    ui_command = UIC_A;
+                    break;
+
                 case '\t':
                     ui_command = UIC_TAB;
                     break;
@@ -1664,11 +1670,10 @@ char* help_strings =
     "h to show this help window\n"
     "SPACE to play / pause graphics demo\n"
     "\n"
-//    "ESC to close this window";
    "Any key to close this window\n";
 
 
-bool showing_help_window = false;
+bool showing_window = false;
 
 #define HELP_WINDOW_PADDING 2
 #define HELP_WINDOW_WIDTH (56 + 2) * FONT_WIDTH
@@ -1691,7 +1696,7 @@ void show_help_window() {
 
     setTextSize(1);
     setTextColor(BLACK);
-    setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + FONT_HEIGHT);
+    setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + FONT_HEIGHT + HELP_WINDOW_PADDING);
     set_text_padding(HELP_WINDOW_PADDING);
     writeString(help_strings);
 
@@ -1699,7 +1704,111 @@ void show_help_window() {
     uart_puts(UART_ID, help_strings);
     uart_puts(UART_ID, "\n");
 
-    showing_help_window = true;
+    showing_window = true;
+}
+
+
+void logo(int x, int y, bool use_fore_col) {
+
+    #define LOGO_WIDTH 4
+
+    // bool back_col = colour 
+
+    void logo_o(int x, int y) {
+        fillCircle(x, y, 8, use_fore_col);
+        fillCircle(x, y, 8 - LOGO_WIDTH, !use_fore_col);
+    }
+
+    void logo_a(int x, int y) {
+        logo_o(x, y);
+        fillRect(x + 5, y, LOGO_WIDTH, 9, use_fore_col);
+    }
+
+    // p
+
+    logo_o(x + 8, y);
+    fillRect(x, y, LOGO_WIDTH, 12, use_fore_col);
+
+    // x is 61
+
+    x += 16;
+
+    // x is 77
+
+
+    // a
+    logo_a(x + 8 + 3, y);
+    x += 3 + 16;
+
+    // x is 96
+
+    // l
+    fillRect(x + 4, y - 7 - 4, LOGO_WIDTH, 20, use_fore_col);
+    x += 4;
+
+    // x is 100
+
+    // t
+    // fillRect(96 + 8 + 1, 20 - 7 - 4, 4, 20, WHITE);
+    // fillRect(96 + 8 + 1 + 4, 20 - 7 , 4, 4, WHITE);
+
+    // a
+
+    logo_a(x + 8 + 6, y);
+
+    x += 6 + 16;
+
+    // x is 122
+
+    // v
+
+    for (int i = 0; i < LOGO_WIDTH; i++) {
+        // drawLine(O_X + V_SHIFT_X + 10 + i, LOGO_Y_CENTRE - 8, O_X + V_SHIFT_X + 16 + i, LOGO_Y_CENTRE + 8, WHITE);
+        drawLine(x + 1 + i, y - 8, x + 1 + 6 + i, y + 8, use_fore_col);
+        // drawLine(O_X + V_SHIFT_X + 10 + 12 + i, LOGO_Y_CENTRE - 8, O_X + V_SHIFT_X + 16 + i, LOGO_Y_CENTRE + 8, WHITE);
+        drawLine(x + 1 + 12 + i, y - 8, x + 1 + 6 + i, y + 8, use_fore_col);
+    }
+
+    x += 1 + 12; 
+
+    // x is 135
+
+    // o
+    logo_o(x + 2 + 10, y);
+
+}
+
+
+char* about_strings =
+    "PIO Accelerated Logic Analyser with VGA Output\n"
+    "Version 0.0.1\n"
+    "\n"
+   "Press any key to close this window\n";
+
+void show_about_window() {
+    for (int y = 0; y <= SCREEN_HEIGHT; y++) {
+        // set_line_colors(y, BLACK, LIGHT_BLUE, 0, 0);
+        set_line_colors(y, BLACK, WHITE, 0, 0);
+    }
+
+    fillRect(HELP_WINDOW_LEFT, HELP_WINDOW_TOP, HELP_WINDOW_WIDTH, HELP_WINDOW_HEIGHT, LIGHT_BLUE);
+
+    logo(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + 20, false);
+
+    setTextSize(1);
+    setTextColor(BLACK);
+
+    // setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + FONT_HEIGHT + HELP_WINDOW_PADDING + );
+    setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + 20 + 8 + 4 + 4);
+    set_text_padding(HELP_WINDOW_PADDING);
+    writeString(about_strings);
+
+
+    uart_puts(UART_ID, "\n");
+    uart_puts(UART_ID, about_strings);
+    uart_puts(UART_ID, "\n");
+
+    showing_window = true;
 }
 
 
@@ -1723,12 +1832,12 @@ void init_line_colours() {
 }
 
 
-void close_help_window() {
+void close_window() {
     fillRect(HELP_WINDOW_LEFT, HELP_WINDOW_TOP, HELP_WINDOW_WIDTH, HELP_WINDOW_HEIGHT, BLACK);
-    uart_puts(UART_ID, "Help window closed\n");
+    uart_puts(UART_ID, "Window closed\n");
     init_line_colours();
     set_plot_line_colors(g_no_of_captured_pins);
-    showing_help_window = false;
+    showing_window = false;
 }
 
 
@@ -1905,75 +2014,9 @@ int main() {
 
     // #define LOGO_Y_CENTRE 20
 
-    void logo(int x, int y) {
-
-        #define LOGO_WIDTH 4 
-
-        void logo_o(int x, int y) {
-            fillCircle(x, y, 8, WHITE);
-            fillCircle(x, y, 8 - LOGO_WIDTH, BLACK);
-        }
-
-        void logo_a(int x, int y) {
-            logo_o(x, y);
-            fillRect(x + 5, y, LOGO_WIDTH, 9, WHITE);
-        }
-
-        // p
-
-        logo_o(x + 8, y);
-        fillRect(x, y, LOGO_WIDTH, 12, WHITE);
-
-        // x is 61
-
-        x += 16;
-
-        // x is 77
 
 
-        // a
-        logo_a(x + 8 + 3, y);
-        x += 3 + 16;
-
-        // x is 96
-
-        // l
-        fillRect(x + 4, y - 7 - 4, LOGO_WIDTH, 20, WHITE);
-        x += 4;
-
-        // x is 100
-
-        // t
-        // fillRect(96 + 8 + 1, 20 - 7 - 4, 4, 20, WHITE);
-        // fillRect(96 + 8 + 1 + 4, 20 - 7 , 4, 4, WHITE);
-
-        // a
-
-        logo_a(x + 8 + 6, y);
-
-        x += 6 + 16;
-
-        // x is 122
-
-        // v
-
-        for (int i = 0; i < LOGO_WIDTH; i++) {
-            // drawLine(O_X + V_SHIFT_X + 10 + i, LOGO_Y_CENTRE - 8, O_X + V_SHIFT_X + 16 + i, LOGO_Y_CENTRE + 8, WHITE);
-            drawLine(x + 1 + i, y - 8, x + 1 + 6 + i, y + 8, WHITE);
-            // drawLine(O_X + V_SHIFT_X + 10 + 12 + i, LOGO_Y_CENTRE - 8, O_X + V_SHIFT_X + 16 + i, LOGO_Y_CENTRE + 8, WHITE);
-            drawLine(x + 1 + 12 + i, y - 8, x + 1 + 6 + i, y + 8, WHITE);
-        }
-
-        x += 1 + 12; 
-
-        // x is 135
-
-        // o
-        logo_o(x + 2 + 10, y);
-
-    }
-
-    logo(66, 14);
+    logo(66, 14, true);
 
     // logo(200, 0);
 
@@ -2014,7 +2057,7 @@ int main() {
 
     while(true) {
 
-        if (!demo_paused && !showing_help_window) {
+        if (!demo_paused && !showing_window) {
             demo();
         }
 
@@ -2036,10 +2079,10 @@ int main() {
 
             bool plot_required = false;
             bool mini_map_redraw_required = false;
-            if (showing_help_window) {
+            if (showing_window) {
                 // if (ui_command == UIC_ESC) {
                     // writeString("esc");
-                    close_help_window();
+                    close_window();
                     plot_required = true;
                 // }
 
@@ -2305,6 +2348,13 @@ int main() {
                         writeString("help");
                         show_help_window();
                         break;
+
+                    case UIC_A:
+                        writeString("about");
+                        show_about_window();
+                        break;
+
+
                 }
             }
 
