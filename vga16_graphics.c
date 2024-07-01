@@ -1405,6 +1405,9 @@ void fillRect(short x, short y, short w, short h, char color) {
 
           if (y < _height) {
 
+              short y2 = y;
+              short h2 = h;
+
               if (y < 0) {
                   h += y; // decrease h
                   y = 0;
@@ -1421,6 +1424,10 @@ void fillRect(short x, short y, short w, short h, char color) {
                       drawHLine(x, y + i, w, color);
                   }
               }
+
+              y = y2;
+              h = h2;
+
           }
 
 

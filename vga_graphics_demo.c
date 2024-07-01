@@ -43,6 +43,8 @@
 
 uint8_t last_uart_char = 0;
 
+#define MAX_NO_OF_CHANNELS 16
+
 // Some globals for storing timer information
 volatile unsigned int time_accum = 0;
 unsigned int time_accum_old = 0 ;
@@ -51,7 +53,7 @@ char timetext[40];
 
 int g_mag = 0;
 int g_scrollx = 0;
-uint8_t g_channel = 1;
+uint8_t g_channel = 0;
 
 int g_prev_scrollx = 0;
 
@@ -70,7 +72,7 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 #define SCREEN_HEIGHT 480
 
 const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
-const uint CAPTURE_PIN_COUNT = 6;
+const uint CAPTURE_PIN_COUNT = 4;
 const uint CAPTURE_TRIGGER_PIN = VSYNC; // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
 const uint CAPTURE_N_SAMPLES = SCREEN_WIDTH * 96; // enough for 48 screen width's worth of data
 const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 1 * 5 * 1; /*271.267*/ // was 5 * 4
@@ -175,8 +177,6 @@ struct Edges {
     int next_start;
     int next_end;
 };
-
-#define MAX_NO_OF_CHANNELS 8
 
 struct Edges edges[MAX_NO_OF_CHANNELS];
 
@@ -386,12 +386,24 @@ void write_intf(const char *s, int c) {
 #define MIDDLE_BOX_COLOR BLACK
 #define RIGHT_BOX_COLOR BLACK
 
+// Titlebar defines
+#define TITLEBAR_TOP 1
+#define TITLEBAR_LEFT 1
+#define TITLEBAR_WIDTH SCREEN_WIDTH - (2 * TITLEBAR_LEFT)
+#define TITLEBAR_HEIGHT 32
+
+
 // Toolbar defines
-#define TOOLBAR_LEFT 1
-#define TOOLBAR_WIDTH SCREEN_WIDTH - (2 * TOOLBAR_LEFT)
+// #define TOOLBAR_LEFT 1
+// #define TOOLBAR_WIDTH SCREEN_WIDTH - (2 * TOOLBAR_LEFT)
+
+#define TOOLBAR_LEFT 120
+#define TOOLBAR_WIDTH SCREEN_WIDTH - TOOLBAR_LEFT - 1
+
 #define TOOLBAR_HEIGHT 10
 // #define TOOLBAR_TOP SCREEN_HEIGHT - TOOLBAR_HEIGHT - 1
-#define TOOLBAR_TOP 55
+// #define TOOLBAR_TOP TITLEBAR_TOP + TITLEBAR_HEIGHT
+#define TOOLBAR_TOP (22 - TOOLBAR_HEIGHT)
 #define TOOLBAR_TEXT_PADDING 1
 
 // #define TOOLBAR_COLOR DARK_BLUE
@@ -399,23 +411,22 @@ void write_intf(const char *s, int c) {
 #define TOOLBAR_ITEM_PADDING 0
 
 // #define TOOLBAR_HINT_WIDTH (TOOLBAR_WIDTH) / 3
- #define TOOLBAR_HINT_WIDTH 100
+// #define TOOLBAR_HINT_WIDTH 100
+#define TOOLBAR_HINT_WIDTH 0
 
 
 // #define CHANNEL_NO_LEFT (SCREEN_WIDTH / 2)
 
 #define CHANNEL_NO_LEFT TOOLBAR_LEFT + TOOLBAR_TEXT_PADDING + TOOLBAR_HINT_WIDTH + TOOLBAR_TEXT_PADDING
 
-#define CHANNEL_NO_WIDTH (FONT_WIDTH * 6) + TOOLBAR_ITEM_PADDING
+#define CHANNEL_NO_WIDTH (FONT_WIDTH * (6 + 6)) + TOOLBAR_ITEM_PADDING
 
 #define MAG_LEFT CHANNEL_NO_LEFT + CHANNEL_NO_WIDTH + TOOLBAR_ITEM_PADDING
 #define MAG_WIDTH (FONT_WIDTH * 11) + TOOLBAR_ITEM_PADDING
 
 
 #define FREQ_LEFT MAG_LEFT + MAG_WIDTH + TOOLBAR_ITEM_PADDING
-#define FREQ_WIDTH (FONT_WIDTH * 10) + TOOLBAR_ITEM_PADDING
-
-
+#define FREQ_WIDTH (FONT_WIDTH * 14) + TOOLBAR_ITEM_PADDING
 
 
 // #define NO_OF_PINS_LEFT FREQ_LEFT + FREQ_WIDTH + TOOLBAR_ITEM_PADDING
@@ -430,17 +441,22 @@ void write_intf(const char *s, int c) {
 #define PINS_BASE_WIDTH (FONT_WIDTH * 11) + TOOLBAR_ITEM_PADDING
 
 #define NO_OF_PINS_LEFT PINS_BASE_LEFT + PINS_BASE_WIDTH + TOOLBAR_ITEM_PADDING
-#define NO_OF_PINS_WIDTH (FONT_WIDTH * 8) + TOOLBAR_ITEM_PADDING
+#define NO_OF_PINS_WIDTH (FONT_WIDTH * 9) + TOOLBAR_ITEM_PADDING
 
 #define TRIGGER_BASE_LEFT NO_OF_PINS_LEFT + NO_OF_PINS_WIDTH + TOOLBAR_ITEM_PADDING
-#define TRIGGER_BASE_WIDTH (FONT_WIDTH * 11) + TOOLBAR_ITEM_PADDING
+#define TRIGGER_BASE_WIDTH (FONT_WIDTH * (11 + 3)) + TOOLBAR_ITEM_PADDING
 
 #define TRIGGER_TYPE_LEFT TRIGGER_BASE_LEFT + TRIGGER_BASE_WIDTH + TOOLBAR_ITEM_PADDING
 #define TRIGGER_TYPE_WIDTH (FONT_WIDTH * 13) + TOOLBAR_ITEM_PADDING
 
-#define PLOT_TOP 75
-#define PLOT_HEIGHT 36
 #define PLOT_PADDING 4
+#define PLOT_TOP (TOOLBAR_TOP + TOOLBAR_HEIGHT + 12)
+// #define PLOT_HEIGHT 36
+
+#define MAX_PLOT_HEIGHT 48
+
+int plot_height;
+
 
 // #define MINIMAP_BOTTOM TOOLBAR_TOP - 4
 
@@ -454,11 +470,11 @@ void write_intf(const char *s, int c) {
 // #define MINIMAP_TOP 420
 #define MINIMAP_HEIGHT 6
 #define MINIMAP_PADDING 1
-#define MINIMAP_BOTTOM STATUSBAR_TOP - 4
+#define MINIMAP_BOTTOM STATUSBAR_TOP - 5
 
 
 #define STATUSBAR_HEIGHT 10
-#define STATUSBAR_TOP SCREEN_HEIGHT - STATUSBAR_HEIGHT - 1
+#define STATUSBAR_TOP (SCREEN_HEIGHT - STATUSBAR_HEIGHT - 1)
 #define STATUSBAR_LEFT 1
 #define STATUSBAR_WIDTH SCREEN_WIDTH - (2 * STATUSBAR_LEFT)
 
@@ -481,12 +497,22 @@ void write_intf(const char *s, int c) {
 #define STATUSBAR_INFO_COLOR STATUSBAR_COLOR
 
 // Plot colours:  HSYNC, VSYNC, LO_GREEN, HI_GREEN, BLUE & RED
-char colours[] = {YELLOW, ORANGE, MED_GREEN, GREEN, BLUE, RED, MAGENTA, CYAN};
+char colours[] = {YELLOW, ORANGE, MED_GREEN, GREEN, BLUE, RED, MAGENTA, CYAN, YELLOW, ORANGE, MED_GREEN, GREEN, BLUE, RED, MAGENTA, CYAN};
+
+
+#define MINIMAP_SCROLLBAR_HEIGHT 2
+#define MINIMAP_SCROLLBAR_PADDING 1
+
+void calc_plot_height(uint pin_count) {
+    int avail_height = MINIMAP_BOTTOM - PLOT_TOP;
+    int fixed_height = ((PLOT_PADDING + MINIMAP_HEIGHT + MINIMAP_PADDING) * pin_count) + MINIMAP_SCROLLBAR_HEIGHT + (2 * MINIMAP_PADDING);
+    plot_height = MIN((avail_height - fixed_height) / pin_count, MAX_PLOT_HEIGHT);
+}
 
 
 void set_plot_line_colors(uint pin_count) {
 
-    int trace_height = PLOT_HEIGHT;
+    int trace_height = plot_height;
     int y_padding = PLOT_PADDING;
     int y = PLOT_TOP;
 
@@ -510,10 +536,10 @@ void set_plot_line_colors(uint pin_count) {
 
     }
 
-    y = MINIMAP_BOTTOM - ((MINIMAP_HEIGHT + MINIMAP_PADDING) * g_no_of_captured_pins) - 3;
-
-    set_line_colors(y, BLACK, WHITE, 0, 0);
-    set_line_colors(y + 1, BLACK, WHITE, 0, 0);
+    y = MINIMAP_BOTTOM - ((MINIMAP_HEIGHT + MINIMAP_PADDING) * pin_count) - (MINIMAP_SCROLLBAR_HEIGHT + MINIMAP_SCROLLBAR_PADDING);
+    for (int i = 0; i < MINIMAP_SCROLLBAR_HEIGHT; i++) {
+        set_line_colors(y + i, BLACK, WHITE, 0, 0);
+    }
 
 }
 
@@ -533,7 +559,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
     uint record_size_bits = bits_packed_per_word(pin_count);
 
-    int trace_height = PLOT_HEIGHT;
+    int trace_height = plot_height;
     int y_padding = PLOT_PADDING;
     int y = PLOT_TOP;
 
@@ -1157,7 +1183,7 @@ void draw_setting_helper(uint left, uint8_t label_len, uint8_t str_len) {
 
 
 void draw_channel_no() {
-    draw_setting_helper(CHANNEL_NO_LEFT, 2, 3);
+    draw_setting_helper(CHANNEL_NO_LEFT, 2 + 5, 4);
     if (settings_state == SS_CHANNEL) {
         uart_putcf(UART_ID, "ch: %d\n", g_channel);
         setTextColor2(TOOLBAR_COLOR, WHITE);
@@ -1186,7 +1212,7 @@ void draw_magnification() {
 
 
 void draw_no_of_pins() {
-    draw_setting_helper(NO_OF_PINS_LEFT, 4, 4);
+    draw_setting_helper(NO_OF_PINS_LEFT, 4, 5);
     if (settings_state == SS_NO_OF_PINS) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
         uart_putcf(UART_ID, "pins: %d\n", g_no_of_pins_to_capture);
@@ -1206,7 +1232,7 @@ void draw_pins_base() {
 
 
 void draw_sample_frequency() {
-    draw_setting_helper(FREQ_LEFT, 4, 5);
+    draw_setting_helper(FREQ_LEFT, 8, 5);
     if (settings_state == SS_FREQ) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
         uart_putcf(UART_ID, "fdiv: %d\n", g_sample_frequency);
@@ -1216,7 +1242,7 @@ void draw_sample_frequency() {
 
 
 void draw_trigger_pin_base() {
-    draw_setting_helper(TRIGGER_BASE_LEFT, 4, 6);
+    draw_setting_helper(TRIGGER_BASE_LEFT, 7, 6);
     if (settings_state == SS_TRIGGER_PIN_BASE) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
         uart_putcf(UART_ID, "tpin: %d\n", g_trigger_pin_base);
@@ -1230,7 +1256,7 @@ void draw_trigger_type() {
 // enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_VSYNC, TT_VGA_RGB, TT_VGA_VFRONT_PORCH, TT_COUNT};
 
     unsigned char tt_chars[9][8] = {" NONE ", " LOW ", " HIGH ", " RISE ", " FALL ", " EDGE ", " VSYNC ", " RGB ", " VFPOR "};
-    draw_setting_helper(TRIGGER_TYPE_LEFT, 5, 7);
+    draw_setting_helper(TRIGGER_TYPE_LEFT, 4, 7);
     if (settings_state == SS_TRIGGER_TYPE) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
         uart_puts(UART_ID, "ttype:");
@@ -1252,13 +1278,23 @@ void draw_settings() {
 }
 
 
+void draw_titlebar() {
+    // fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    fillRect(TITLEBAR_LEFT, TITLEBAR_TOP, TITLEBAR_WIDTH, TITLEBAR_HEIGHT, BLACK);
+    setTextColor(WHITE);
+    setCursor(TITLEBAR_LEFT + ((TITLEBAR_WIDTH - (6 * FONT_WIDTH)) / 2), TITLEBAR_TOP + 1);
+    setTextSize(1);
+    // writeString("palavo");
+}
+
+
 void draw_toolbar() {
     // fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
     fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_WIDTH, TOOLBAR_HEIGHT, BLACK);
     setTextColor(WHITE);
     setCursor(CHANNEL_NO_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
     setTextSize(1);
-    writeString("ch    zoom       fdiv      base       pins    tpin       ttype");
+    writeString("channel     zoom       freq.div      base       pins     trigger       type");
     draw_settings();
 }
 
@@ -1502,10 +1538,10 @@ void draw_minimap_indicator() {
     int mini_x = (g_scrollx * SCREEN_WIDTH) / g_capture_n_samples;
     int mini_w = (mag_factor(SCREEN_WIDTH * SCREEN_WIDTH) / g_capture_n_samples) + 1; // add one to round up and/or ensure a visible indicator
 
-    uint y = MINIMAP_BOTTOM - ((MINIMAP_HEIGHT + MINIMAP_PADDING) * g_no_of_captured_pins) - 3;
+    uint y = MINIMAP_BOTTOM - ((MINIMAP_HEIGHT + MINIMAP_PADDING) * g_no_of_captured_pins) - (MINIMAP_SCROLLBAR_HEIGHT + MINIMAP_SCROLLBAR_PADDING);
 
-    fillRect(prev_mini_x, y, prev_mini_w, 2, BLACK);
-    fillRect(mini_x, y, mini_w, 2, WHITE);
+    fillRect(prev_mini_x, y, prev_mini_w, MINIMAP_SCROLLBAR_HEIGHT, BLACK);
+    fillRect(mini_x, y, mini_w, MINIMAP_SCROLLBAR_HEIGHT, WHITE);
 
     prev_mini_x = mini_x;
     prev_mini_w = mini_w;
@@ -1668,16 +1704,18 @@ char* help_strings =
     "= to set zoom to 1:1\n"
     "m to measure VGA timings\n"
     "h to show this help window\n"
-    "SPACE to play / pause graphics demo\n"
-    "\n"
-   "Any key to close this window\n";
+    "a to show the about window\n"
+    "SPACE to play / pause graphics demo\n";
+
+char* press_any_key_string = 
+    "Press any key to close this window\n";
 
 
 bool showing_window = false;
 
 #define HELP_WINDOW_PADDING 2
 #define HELP_WINDOW_WIDTH (56 + 2) * FONT_WIDTH
-#define HELP_WINDOW_HEIGHT (19 + 2) * (FONT_HEIGHT + HELP_WINDOW_PADDING)
+#define HELP_WINDOW_HEIGHT (20 + 2) * (FONT_HEIGHT + HELP_WINDOW_PADDING)
 #define HELP_WINDOW_TOP (SCREEN_HEIGHT - HELP_WINDOW_HEIGHT) / 2
 #define HELP_WINDOW_LEFT (SCREEN_WIDTH - HELP_WINDOW_WIDTH) / 2 
 
@@ -1699,9 +1737,14 @@ void show_help_window() {
     setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + FONT_HEIGHT + HELP_WINDOW_PADDING);
     set_text_padding(HELP_WINDOW_PADDING);
     writeString(help_strings);
+    // writeString(press_any_key_string);
+
+    setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + HELP_WINDOW_HEIGHT - (2 * (FONT_HEIGHT + HELP_WINDOW_PADDING)));
+    writeString(press_any_key_string);
 
     uart_puts(UART_ID, "\n");
     uart_puts(UART_ID, help_strings);
+    uart_puts(UART_ID, press_any_key_string);
     uart_puts(UART_ID, "\n");
 
     showing_window = true;
@@ -1710,24 +1753,26 @@ void show_help_window() {
 
 void logo(int x, int y, bool use_fore_col) {
 
-    #define LOGO_WIDTH 4
+    #define LOGO_THICKNESS 4
+    #define LOGO_WIDTH 16
+    // #define LOGO_HEIGHT
 
     // bool back_col = colour 
 
     void logo_o(int x, int y) {
-        fillCircle(x, y, 8, use_fore_col);
-        fillCircle(x, y, 8 - LOGO_WIDTH, !use_fore_col);
+        fillCircle(x + (LOGO_WIDTH / 2), y + (LOGO_WIDTH / 2) + 4 - 1, 8, use_fore_col);
+        fillCircle(x + (LOGO_WIDTH / 2), y + (LOGO_WIDTH / 2) + 4 - 1, 8 - LOGO_THICKNESS, !use_fore_col);
     }
 
     void logo_a(int x, int y) {
         logo_o(x, y);
-        fillRect(x + 5, y, LOGO_WIDTH, 9, use_fore_col);
+        fillRect(x + LOGO_WIDTH - LOGO_THICKNESS + 1, y + (LOGO_WIDTH / 2) + 4 - 1, LOGO_THICKNESS, 9, use_fore_col);
     }
 
     // p
 
-    logo_o(x + 8, y);
-    fillRect(x, y, LOGO_WIDTH, 12, use_fore_col);
+    logo_o(x, y);
+    fillRect(x, y + (LOGO_WIDTH / 2) + 4 - 1, LOGO_THICKNESS, 12, use_fore_col);
 
     // x is 61
 
@@ -1737,13 +1782,15 @@ void logo(int x, int y, bool use_fore_col) {
 
 
     // a
-    logo_a(x + 8 + 3, y);
+    logo_a(x + 3, y);
     x += 3 + 16;
 
     // x is 96
 
     // l
-    fillRect(x + 4, y - 7 - 4, LOGO_WIDTH, 20, use_fore_col);
+    // fillRect(x + 4, y - 7 - 4, LOGO_THICKNESS, 20, use_fore_col);
+    fillRect(x + 4, y, LOGO_THICKNESS, 20, use_fore_col);
+
     x += 4;
 
     // x is 100
@@ -1754,7 +1801,7 @@ void logo(int x, int y, bool use_fore_col) {
 
     // a
 
-    logo_a(x + 8 + 6, y);
+    logo_a(x + 6, y);
 
     x += 6 + 16;
 
@@ -1762,11 +1809,13 @@ void logo(int x, int y, bool use_fore_col) {
 
     // v
 
-    for (int i = 0; i < LOGO_WIDTH; i++) {
+    for (int i = 0; i < LOGO_THICKNESS; i++) {
         // drawLine(O_X + V_SHIFT_X + 10 + i, LOGO_Y_CENTRE - 8, O_X + V_SHIFT_X + 16 + i, LOGO_Y_CENTRE + 8, WHITE);
-        drawLine(x + 1 + i, y - 8, x + 1 + 6 + i, y + 8, use_fore_col);
+        // drawLine(x + 1 + i, y - 8, x + 1 + 6 + i, y + 8, use_fore_col);
+        drawLine(x + 1 + i, y + 3, x + 1 + 6 + i, y + 3 + 16, use_fore_col);
         // drawLine(O_X + V_SHIFT_X + 10 + 12 + i, LOGO_Y_CENTRE - 8, O_X + V_SHIFT_X + 16 + i, LOGO_Y_CENTRE + 8, WHITE);
-        drawLine(x + 1 + 12 + i, y - 8, x + 1 + 6 + i, y + 8, use_fore_col);
+        // drawLine(x + 1 + 12 + i, y - 8, x + 1 + 6 + i, y + 8, use_fore_col);
+        drawLine(x + 1 + 12 + i, y + 3, x + 1 + 6 + i, y + 3 + 16, use_fore_col);
     }
 
     x += 1 + 12; 
@@ -1774,16 +1823,205 @@ void logo(int x, int y, bool use_fore_col) {
     // x is 135
 
     // o
-    logo_o(x + 2 + 10, y);
+    logo_o(x + 2 + 2, y);
 
 }
 
+
+
+void logo_small(int x, int y, bool use_fore_col) {
+
+    #define LOGO_SMALL_THICKNESS 2
+    #define LOGO_SMALL_WIDTH 8
+
+    #define LOGO_SMALL_DIAMETER 4
+
+
+
+    // #define LOGO_HEIGHT
+
+    // bool back_col = colour 
+
+    void logo_o(int x, int y) {
+        fillCircle(x + (LOGO_SMALL_WIDTH / 2), y + (LOGO_SMALL_WIDTH / 2) + 2 - 1, LOGO_SMALL_DIAMETER, use_fore_col);
+        fillCircle(x + (LOGO_SMALL_WIDTH / 2), y + (LOGO_SMALL_WIDTH / 2) + 2 - 1, LOGO_SMALL_DIAMETER - LOGO_SMALL_THICKNESS, !use_fore_col);
+    }
+
+    void logo_a(int x, int y) {
+        logo_o(x, y);
+        fillRect(x + LOGO_SMALL_WIDTH - LOGO_SMALL_THICKNESS + 1, y + (LOGO_SMALL_WIDTH / 2) + 2 - 1, LOGO_SMALL_THICKNESS, LOGO_SMALL_DIAMETER + 1, use_fore_col);
+    }
+
+    // p
+
+    logo_o(x, y);
+    fillRect(x, y + (LOGO_SMALL_WIDTH / 2) + 2 - 1, LOGO_SMALL_THICKNESS, LOGO_SMALL_DIAMETER + 1 + 2, use_fore_col);
+
+    // x is 61
+
+    x += 7;
+
+    // x is 77
+
+
+    // a
+    logo_a(x + 3, y);
+    x += 2 + 8;
+
+    // x is 96
+
+    // l
+    // fillRect(x + 4, y - 7 - 4, LOGO_SMALL_THICKNESS, 20, use_fore_col);
+    fillRect(x + 4, y, LOGO_SMALL_THICKNESS, LOGO_SMALL_WIDTH + 2, use_fore_col);
+
+    x += 7;
+
+    // x is 100
+
+    // t
+    // fillRect(96 + 8 + 1, 20 - 7 - 4, 4, 20, WHITE);
+    // fillRect(96 + 8 + 1 + 4, 20 - 7 , 4, 4, WHITE);
+
+    // a
+
+    logo_a(x, y);
+
+    x += 8;
+
+    // x is 122
+
+    // v
+
+    for (int i = 0; i < LOGO_SMALL_THICKNESS; i++) {
+        // drawLine(O_X + V_SHIFT_X + 10 + i, LOGO_Y_CENTRE - 8, O_X + V_SHIFT_X + 16 + i, LOGO_Y_CENTRE + 8, WHITE);
+        // drawLine(x + 1 + i, y - 8, x + 1 + 6 + i, y + 8, use_fore_col);
+        drawLine(x + 1 + i, y + 1, x + 1 + 3 + i, y + 1 + 8, use_fore_col);
+        // drawLine(O_X + V_SHIFT_X + 10 + 12 + i, LOGO_Y_CENTRE - 8, O_X + V_SHIFT_X + 16 + i, LOGO_Y_CENTRE + 8, WHITE);
+        // drawLine(x + 1 + 12 + i, y - 8, x + 1 + 6 + i, y + 8, use_fore_col);
+        drawLine(x + 1 + 6 + i, y + 1, x + 1 + 3 + i, y + 1 + 8, use_fore_col);
+    }
+
+    x += 6 - 1; 
+
+    // x is 135
+
+    // o
+    logo_o(x + 2 + 2, y);
+
+}
+
+
+
+void logo_med(int x, int y, bool use_fore_col) {
+
+    
+    #define LOGO_MED_ASC 3
+    #define LOGO_MED_DES 3
+    
+    #define LOGO_MED_THICKNESS 4
+    #define LOGO_MED_WIDTH 14
+
+    #define LOGO_MED_RADIUS 7
+
+
+
+    // #define LOGO_HEIGHT
+
+    // bool back_col = colour 
+
+    void logo_o(int x, int y) {
+        fillCircle(x + LOGO_MED_RADIUS, y + LOGO_MED_ASC + LOGO_MED_RADIUS - 1, LOGO_MED_RADIUS, use_fore_col);
+        fillCircle(x + LOGO_MED_RADIUS, y + LOGO_MED_ASC + LOGO_MED_RADIUS - 1, LOGO_MED_RADIUS - LOGO_MED_THICKNESS, !use_fore_col);
+    }
+
+    void logo_a(int x, int y) {
+        logo_o(x, y);
+        fillRect(x + LOGO_MED_WIDTH - LOGO_MED_THICKNESS + 1, y + LOGO_MED_ASC + LOGO_MED_RADIUS, LOGO_MED_THICKNESS, LOGO_MED_RADIUS, use_fore_col);
+    }
+
+    // p
+
+    logo_o(x, y);
+    fillRect(x, y + LOGO_MED_ASC + LOGO_MED_RADIUS, LOGO_MED_THICKNESS, LOGO_MED_RADIUS + LOGO_MED_DES, use_fore_col);
+
+    // x is 61
+
+    x += 7 + 7 + 3;
+
+    // x is 77
+
+
+    // a
+    logo_a(x, y);
+    x += LOGO_MED_WIDTH + 4;
+
+    // x is 96
+
+    // l
+    // fillRect(x + 4, y - 7 - 4, LOGO_MED_THICKNESS, 20, use_fore_col);
+    fillRect(x, y, LOGO_MED_THICKNESS, LOGO_MED_ASC + LOGO_MED_WIDTH, use_fore_col);
+
+    x += LOGO_MED_THICKNESS + 2;
+
+    // x is 100
+
+    // t
+    // fillRect(96 + 8 + 1, 20 - 7 - 4, 4, 20, WHITE);
+    // fillRect(96 + 8 + 1 + 4, 20 - 7 , 4, 4, WHITE);
+
+    // a
+
+    logo_a(x, y);
+
+    x += (LOGO_MED_WIDTH) + 1;
+
+    // x is 122
+
+    // v
+
+    for (int i = 0; i < LOGO_MED_THICKNESS; i++) {
+        // drawLine(O_X + V_SHIFT_X + 10 + i, LOGO_Y_CENTRE - 8, O_X + V_SHIFT_X + 16 + i, LOGO_Y_CENTRE + 8, WHITE);
+        // drawLine(x + 1 + i, y - 8, x + 1 + 6 + i, y + 8, use_fore_col);
+        drawLine(x + i, y + LOGO_MED_ASC - 1, x + 5 + i, y + LOGO_MED_ASC - 1 + (LOGO_MED_WIDTH), use_fore_col);
+        // drawLine(O_X + V_SHIFT_X + 10 + 12 + i, LOGO_Y_CENTRE - 8, O_X + V_SHIFT_X + 16 + i, LOGO_Y_CENTRE + 8, WHITE);
+        // drawLine(x + 1 + 12 + i, y - 8, x + 1 + 6 + i, y + 8, use_fore_col);
+        drawLine(x + 10 + i, y + LOGO_MED_ASC - 1, x + 5 + i, y + LOGO_MED_ASC - 1 + (LOGO_MED_WIDTH), use_fore_col);
+    }
+
+    x += 6 + 1 + 7; 
+
+    // x is 135
+
+    // o
+    logo_o(x, y);
+
+}
+
+
+
+char* name_string = "PALAVO";
 
 char* about_strings =
     "PIO Accelerated Logic Analyser with VGA Output\n"
     "Version 0.0.1\n"
     "\n"
-   "Press any key to close this window\n";
+    "Developed by Peter Stansfeld.\n"
+    "\n"
+    "\n"
+    // "Inspired by and using code from Hunter Adams's\n"
+    // "Graphics Primitives demo with Bruce Land's 4-bit mod\n"
+    // "and Raspberry Pi's Logic Analyser example for the Pico.\n";
+
+    "Inspired by and using code from:\n"
+    "\n"
+    "\x07 Raspberry Pi's Logic Analyser example for the Pico.\n"
+    "\n"
+    "\x07 Hunter Adams's Graphics Primitives demo with Bruce\n"
+    "  Land's 4-bit mod.\n";
+
+
+    // "vha3@cornell.edu\n"
+    // "4-bit mod by Bruce Land\n";
 
 void show_about_window() {
     for (int y = 0; y <= SCREEN_HEIGHT; y++) {
@@ -1793,7 +2031,8 @@ void show_about_window() {
 
     fillRect(HELP_WINDOW_LEFT, HELP_WINDOW_TOP, HELP_WINDOW_WIDTH, HELP_WINDOW_HEIGHT, LIGHT_BLUE);
 
-    logo(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + 20, false);
+    // logo(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + 20 - 11, false);
+    logo_med(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + 20 - 11, false);
 
     setTextSize(1);
     setTextColor(BLACK);
@@ -1802,10 +2041,14 @@ void show_about_window() {
     setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + 20 + 8 + 4 + 4);
     set_text_padding(HELP_WINDOW_PADDING);
     writeString(about_strings);
+    // writeString(press_any_key_string);
 
+    setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + HELP_WINDOW_HEIGHT - (2 * (FONT_HEIGHT + HELP_WINDOW_PADDING)));
+    writeString(press_any_key_string);
 
-    uart_puts(UART_ID, "\n");
+    uart_puts(UART_ID, "PALAVO\n");
     uart_puts(UART_ID, about_strings);
+    uart_puts(UART_ID, press_any_key_string);
     uart_puts(UART_ID, "\n");
 
     showing_window = true;
@@ -1820,7 +2063,9 @@ void init_line_colours() {
         
         if (((y >= TOOLBAR_TOP) && (y <= TOOLBAR_TOP + TOOLBAR_HEIGHT)) || (y >= STATUSBAR_TOP)) {
             fore_colour = WHITE;
-            back_colour = DARK_BLUE;
+            // back_colour = DARK_BLUE;
+            back_colour = BLACK;
+            
         } else {
             fore_colour = WHITE;
             back_colour = BLACK;
@@ -1841,18 +2086,18 @@ void close_window() {
 }
 
 
-char* left_rect_text =
-    // "Raspberry Pi Pico Test\n"
-    // "Graphics primitives demo\n"
-    // "Hunter Adams\n"
-    // "vha3@cornell.edu\n"
-    // "4-bit mod by Bruce Land";
+// char* left_rect_text =
+//     // "Raspberry Pi Pico Test\n"
+//     // "Graphics primitives demo\n"
+//     // "Hunter Adams\n"
+//     // "vha3@cornell.edu\n"
+//     // "4-bit mod by Bruce Land";
 
-    "PLATYPUS\n"
-    "Pico Logic Analyser\n"
-    "for Testing Your\n"
-    "PIO something something\n"
-    "Peter Stansfeld\n";
+//     "PALAVO\n"
+//     "PIO Accelerated\n"
+//     "Logic Analyser with\n"
+//     "VGA Output\n"
+//     "Peter Stansfeld\n";
 
     // "PLATYPI\n"
     // "Pico Logic Analyser\n"
@@ -1860,13 +2105,13 @@ char* left_rect_text =
     // "PIO Ideas\n"
     // "Peter Stansfeld";
 
-char* right_rect_text =
+// char* right_rect_text =
 
-    "Inspired by and using\n"
-    "Graphics primitives demo\n"
-    "Hunter Adams\n"
-    "vha3@cornell.edu\n"
-    "4-bit mod by Bruce Land\n";
+//     "Inspired by and using\n"
+//     "Graphics primitives demo\n"
+//     "Hunter Adams\n"
+//     "vha3@cornell.edu\n"
+//     "4-bit mod by Bruce Land\n";
 
 char * start_help_text = "Press h for help.\n";
 
@@ -1895,9 +2140,17 @@ int main() {
     gpio_put(LED_PIN, 1); // set LED_PIN
 
     uart_puts(UART_ID, "\n\n");
-    uart_puts(UART_ID, left_rect_text);
+    // uart_puts(UART_ID, left_rect_text);
+    // uart_puts(UART_ID, "\n");
+    // uart_puts(UART_ID, right_rect_text);
+
+    uart_puts(UART_ID, name_string);
     uart_puts(UART_ID, "\n");
-    uart_puts(UART_ID, right_rect_text);
+
+    uart_puts(UART_ID, about_strings);
+    uart_puts(UART_ID, "\n");
+    // uart_puts(UART_ID, right_rect_text);
+
 
 #ifdef SYS_CLOCK_FREQ_KHZ
     int sys_clk_freq_khz = SYS_CLOCK_FREQ_KHZ;
@@ -1957,24 +2210,49 @@ int main() {
 
 //    drawVLine(Vline_x, 300, (Vline_x>>2), color_index);
 
-    drawHLine(0, 0, 16, WHITE);
-    drawVLine(0, 0, 16, WHITE);
-//    drawVLine(2, 0, 16, WHITE);
 
-//    drawVLine(9, 0, 16, WHITE);
-//    drawVLine(11, 0, 16, WHITE);
+    #define CORNER_LEN 2
 
- //   drawVLine(637, 0, 16, WHITE);
+    drawHLine(0, 0, CORNER_LEN, WHITE);
+    drawVLine(0, 0, CORNER_LEN, WHITE);
 
-    drawHLine(0, SCREEN_HEIGHT - 1, 16, WHITE);
-    drawVLine(0, SCREEN_HEIGHT - 16, 16, WHITE);
+    drawHLine(SCREEN_WIDTH - CORNER_LEN, 0, CORNER_LEN, WHITE);
+    drawVLine(639, 0, CORNER_LEN, WHITE);
 
-    drawHLine(SCREEN_WIDTH - 16, 0, 16, WHITE);
-    drawVLine(639, 0, 16, WHITE);
+    // drawRect(0, 0, SCREEN_WIDTH, TOOLBAR_TOP + TOOLBAR_HEIGHT + 1, WHITE);
 
-    drawVLine(639, SCREEN_HEIGHT - 16, 16, WHITE);
-    drawHLine(SCREEN_WIDTH - 16, SCREEN_HEIGHT - 1, 16, WHITE);
+    // drawHLine(0, TOOLBAR_TOP + TOOLBAR_HEIGHT + 3, SCREEN_WIDTH, WHITE);
 
+
+
+
+
+    // drawHLine(10, TOOLBAR_TOP + TOOLBAR_HEIGHT, SCREEN_WIDTH - 10, WHITE);
+    // drawVLine(102, 0, TOOLBAR_TOP + TOOLBAR_HEIGHT - 1, WHITE);
+
+
+    // for (int i = 0; i < SCREEN_WIDTH - 10; i+= 3){
+    //     drawPixel(10 + i , TOOLBAR_TOP + TOOLBAR_HEIGHT, WHITE); // test all colours in first horizontal line following sync
+    // }
+
+    drawHLine(0, SCREEN_HEIGHT - 1, CORNER_LEN, WHITE);
+    drawVLine(0, SCREEN_HEIGHT - CORNER_LEN, CORNER_LEN, WHITE);
+
+    drawVLine(639, SCREEN_HEIGHT - CORNER_LEN, CORNER_LEN, WHITE);
+    drawHLine(SCREEN_WIDTH - CORNER_LEN, SCREEN_HEIGHT - 1, CORNER_LEN, WHITE);
+
+
+
+
+
+
+
+    // drawRect(0, SCREEN_HEIGHT - (STATUSBAR_HEIGHT + 3), SCREEN_WIDTH, STATUSBAR_HEIGHT + 3, WHITE);
+
+    // drawHLine(0, SCREEN_HEIGHT - (STATUSBAR_HEIGHT + 3), SCREEN_WIDTH, WHITE);
+
+    // draw_titlebar();
+    
     draw_toolbar();
 
     draw_statusbar();
@@ -1982,9 +2260,9 @@ int main() {
     // drawHLine(630, 480 - 1, 1, WHITE);
 
 
-    for (int i = 0; i < 16; i++){
-        drawPixel(16 + i , 0, i); // test all colours in first horizontal line following sync
-    }
+    // for (int i = 0; i < 16; i++){
+    //     drawPixel(16 + i , 0, i); // test all colours in first horizontal line following sync
+    // }
 
     // drawPixel(0, 0, WHITE);
 
@@ -2005,30 +2283,26 @@ int main() {
 
     // Write some text
 
-    setTextColor(WHITE) ;
-    set_text_padding(2);
-    setCursor(65, 0) ;
+    // setTextColor(WHITE) ;
+    // set_text_padding(2);
+    // setCursor(65, 0) ;
+    // logo(3, 0, true);
 
-    // writeString(left_rect_text);
+    // logo_small(180, 0, true);
 
-
-    // #define LOGO_Y_CENTRE 20
-
-
-
-    logo(66, 14, true);
+    logo_med(3, 3, true);
 
     // logo(200, 0);
 
     // logo(440, 30);
 
 
-    setCursor(435, 0);
-    writeString(right_rect_text);
+    // setCursor(435, 0);
+    // writeString(right_rect_text);
 
-    setCursor(250, 0) ;
-    setTextSize(2) ;
-    writeString("Time Elapsed:") ;
+    // setCursor(250, 0) ;
+    // setTextSize(2) ;
+    // writeString("Time Elapsed:") ;
 
 
     clear_statusbar_hint(); // set the cursor etc.
@@ -2036,14 +2310,15 @@ int main() {
     uart_puts(UART_ID, start_help_text);
 
     // Setup a 1Hz timer
-    struct repeating_timer timer;
-    add_repeating_timer_ms(-1000, repeating_timer_callback, NULL, &timer);
+    // struct repeating_timer timer;
+    // add_repeating_timer_ms(-1000, repeating_timer_callback, NULL, &timer);
 
     // Wait for the pios to get warmed up. Probably not necessary.
     sleep_ms(10);
 
     logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, g_trigger_pin_base, g_trigger_type);
 
+    calc_plot_height(g_no_of_captured_pins);
     set_plot_line_colors(g_no_of_captured_pins);
 
 
@@ -2062,16 +2337,17 @@ int main() {
         }
 
         // Timing text
-        if (time_accum != time_accum_old) {
-            setTextColor(WHITE) ;
-            time_accum_old = time_accum ;
-            fillRect(250, 20, 176, 30, MIDDLE_BOX_COLOR); // red box
-            sprintf(timetext, "%d", time_accum) ;
-            setCursor(250, 20) ;
-            setTextSize(2) ;
-            writeString(timetext) ;
-            // gpio_xor_mask(1 << LED_PIN);
-        }
+        
+        // if (time_accum != time_accum_old) {
+        //     setTextColor(WHITE) ;
+        //     time_accum_old = time_accum ;
+        //     fillRect(250, 20, 176, 30, MIDDLE_BOX_COLOR); // red box
+        //     sprintf(timetext, "%d", time_accum) ;
+        //     setCursor(250, 20) ;
+        //     setTextSize(2) ;
+        //     writeString(timetext) ;
+        //     // gpio_xor_mask(1 << LED_PIN);
+        // }
 
         uint ui_command = check_keyboard();
 
@@ -2177,13 +2453,16 @@ int main() {
 
                     case UIC_C:
                         writeString("capture");
-                        fillRect(0, PLOT_TOP, SCREEN_WIDTH, MINIMAP_BOTTOM - PLOT_TOP, BLACK);
+                        // fillRect(0, PLOT_TOP, SCREEN_WIDTH, MINIMAP_BOTTOM - PLOT_TOP, BLACK);
 
                         logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency);
 
                         if (!logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, g_trigger_pin_base, g_trigger_type)) {
                             writeString(" - failed to trigger");
                         }
+
+                        fillRect(0, PLOT_TOP, SCREEN_WIDTH, MINIMAP_BOTTOM - PLOT_TOP, BLACK);
+
 
                         // each bit on a uart travels at 115200 bits per second
                         // the clock goes at 125,000,000 hz (I think)
@@ -2225,6 +2504,8 @@ int main() {
                         // plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
 
                         set_scroll_x(0);
+
+                        calc_plot_height(g_no_of_captured_pins);
 
                         set_plot_line_colors(g_no_of_captured_pins);
 
@@ -2281,7 +2562,7 @@ int main() {
                                 break;
 
                             case SS_NO_OF_PINS:
-                                set_no_of_pins(MIN(g_no_of_pins_to_capture + 1, 8));
+                                set_no_of_pins(MIN(g_no_of_pins_to_capture + 1, MAX_NO_OF_CHANNELS));
                                 break;
 
                             case SS_PINS_BASE:
