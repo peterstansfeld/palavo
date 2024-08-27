@@ -71,11 +71,20 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
 
-const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
-const uint CAPTURE_PIN_COUNT = 4;
-const uint CAPTURE_TRIGGER_PIN = VSYNC; // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
-const uint CAPTURE_N_SAMPLES = SCREEN_WIDTH * 96; // enough for 48 screen width's worth of data
-const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 1 * 5 * 1; /*271.267*/ // was 5 * 4
+// const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
+#define CAPTURE_PIN_BASE HSYNC2 // 16 = hsync, 17 = vsync // 22 = hsync2
+
+// const uint CAPTURE_PIN_COUNT = 4;
+#define CAPTURE_PIN_COUNT 4
+
+// const uint CAPTURE_TRIGGER_PIN = VSYNC; // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
+#define CAPTURE_TRIGGER_PIN VSYNC // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
+
+// const uint CAPTURE_N_SAMPLES = SCREEN_WIDTH * 96; // enough for 48 screen width's worth of data
+#define CAPTURE_N_SAMPLES SCREEN_WIDTH * 96 // enough for 48 screen width's worth of data
+
+// const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 1 * 5 * 1; /*271.267*/ // was 5 * 4
+#define CAPTURE_SAMPLE_FREQ_DIVISOR 1 * 5 * 1    /*271.267*/ // was 5 * 4
 
 uint g_sample_frequency = CAPTURE_SAMPLE_FREQ_DIVISOR;
 uint8_t g_no_of_captured_pins = CAPTURE_PIN_COUNT;
@@ -92,6 +101,25 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 
 uint8_t g_trigger_type = TT_VGA_RGB;
 
+/*
+    // uint total_sample_bits = g_capture_n_samples * g_no_of_captured_pins;
+    // total_sample_bits += bits_packed_per_word(g_no_of_captured_pins) - 1;
+
+    // uint buf_size_words = total_sample_bits / bits_packed_per_word(g_no_of_captured_pins);
+    // uint32_t *capture_buf = malloc(buf_size_words * sizeof(uint32_t));
+
+#define TOTAL_SAMPLE_BITS CAPTURE_N_SAMPLES * CAPTURE_PIN_COUNT + (32 - (32 % CAPTURE_PIN_COUNT) - 1)
+// #define BUF_SIZE_WORDS TOTAL_SAMPLE_BITS / bits_packed_per_word(CAPTURE_PIN_COUNT)
+
+#define BUF_SIZE_WORDS TOTAL_SAMPLE_BITS / (32 - (32 % CAPTURE_PIN_COUNT))
+
+
+uint32_t new_capture_buf[];
+
+    // hard_assert(capture_buf);
+
+
+*/
 static inline uint bits_packed_per_word(uint pin_count) {
     // If the number of pins to be sampled divides the shift register size, we
     // can use the full SR and FIFO width, and push when the input shift count
@@ -756,6 +784,10 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                                 }
                             }
 
+                            // if (cursor_x <= last_x) {
+                            //     cursor_x = last_x + 1;
+                            // }
+
                             if (cursor_x - str_width < SCREEN_WIDTH) {
                                 setCursor(cursor_x, y + (trace_height / 2) - (FONT_HEIGHT / 2));
                                 writeString(str);
@@ -847,12 +879,32 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
             sprintf(str,"%d", i - last_i);
             int str_width = strlen(str) * FONT_WIDTH;
+
+/*
+            if (str_width < (x - last_x)) {
+                // the string fits between the two edges
+                cursor_x = last_x + ((x - last_x - str_width) / 2) + 1;
+
+                if (cursor_x < 0) {
+                    cursor_x = 0;
+                    if (cursor_x + str_width >= x) {
+                        cursor_x = x - str_width;
+                    }
+                }
+
+                if (cursor_x - str_width < SCREEN_WIDTH) {
+                    setCursor(cursor_x, y + (trace_height / 2) - (FONT_HEIGHT / 2));
+                    writeString(str);
+                }
+            }
+*/
+
             if (str_width < (x - last_x)) {
 
                 cursor_x = last_x + ((x - last_x - str_width) / 2) + 1;
                 if (cursor_x + str_width >= SCREEN_WIDTH) {
                     // some of the string is off screen and to the right
-                    cursor_x = last_x + 3;
+                    cursor_x = last_x + 2;
                     if (cursor_x + str_width < SCREEN_WIDTH) {
                         cursor_x = SCREEN_WIDTH - str_width - 1;
                     }
@@ -860,6 +912,9 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                 } else if (cursor_x < 0) {
                     cursor_x = 0;
                 }
+                // else if (cursor_x <= last_x) {
+                //     cursor_x = last_x + 1;
+                // } 
                 setCursor(cursor_x, y + (trace_height / 2) - (FONT_HEIGHT / 2));
                 writeString(str);
             }
@@ -1742,7 +1797,7 @@ void show_help_window() {
     setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + HELP_WINDOW_HEIGHT - (2 * (FONT_HEIGHT + HELP_WINDOW_PADDING)));
     writeString(press_any_key_string);
 
-    uart_puts(UART_ID, "\n");
+    uart_puts(UART_ID, "\nHELP\n\n");
     uart_puts(UART_ID, help_strings);
     uart_puts(UART_ID, press_any_key_string);
     uart_puts(UART_ID, "\n");
@@ -2014,9 +2069,9 @@ char* about_strings =
 
     "Inspired by and using code from:\n"
     "\n"
-    "\x07 Raspberry Pi's Logic Analyser example for the Pico.\n"
+    "* Raspberry Pi's Logic Analyser example for the Pico.\n"
     "\n"
-    "\x07 Hunter Adams's Graphics Primitives demo with Bruce\n"
+    "* Hunter Adams's Graphics Primitives demo with Bruce\n"
     "  Land's 4-bit mod.\n";
 
 
@@ -2046,7 +2101,7 @@ void show_about_window() {
     setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + HELP_WINDOW_HEIGHT - (2 * (FONT_HEIGHT + HELP_WINDOW_PADDING)));
     writeString(press_any_key_string);
 
-    uart_puts(UART_ID, "PALAVO\n");
+    uart_puts(UART_ID, "\nABOUT\n\nPALAVO\n");
     uart_puts(UART_ID, about_strings);
     uart_puts(UART_ID, press_any_key_string);
     uart_puts(UART_ID, "\n");
@@ -2640,11 +2695,11 @@ int main() {
             }
 
             if (plot_required) {
-                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, true);
+                plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, true);
             }
 
             if (mini_map_redraw_required){
-                plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
+                plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
             }
 
 
