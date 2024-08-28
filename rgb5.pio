@@ -205,6 +205,19 @@ static inline void rgb5_program_init(PIO pio, uint sm, uint offset, uint pin) {
     // Set clock division (Commented out, this one runs at full speed)
     // sm_config_set_clkdiv(&c, 5) ;
 
+
+    #if SYS_CLK_KHZ != 125000u
+ 
+    // Set PIO clock frequency to 125 MHz if posssible
+    float div = (float)clock_get_hz(clk_sys) / 125000000;
+    sm_config_set_clkdiv(&c, div);
+    // The result with SYS_CLK_KHZ==150000000u, i.e the default for the rp2350, is flickery VGA output,
+    // which is not surprising as 150/125 = 1.2, ie not a whole number.
+
+    #warning SYS_CLK is not 125 MHz and will probably result in some flickery VGA output
+    #warning try adding 'add_compile_definitions(SYS_CLK_KHZ=125000u)' to CMakeLists.txt
+    #endif
+
     // shift OSR to the right, enable autopull, and set the pull threshold set to 32
     sm_config_set_out_shift(&c, true, true, 32);
 

@@ -35,6 +35,8 @@
 #include "hardware/pio.h"
 #include "hardware/dma.h"
 
+#include "hardware/clocks.h"
+
 // Header file - move this to before the *.pio.h files so that they can access
 // SYS_CLOCK_FREQ_KHZ
 

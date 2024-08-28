@@ -1,5 +1,13 @@
-# add_compile_definitions(SYS_CLOCK_FREQ_KHZ=250000u)
-# add_compile_definitions(SYS_CLOCK_FREQ_KHZ=125000u)
+cmake_minimum_required(VERSION 3.13)
+
+add_compile_definitions(SYS_CLK_KHZ=125000u)
+
+include(pico_sdk_import.cmake)
+
+project(test_project C CXX ASM)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
+pico_sdk_init()
 
 add_executable(graphics_test)
 
@@ -21,7 +29,7 @@ pico_generate_pio_header(graphics_test ${CMAKE_CURRENT_LIST_DIR}/rgb5.pio)
 target_sources(graphics_test PRIVATE vga_graphics_demo.c vga16_graphics.c)
 
 # must match with executable name
-target_link_libraries(graphics_test PRIVATE pico_stdlib hardware_pio hardware_dma hardware_adc hardware_irq hardware_uart)
+target_link_libraries(graphics_test PRIVATE pico_stdlib hardware_pio hardware_dma hardware_adc hardware_irq hardware_uart hardware_clocks)
 
 # must match with executable name
 pico_add_extra_outputs(graphics_test)

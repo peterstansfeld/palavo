@@ -2175,11 +2175,6 @@ int main() {
 
     // Initialize stdio
     
-    // set sys clock freq to 250 MHz
-    #ifdef SYS_CLOCK_FREQ_KHZ 
-    set_sys_clock_khz(SYS_CLOCK_FREQ_KHZ, true);
-    #endif
-
     stdio_init_all();
 
     uart_init(UART_ID, BAUD_RATE);

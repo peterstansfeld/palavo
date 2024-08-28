@@ -101,12 +101,11 @@ static inline void hsync5_program_init(PIO pio, uint sm, uint offset, uint pin) 
     // parameter of this function.
     sm_config_set_out_pins(&c, pin, 2);
 
-    // Set clock division (div by 20 for 25 MHz state machine, if sys clock is 125 MHz)
-#if SYS_CLOCK_FREQ_KHZ == 250000u
-    sm_config_set_clkdiv(&c, 5 * 4 * 2);
-#else
-    sm_config_set_clkdiv(&c, 5 * 4 * 1);
-#endif
+    // Set PIO clock frequency to 25 MHz / 4 = 6,250 kHz
+    // At either 125 MHz for the rp2040 or 150 MHz for the rp235x the clock divisor
+    // is a whole number, ie either 20 or 24
+    float div = (float)clock_get_hz(clk_sys) / (25000000 / 4);
+    sm_config_set_clkdiv(&c, div);
 
     // Set this pin's GPIO function (connect PIO to the pad)
     pio_gpio_init(pio, pin);
