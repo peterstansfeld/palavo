@@ -72,19 +72,19 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 #define SCREEN_HEIGHT 480
 
 // const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
-#define CAPTURE_PIN_BASE HSYNC2 // 16 = hsync, 17 = vsync // 22 = hsync2
+#define CAPTURE_PIN_BASE HSYNC // 16 = hsync, 17 = vsync // 22 = hsync2
 
 // const uint CAPTURE_PIN_COUNT = 4;
 #define CAPTURE_PIN_COUNT 4
 
 // const uint CAPTURE_TRIGGER_PIN = VSYNC; // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
-#define CAPTURE_TRIGGER_PIN VSYNC // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
+#define CAPTURE_TRIGGER_PIN_BASE HSYNC // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
 
 // const uint CAPTURE_N_SAMPLES = SCREEN_WIDTH * 96; // enough for 48 screen width's worth of data
 #define CAPTURE_N_SAMPLES SCREEN_WIDTH * 96 // enough for 48 screen width's worth of data
 
-// const uint CAPTURE_SAMPLE_FREQ_DIVISOR = 1 * 5 * 1; /*271.267*/ // was 5 * 4
-#define CAPTURE_SAMPLE_FREQ_DIVISOR 1 * 5 * 1    /*271.267*/ // was 5 * 4
+//set the default sample rate to the pixel clock rate of 25 MHz
+#define CAPTURE_SAMPLE_FREQ_DIVISOR (SYS_CLK_KHZ / 25000u)
 
 uint g_sample_frequency = CAPTURE_SAMPLE_FREQ_DIVISOR;
 uint8_t g_no_of_captured_pins = CAPTURE_PIN_COUNT;
@@ -93,7 +93,7 @@ uint g_capture_n_samples = CAPTURE_N_SAMPLES;
 
 uint8_t g_no_of_pins_to_capture = CAPTURE_PIN_COUNT;
 
-uint8_t g_trigger_pin_base = CAPTURE_PIN_BASE;
+uint8_t g_trigger_pin_base = CAPTURE_TRIGGER_PIN_BASE;
 
 enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_VSYNC, TT_VGA_RGB, TT_VGA_VFRONT_PORCH, TT_COUNT};
 

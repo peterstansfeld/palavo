@@ -350,9 +350,11 @@ void initVGA() {
     uint hsync5_sm = 0;
     uint rgb5_sm = 1;
 
-#if SYS_CLOCK_FREQ_KHZ == 125000u
+#if SYS_CLK_KHZ == 125000u
     uint rgb5_offset = pio_add_program(pio_2, &rgb5_program);
-#elif SYS_CLOCK_FREQ_KHZ == 250000u
+#elif SYS_CLK_KHZ == 150000u
+    uint rgb5_offset = pio_add_program(pio_2, &rgb5_150_mhz_program);
+#elif SYS_CLK_KHZ == 250000u
     uint rgb5_offset = pio_add_program(pio_2, &rgb5_250_mhz_program);
 #endif
 
@@ -419,16 +421,33 @@ void initVGA() {
     #elif VGA_USE_PIO_PROG == 5
       hsync5_program_init(pio_2, hsync5_sm, hsync5_offset, HSYNC);
 
-#if SYS_CLOCK_FREQ_KHZ == 125000u
+#if SYS_CLK_KHZ == 125000u
       rgb5_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN);
-#elif SYS_CLOCK_FREQ_KHZ == 250000u
-      rgb5_250_mhz_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN);
+#elif SYS_CLK_KHZ == 150000u
+      rgb5_150_mhz_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN);
+#elif SYS_CLK_KHZ == 250000u
+      rgb5_250_mhz_program_init(pio_2, rgb5_250_mhz_sm, rgb5_offset, LO_GRN);
 #endif
 
     #endif
 
 
 #endif
+
+
+#ifdef PICO_PLATFORM
+
+#else
+    #warning no PICO_PLATFORM defined
+#endif
+
+#ifdef PICO_BOARD
+
+#else
+    #warning no PICO_BOARD defined
+#endif
+
+
 
 
     // hsync3_program_init(pio_2, hsync3_sm, hsync3_offset, HI_GRN2);
