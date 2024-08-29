@@ -192,6 +192,49 @@ get_bit:
 ;#endif
 
 
+; Program name
+.program rgb5_150_mhz_rp235x
+;.side_set 1 ;opt
+.origin 0                           ; we modify the PC, which needs absolute addresses
+
+.define DELAY_LOOPS 6
+.define SET_DELAY_LOOPS_DELAY 22
+.define DELAY_LOOP_DELAY 29
+.define GET_BIT_DELAY 1
+.define BLANK_DELAY 3
+
+jmp_table_0:
+    jmp set_rgb_pins                ; can't use wrap
+
+jmp_table_1:
+    in null, 4                      ; shift the ISR 4 places to the right
+
+set_rgb_pins:
+    mov pins, isr                   ; put the 4 colour bits on the colour pins
+
+test_end_of_line:
+    jmp x-- get_bit
+; X is zero, which means we've out'ed all 640 1-bit values from the TX FIFO
+
+
+public start:
+    out x, 16 [BLANK_DELAY]         ; load x with 639 repeats (640 loops) and wait for the last pixel
+    set pins, 0                     ; blank the colour pins
+
+    wait 1 irq 5 [0]                ; wait for vsync active mode
+
+    set y, DELAY_LOOPS [SET_DELAY_LOOPS_DELAY]    ; load a delay counter
+delay_loop:
+    jmp y-- delay_loop [DELAY_LOOP_DELAY]         ; delay, delay, delay
+
+get_colours:
+    out y, 16                       ; save the 2 or 4, 4-bit colours for this line
+
+get_bit:
+    mov isr, y                      ; put the 4-bit colours in the ISR
+    out PC, 1 [GET_BIT_DELAY]       ; jump to the address stored in bit 0 of the OSR, ie jmp_table_0 or jmp_table_1
+
+
 .program rgb5_250_mhz
 ;.side_set 1 ;opt
 .origin 0                           ; we modify the PC, which needs absolute addresses
@@ -376,6 +419,52 @@ static inline void rgb5_150_mhz_program_init(PIO pio, uint sm, uint offset, uint
     // Set the state machine running (commented out, I'll start this in the C)
     // pio_sm_set_enabled(pio, sm, true);
 }
+
+
+static inline void rgb5_150_mhz_rp235x_program_init(PIO pio, uint sm, uint offset, uint pin) {
+
+    // creates state machine configuration object c, sets
+    // to default configurations. I believe this function is auto-generated
+    // and gets a name of <program name>_program_get_default_config
+    // Yes, page 40 of SDK guide
+    pio_sm_config c = rgb5_150_mhz_rp235x_program_get_default_config(offset);
+
+    // Map the state machine's SET and OUT pin group to three pins, the `pin`
+    // parameter to this function is the lowest one. These groups overlap.
+    sm_config_set_set_pins(&c, pin, 4);
+    sm_config_set_out_pins(&c, pin, 4);
+
+    // Set clock division (Commented out, this one runs at full speed)
+    // sm_config_set_clkdiv(&c, 5) ;
+
+    // Set PIO clock frequency to 150 MHz
+    // float div = (float)clock_get_hz(clk_sys) / 150000000;
+    // sm_config_set_clkdiv(&c, div);
+
+    // shift OSR to the right, enable autopull, and set the pull threshold set to 32
+    sm_config_set_out_shift(&c, true, true, 32);
+
+    // shift ISR to the right, disable autopush, and set the push threshold set to 32
+    sm_config_set_in_shift(&c, true, false, 32);
+
+    // Set this pin's GPIO function (connect PIO to the pad)
+    pio_gpio_init(pio, pin);
+    pio_gpio_init(pio, pin+1);
+    pio_gpio_init(pio, pin+2);
+    pio_gpio_init(pio, pin+3);
+
+    // Set the pin direction to output at the PIO (3 pins)
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 4, true);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset + rgb5_offset_start, &c);
+
+    // pio_sm_exec(pio_encode_mov(enum pio_src_dest dest, enum pio_src_dest src))
+
+    // Set the state machine running (commented out, I'll start this in the C)
+    // pio_sm_set_enabled(pio, sm, true);
+}
+
 
 #elif SYS_CLK_KHZ == 250000u
 
