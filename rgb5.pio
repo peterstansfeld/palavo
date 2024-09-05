@@ -197,6 +197,12 @@ get_bit:
 ;.side_set 1 ;opt
 .origin 0                           ; we modify the PC, which needs absolute addresses
 
+; can't get the rxfifo working with auto-pull enabled
+; presumably because a mov osr, rxfifo[?] overrides whatever was in osr
+; and does who knows what to the auto-pull logic 
+
+; .fifo putget                        ; enable the rxfifo for get and put usage (4 scratch)
+
 .define DELAY_LOOPS 6
 .define SET_DELAY_LOOPS_DELAY 22
 .define DELAY_LOOP_DELAY 29

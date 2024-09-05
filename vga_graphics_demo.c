@@ -19,7 +19,7 @@
  */
 
 // VGA graphics library
-#include "vga16_graphics.h"
+#include "vga2_graphics.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include "pico/stdlib.h"

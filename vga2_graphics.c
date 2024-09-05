@@ -40,7 +40,7 @@
 // Header file - move this to before the *.pio.h files so that they can access
 // SYS_CLOCK_FREQ_KHZ
 
-#include "vga16_graphics.h"
+#include "vga2_graphics.h"
 
 // #include "hardware/irq.h"
 
