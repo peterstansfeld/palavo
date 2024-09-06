@@ -1,13 +1,8 @@
-
-#define SPEED_UP_GRAPHICS
-
 // VGA_USE_PIO_PROG defines which VGA driver should be used to drive the VGA port
 
 // If it's 1 Hunter Adams' VGA driver is used on HSYNC, VSYNC, LO_GRN, etc.
 // otherwise its output will be on HSYNC2, VSYNC2, LO_GRN2, etc. and another
 // VGA driver will be used on HSYNC, VSYNC, LO_GRN, etc.
-
-#define VGA_USE_PIO_PROG 5
 
 // #define SYS_CLOCK_FREQ_KHZ 125000u
 
@@ -15,19 +10,6 @@
 
 // VGA_TEST_PIO_PROG defines which VGA driver should be used to drive the VGA
 // test pins on HSYNC2, VSYNC2, LO_GRN2, etc.
-
-#define VGA_TEST_PIO_PROG 1
-
-
-#if (VGA_USE_PIO_PROG != 1) && (VGA_TEST_PIO_PROG != 1) 
-
-    #error Either VGA_USE_PIO_PROG or VGA_TEST_PIO_PROG must be 1.
-
-#elif (VGA_USE_PIO_PROG == 1) && (VGA_TEST_PIO_PROG == 1)
-
-    #error VGA_USE_PIO_PROG and VGA_TEST_PIO_PROG cannot both be 1.
-
-#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,27 +28,6 @@
 
 // Our assembled programs:
 // Each gets the name <pio_filename.pio.h>
-#include "hsync.pio.h"
-#include "vsync.pio.h"
-#include "rgb.pio.h"
-
-#if (VGA_USE_PIO_PROG == 2) || (VGA_TEST_PIO_PROG == 2)
-
-#include "hsync2.pio.h"
-#include "vsync2.pio.h"
-#include "rgb2.pio.h"
-
-#elif (VGA_USE_PIO_PROG == 3) || (VGA_TEST_PIO_PROG == 3)
-
-#include "hsync3.pio.h"
-#include "rgb3.pio.h"
-
-#elif (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
-
-#include "hsync4.pio.h"
-#include "rgb4.pio.h"
-
-#elif (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
 
 #include "hsync5.pio.h"
 #include "rgb5.pio.h"
@@ -90,58 +51,28 @@
 
 #endif
 
-#endif
 
 // Font file
 #include "glcdfont.c"
 #include "font_rom_brl4.h"
 
-#ifdef SPEED_UP_GRAPHICS
 
 #include <string.h>
 
-#endif
-
-// VGA timing constants
-#define H_ACTIVE   655    // (active + frontporch - 1) - one cycle delay for mov
-#define V_ACTIVE   479    // (active - 1)
-#define RGB_ACTIVE 319    // (horizontal active)/2 - 1
 // #define RGB_ACTIVE 639 // change to this if 1 pixel/byte
 
 // Screen width/height
 #define _width 640
 
 
-#if VGA_USE_PIO_PROG == 5
 
-#ifdef USE_4_BIT_RGB5_PIO
-
-#define _height 120
-
-#else
-
-// #define _height 240
-#define _height 48
-
-#endif
-
-#else
-
-#define _height 480
-
-#endif
 
 
 // Length of the pixel array, and number of DMA transfers
-#define TXCOUNT (_width * _height) / 2 // Total pixels/2 (since we have 2 pixels per byte)
 
 // Pixel color array that is DMA's to the PIO machines and
 // a pointer to the ADDRESS of this color array.
 // Note that this array is automatically initialized to all 0's (black)
-unsigned char vga_data_array[TXCOUNT];
-char * address_pointer = &vga_data_array[0] ;
-
-#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4) || (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
 
 // #define SYNC_BUFFER_COUNT 14
 #define SYNC_BUFFER_COUNT 8
@@ -157,42 +88,16 @@ uint32_t sync_buffer [SYNC_BUFFER_COUNT] __attribute__ ((aligned(SYNC_BUFFER_COU
 
 uint32_t * sync_buffer_address_pointer = &sync_buffer[0] ;
 
-#if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
-
  // (16 bits (639) + 16 bits (2, 4-bit colors) + (20 * 32 = 640 bits)
 
-
-#ifdef USE_4_BIT_RGB5_PIO
-
-#define WORDS_PER_LINE (1 + (20 * 2))
-
-#else
-
 #define WORDS_PER_LINE (1 + 20)
-
-#endif
 
 // any more than 48 and we get a weird vertical scrolling side-effet
 // suggest that this is ram overflow 
 
 
-#if VGA_USE_PIO_PROG == 5
-
 #define NO_OF_LINES 480
 
-#else
-
-#ifdef USE_4_BIT_RGB5_PIO
-
-#define NO_OF_LINES 24
-
-#else
-
-#define NO_OF_LINES 48
-
-#endif
-
-#endif
 
 
 #define TXCOUNT_2 WORDS_PER_LINE * NO_OF_LINES
@@ -207,14 +112,6 @@ uint32_t * address_pointer_2 = &vga_1bit_data_array[0] ;
 
 // vga_1bit_data_array[1] = 0xff00ff; //0b10101010110011001111000011111111;
 
-
-#endif
-
-#endif
-
-// Bit masks for drawPixel routine
-#define TOPMASK 0b00001111
-#define BOTTOMMASK 0b11110000
 
 // For drawLine
 #define swap(a, b) { short t = a; a = b; b = t; }
@@ -233,8 +130,6 @@ uint16_t str_cursor_x;
 
 
 #define LED_PIN PICO_DEFAULT_LED_PIN
-
-#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4) || (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
 
 static int sync_test_chan_0 = 0;
 
@@ -272,8 +167,6 @@ void __not_in_flash_func(dma_handler)() {
 
 }
 
-#endif
-
 
 void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour, uint8_t colour_2, uint8_t colour_3) {
     if ((line < 0) || (line >= NO_OF_LINES)) 
@@ -283,8 +176,6 @@ void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour, ui
 
 void initVGA() {
         // Choose which PIO instance to use (there are two instances, each with 4 state machines)
-    PIO pio = pio0;
-
     PIO pio_2 = pio1;
 
 
@@ -298,9 +189,6 @@ void initVGA() {
     //
     // The program name comes from the .program part of the pio file
     // and is of the form <program name_program>
-    uint hsync_offset = pio_add_program(pio, &hsync_program);
-    uint vsync_offset = pio_add_program(pio, &vsync_program);
-    uint rgb_offset = pio_add_program(pio, &rgb_program);
 
     // uint hsync2_offset = pio_add_program(pio_2, &hsync2_program);
     // uint vsync2_offset = pio_add_program(pio_2, &vsync2_program);
@@ -308,9 +196,6 @@ void initVGA() {
     // uint hsync3_offset = pio_add_program(pio_2, &hsync3_program);
 
     // Manually select a few state machines from pio instance pio0.
-    uint hsync_sm = 0;
-    uint vsync_sm = 1;
-    uint rgb_sm = 2;
 
     // uint hsync2_sm = 0;
     // uint vsync2_sm = 1;
@@ -319,34 +204,6 @@ void initVGA() {
 
     // Manually select a couple of state machines from pio instance pio1
 
-#if (VGA_USE_PIO_PROG == 2) || (VGA_TEST_PIO_PROG == 2)
-
-    uint hsync2_offset = pio_add_program(pio_2, &hsync2_program);
-    uint vsync2_offset = pio_add_program(pio_2, &vsync2_program);
-    uint rgb2_offset = pio_add_program(pio_2, &rgb2_program);
-
-    uint hsync2_sm = 0;
-    uint vsync2_sm = 1;
-    uint rgb2_sm = 2;
-    
-#elif (VGA_USE_PIO_PROG == 3) || (VGA_TEST_PIO_PROG == 3)
-    
-    uint hsync3_sm = 0;
-    uint rgb3_sm = 1;
-
-    uint rgb3_offset = pio_add_program(pio_2, &rgb3_program);
-    uint hsync3_offset = pio_add_program(pio_2, &hsync3_program);
-
-#elif (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
-    
-    uint hsync4_sm = 0;
-    uint rgb4_sm = 1;
-
-    uint rgb4_offset = pio_add_program(pio_2, &rgb4_program);
-    uint hsync4_offset = pio_add_program(pio_2, &hsync4_program);
-
-#elif (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
-    
     uint hsync5_sm = 0;
     uint rgb5_sm = 1;
 
@@ -361,81 +218,21 @@ void initVGA() {
 
     uint hsync5_offset = pio_add_program(pio_2, &hsync5_program);
 
-
-
-#endif
-    
     // Call the initialization functions that are defined within each PIO file.
     // Why not create these programs here? By putting the initialization function in
     // the pio file, then all information about how to use/setup that state machine
     // is consolidated in one place. Here in the C, we then just import and use it.
     
-#if VGA_USE_PIO_PROG == 1
-    
-    hsync_program_init(pio, hsync_sm, hsync_offset, HSYNC);
-    vsync_program_init(pio, vsync_sm, vsync_offset, VSYNC);
-    rgb_program_init(pio, rgb_sm, rgb_offset, LO_GRN);
-
-    #if VGA_TEST_PIO_PROG == 2
-
-        hsync2_program_init(pio_2, hsync2_sm, hsync2_offset, HSYNC2);
-        vsync2_program_init(pio_2, vsync2_sm, vsync2_offset, VSYNC2);
-        rgb2_program_init(pio_2, rgb2_sm, rgb2_offset, LO_GRN2);
-
-    #elif VGA_TEST_PIO_PROG == 3
-    
-        hsync3_program_init(pio_2, hsync3_sm, hsync3_offset, HSYNC2, VSYNC2); // this has to be the first (not true, it must have .org 0)
-        rgb3_program_init(pio_2, rgb3_sm, rgb3_offset, LO_GRN2 /*, HI_GRN2*/); // 
-
-    #elif VGA_TEST_PIO_PROG == 4
-
-        hsync4_program_init(pio_2, hsync4_sm, hsync4_offset, HSYNC2); //
-        rgb4_program_init(pio_2, rgb4_sm, rgb4_offset, LO_GRN2); // 
-
-    #elif VGA_TEST_PIO_PROG == 5
-
-        hsync5_program_init(pio_2, hsync5_sm, hsync5_offset, HSYNC2); //
-        rgb5_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN2); // 
-
-    #endif
-
-#else
-    // VGA_USE_PIO_PROG != 1, output it on test pins HSYNC2, HSYNC2, VSYNC2 & LO_GRN2 etc.
-    hsync_program_init(pio, hsync_sm, hsync_offset, HSYNC2);
-    vsync_program_init(pio, vsync_sm, vsync_offset, VSYNC2);
-    rgb_program_init(pio, rgb_sm, rgb_offset, LO_GRN2);
-
-    // and use other pio programs to drive the VGA monitor
-    #if VGA_USE_PIO_PROG == 2
-      hsync2_program_init(pio_2, hsync2_sm, hsync2_offset, HSYNC);
-      vsync2_program_init(pio_2, vsync2_sm, vsync2_offset, VSYNC);
-      rgb2_program_init(pio_2, rgb2_sm, rgb2_offset, LO_GRN);
-    
-    #elif VGA_USE_PIO_PROG == 3
-      hsync3_program_init(pio_2, hsync3_sm, hsync3_offset, HSYNC, VSYNC);
-      rgb3_program_init(pio_2, rgb3_sm, rgb3_offset, LO_GRN);
-
-    #elif VGA_USE_PIO_PROG == 4
-      hsync4_program_init(pio_2, hsync4_sm, hsync4_offset, HSYNC);
-      rgb4_program_init(pio_2, rgb4_sm, rgb4_offset, LO_GRN);
-
-    #elif VGA_USE_PIO_PROG == 5
-      hsync5_program_init(pio_2, hsync5_sm, hsync5_offset, HSYNC);
+      hsync5_program_init(pio_2, hsync5_sm, hsync5_offset, HSYNC2);
 
 #if SYS_CLK_KHZ == 125000u
       rgb5_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN);
 #elif SYS_CLK_KHZ == 150000u
     //   rgb5_150_mhz_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN);
-      rgb5_150_mhz_rp235x_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN);
+      rgb5_150_mhz_rp235x_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN2);
 #elif SYS_CLK_KHZ == 250000u
       rgb5_250_mhz_program_init(pio_2, rgb5_250_mhz_sm, rgb5_offset, LO_GRN);
 #endif
-
-    #endif
-
-
-#endif
-
 
 #ifdef PICO_PLATFORM
 
@@ -460,42 +257,9 @@ void initVGA() {
     /////////////////////////////////////////////////////////////////////////////////////////////////////
 
     // DMA channels - 0 sends color data, 1 reconfigures and restarts 0
-    int rgb_chan_0 = dma_claim_unused_channel(true);
-    int rgb_chan_1 = dma_claim_unused_channel(true);
 
-    // Channel Zero (sends color data to PIO VGA machine)
-    dma_channel_config c0 = dma_channel_get_default_config(rgb_chan_0);  // default configs
-    channel_config_set_transfer_data_size(&c0, DMA_SIZE_8);              // 8-bit txfers
-    channel_config_set_read_increment(&c0, true);                        // yes read incrementing
-    channel_config_set_write_increment(&c0, false);                      // no write incrementing
-    channel_config_set_dreq(&c0, DREQ_PIO0_TX2) ;                        // DREQ_PIO0_TX2 pacing (FIFO)
-    channel_config_set_chain_to(&c0, rgb_chan_1);                        // chain to other channel
-
-     dma_channel_configure(
-        rgb_chan_0,                 // Channel to be configured
-        &c0,                        // The configuration we just created
-        &pio->txf[rgb_sm],          // write address (RGB PIO TX FIFO)
-        &vga_data_array,            // The initial read address (pixel color array)
-        TXCOUNT,                    // Number of transfers; in this case each is 1 byte.
-        false                       // Don't start immediately.
-    );
-
-    // Channel One (reconfigures the first channel)
-    dma_channel_config c1 = dma_channel_get_default_config(rgb_chan_1);   // default configs
-    channel_config_set_transfer_data_size(&c1, DMA_SIZE_32);              // 32-bit txfers
-    channel_config_set_read_increment(&c1, false);                        // no read incrementing
-    channel_config_set_write_increment(&c1, false);                       // no write incrementing
-    channel_config_set_chain_to(&c1, rgb_chan_0);                         // chain to other channel
-
-    dma_channel_configure(
-        rgb_chan_1,                         // Channel to be configured
-        &c1,                                // The configuration we just created
-        &dma_hw->ch[rgb_chan_0].read_addr,  // Write address (channel 0 read address)
-        &address_pointer,                   // Read address (POINTER TO AN ADDRESS)
-        1,                                  // Number of transfers, in this case each is 4 byte
-        false                               // Don't start immediately.
-    );
-
+    dma_channel_config c0;
+    dma_channel_config c1;
 
     // More DMA channels - test ones - 0 sends color data, 1 reconfigures and restarts 0
     int rgb_test_chan_0 = dma_claim_unused_channel(true);
@@ -503,48 +267,20 @@ void initVGA() {
 
     // Channel Zero (sends color data to PIO VGA machine)
     c0 = dma_channel_get_default_config(rgb_test_chan_0);  // default configs
-#if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
     channel_config_set_transfer_data_size(&c0, DMA_SIZE_32);              // 32-bit txfers
-#else
-    channel_config_set_transfer_data_size(&c0, DMA_SIZE_8);              // 8-bit txfers
-#endif
     channel_config_set_read_increment(&c0, true);                        // yes read incrementing
     channel_config_set_write_increment(&c0, false);                      // no write incrementing
 
-#if (VGA_USE_PIO_PROG == 2) || (VGA_TEST_PIO_PROG == 2)
-    channel_config_set_dreq(&c0, DREQ_PIO1_TX2) ;                        // DREQ_PIO1_TX2 pacing (FIFO)
-#elif (VGA_USE_PIO_PROG == 3) || (VGA_TEST_PIO_PROG == 3)
     channel_config_set_dreq(&c0, DREQ_PIO1_TX1) ;                        // DREQ_PIO1_TX1 pacing (FIFO)
-#elif (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
-    channel_config_set_dreq(&c0, DREQ_PIO1_TX1) ;                        // DREQ_PIO1_TX1 pacing (FIFO)
-#elif (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
-    channel_config_set_dreq(&c0, DREQ_PIO1_TX1) ;                        // DREQ_PIO1_TX1 pacing (FIFO)
-#endif
 
     channel_config_set_chain_to(&c0, rgb_test_chan_1);                        // chain to other channel
 
      dma_channel_configure(
         rgb_test_chan_0,                 // Channel to be configured
         &c0,                        // The configuration we just created
-
-#if (VGA_USE_PIO_PROG == 2) || (VGA_TEST_PIO_PROG == 2)
-        &pio_2->txf[rgb2_sm],          // write address (RGB PIO TX FIFO)
-#elif (VGA_USE_PIO_PROG == 3) || (VGA_TEST_PIO_PROG == 3)
-        &pio_2->txf[rgb3_sm],          // write address (RGB PIO TX FIFO)
-#elif (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
-        &pio_2->txf[rgb4_sm],          // write address (RGB PIO TX FIFO)
-#elif (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
         &pio_2->txf[rgb5_sm],          // write address (RGB PIO TX FIFO)
-#endif
-
-// #endif
-#if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
         &vga_1bit_data_array,       // The initial read address (pixel color array)
         TXCOUNT_2,                  // Number of transfers; in this case each is 4 byte.
-#else
-        &vga_data_array,            // The initial read address (pixel color array)
-        TXCOUNT,                    // Number of transfers; in this case each is 1 byte.
-#endif
         false                       // Don't start immediately.
     );
 
@@ -559,16 +295,10 @@ void initVGA() {
         rgb_test_chan_1,                         // Channel to be configured
         &c1,                                // The configuration we just created
         &dma_hw->ch[rgb_test_chan_0].read_addr,  // Write address (channel 0 read address)
-#if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
         &address_pointer_2,                 // Read address (POINTER TO AN ADDRESS)
-#else
-        &address_pointer,                   // Read address (POINTER TO AN ADDRESS)
-#endif
         1,                                  // Number of transfers, in this case each is 4 byte
         false                               // Don't start immediately.
     );
-
-#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4) || (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
 
     // More DMA channels - test ones - 0 sends color data, 1 reconfigures and restarts 0
     sync_test_chan_0 = dma_claim_unused_channel(true);
@@ -602,11 +332,7 @@ void initVGA() {
 
     // channel_config_set_dreq(&c0, DREQ_PIO1_TX0) ;                        // DREQ_PIO1_TX0 pacing (FIFO)
 
-#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
-    channel_config_set_dreq(&c0, pio_get_dreq(pio_2, hsync4_sm, true));     // hsync4_sm tx FIFO pacing
-#elif (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
     channel_config_set_dreq(&c0, pio_get_dreq(pio_2, hsync5_sm, true));     // hsync5_sm tx FIFO pacing
-#endif
 
 #ifndef USE_RING_BUF
     channel_config_set_chain_to(&c0, sync_test_chan_1);                  // chain to other channel
@@ -615,13 +341,7 @@ void initVGA() {
      dma_channel_configure(
         sync_test_chan_0,           // Channel to be configured
         &c0,                        // The configuration we just created
-
-#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
-        &pio_2->txf[hsync4_sm],     // write address (RGB PIO TX FIFO)
-#elif (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
         &pio_2->txf[hsync5_sm],     // write address (RGB PIO TX FIFO)
-#endif
-
         &sync_buffer,               // The initial read address (pixel color array)
 
 #ifdef USE_RING_BUF
@@ -721,10 +441,8 @@ void initVGA() {
     sync_buffer[7] = encode(0,     1, 0, 24,           0,  1, 1, 176     );
 
 
-#endif
 
 
-#if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
 
 // vga_1bit_data_array[0] = (((WHITE << 4) | BLACK) << 16) | (639);
 
@@ -765,9 +483,6 @@ for (int y = 0; y < NO_OF_LINES; y++) {
     }
 }
 
-
-
-#endif
 
     /////////////////////////////////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -849,7 +564,6 @@ for (int y = 0; y < NO_OF_LINES; y++) {
     // auto-pull once the dma is enabled. 
     // pio_sm_exec(pio, rgb_sm, pio_encode_out(pio_y, 32)); // trigger auto-pull
 
-#if VGA_TEST_PIO_PROG == 2
     // pio_sm_put_blocking(pio_2, hsync2_sm, H_ACTIVE);  // don't think we need this    
     // pio_sm_put_blocking(pio_2, vsync2_sm, V_ACTIVE);
     // pio_sm_put_blocking(pio_2, rgb2_sm, RGB_ACTIVE); // will need this. no, they've been moved in .pio
@@ -859,42 +573,23 @@ for (int y = 0; y < NO_OF_LINES; y++) {
 
     // pio_sm_exec(pio_2, rgb2_sm, pio_encode_pull(false, true)); // will need this.  no, they've been moved in .pio
     // pio_sm_exec(pio_2, rgb2_sm, pio_encode_out(pio_y, 32)); // // will need this. no, they've been moved in .pio
-#endif
 
     // Start the two pio machine IN SYNC
     // Note that the RGB state machine is running at full speed,
     // so synchronization doesn't matter for that one. But, we'll
     // start them all simultaneously anyway.
-    pio_enable_sm_mask_in_sync(pio, ((1u << hsync_sm) | (1u << vsync_sm) | (1u << rgb_sm)));
 
-
-#if (VGA_USE_PIO_PROG == 2) || (VGA_TEST_PIO_PROG == 2)
-
-    pio_enable_sm_mask_in_sync(pio_2, ((1u << hsync2_sm) | (1u << vsync2_sm) | (1u << rgb2_sm)));
-
-#elif (VGA_USE_PIO_PROG == 3) || (VGA_TEST_PIO_PROG == 3)
-
-    pio_enable_sm_mask_in_sync(pio_2, ((1u << hsync3_sm) | (1u << rgb3_sm)));
-
-#elif (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4)
-
-    pio_enable_sm_mask_in_sync(pio_2, ((1u << hsync4_sm) | (1u << rgb4_sm)));
-
-#elif (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
 
     pio_enable_sm_mask_in_sync(pio_2, ((1u << hsync5_sm) | (1u << rgb5_sm)));
 
 
-#endif
 
     // Start DMA channel 0. Once started, the contents of the pixel color array
     // will be continously DMA's to the PIO machines that are driving the screen.
     // To change the contents of the screen, we need only change the contents
     // of that array.
-    dma_start_channel_mask((1u << rgb_chan_0)) ;
     dma_start_channel_mask((1u << rgb_test_chan_0)) ;
 
-#if (VGA_USE_PIO_PROG == 4) || (VGA_TEST_PIO_PROG == 4) || (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
 
 #ifdef USE_RING_BUF
     // Tell the DMA to raise IRQ line 0 when the channel finishes a block
@@ -924,11 +619,6 @@ for (int y = 0; y < NO_OF_LINES; y++) {
 
 #endif
 
-
-
-
-#endif
-
 }
 
 
@@ -953,24 +643,6 @@ void drawPixel(short x, short y, char color) {
     if ((x >= _width) || (x < 0) || (y < 0))
         return;
 
-    if (y < _height) {
-
-        // Which pixel is it?
-        int pixel = ((_width * y) + x) ;
-
-        // Is this pixel stored in the first 4 bits
-        // of the vga data array index, or the second
-        // 4 bits? Check, then mask.
-        if (pixel & 1) {
-            vga_data_array[pixel>>1] = (vga_data_array[pixel>>1] & TOPMASK) | (color << 4) ;
-        }
-        else {
-            vga_data_array[pixel>>1] = (vga_data_array[pixel>>1] & BOTTOMMASK) | (color) ;
-        }
-    }
-
-#if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
-    
     #define LINES_TOP 0
 
     if ((y < LINES_TOP) || (y >= LINES_TOP + NO_OF_LINES))
@@ -1036,8 +708,6 @@ void drawPixel(short x, short y, char color) {
 
     #endif
 
-#endif
-
 }
 
 void drawVLine(short x, short y, short h, char color) {
@@ -1047,8 +717,6 @@ void drawVLine(short x, short y, short h, char color) {
 }
 
 void drawHLine(short x, short y, short w, char color) {
-
-#ifdef SPEED_UP_GRAPHICS
 
     if ((x < _width) && (y >= 0)) {
 
@@ -1060,25 +728,6 @@ void drawHLine(short x, short y, short w, char color) {
         if (x + w > _width) {
             w = _width - x;
         }
-
-        if (y < _height) {
-
-            if (x & 1) {
-                drawPixel(x, y, color);
-                x++;
-                w--;
-            }
-
-            if (w & 1) {
-                drawPixel(x + w - 1, y, color);
-                w--;
-            }
-
-            memset(&vga_data_array[(y * (_width / 2)) + (x / 2)], (color << 4) | color, w / 2);
-
-        }
-
-#if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
 
         if (y < NO_OF_LINES) {
 
@@ -1141,15 +790,8 @@ void drawHLine(short x, short y, short w, char color) {
             }
         }
 
-#endif
-
     }
 
-#else
-    for (short i=x; i<(x+w); i++) {
-        drawPixel(i, y, color) ;
-    }
-#endif
 }
 
 // Bresenham's algorithm - thx wikipedia and thx Bruce!
@@ -1407,8 +1049,6 @@ void fillRect(short x, short y, short w, short h, char color) {
 
   // tft_setAddrWindow(x, y, x+w-1, y+h-1);
 
-#ifdef SPEED_UP_GRAPHICS
-
     // if (y >= _height) {
     //     return;
     // }
@@ -1425,36 +1065,6 @@ void fillRect(short x, short y, short w, short h, char color) {
           if (x + w > _width) {
               w = _width - x;
           }
-
-          if (y < _height) {
-
-              short y2 = y;
-              short h2 = h;
-
-              if (y < 0) {
-                  h += y; // decrease h
-                  y = 0;
-              }
-
-              if (y + h > _height) {
-                  h = _height - y;
-              }
-
-              if ((x == 0) && (w == _width)) {
-                  memset(&vga_data_array[y * (_width / 2)], (color << 4) | color, h * (_width / 2));
-              } else{
-                  for (int i = 0; i < h; i++) {
-                      drawHLine(x, y + i, w, color);
-                  }
-              }
-
-              y = y2;
-              h = h2;
-
-          }
-
-
-#if (VGA_USE_PIO_PROG == 5) || (VGA_TEST_PIO_PROG == 5)
 
           if (y < NO_OF_LINES) {
 
@@ -1481,7 +1091,6 @@ void fillRect(short x, short y, short w, short h, char color) {
                   }
               }
           }
-#endif
 
             //  memset(&vga_1bit_data_array[(479 * WORDS_PER_LINE) + 1], 0xff, (WORDS_PER_LINE - 1) * sizeof(uint32_t));
 
@@ -1499,16 +1108,6 @@ void fillRect(short x, short y, short w, short h, char color) {
 
       }
 
-
-#else
-
-    for(int i=x; i<(x+w); i++) {
-      for(int j=y; j<(y+h); j++) {
-          drawPixel(i, j, color);
-      }
-    }
-
-#endif
 }
 
 // Draw a character
