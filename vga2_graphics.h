@@ -25,8 +25,9 @@
 
 #include <stdint.h>
 
-#define SYS_CLOCK_FREQ_KHZ 125000u
+// #define SYS_CLOCK_FREQ_KHZ 125000u
 // #define SYS_CLOCK_FREQ_KHZ 250000u
+// SYS_CLOCK_KHZ is now an SDK #define, I believe.
 
 // Give the I/O pins that we're using some names that make sense - usable in main()
  enum vga_pins {HSYNC=16, VSYNC, LO_GRN, HI_GRN, BLUE_PIN, RED_PIN} ;
@@ -38,6 +39,15 @@ enum colors {BLACK, DARK_GREEN, MED_GREEN, GREEN,
             DARK_BLUE, BLUE, LIGHT_BLUE, CYAN,
             RED, DARK_ORANGE, ORANGE, YELLOW, 
             MAGENTA, PINK, LIGHT_PINK, WHITE} ;
+
+#define WORDS_PER_LINE (1 + 20)
+
+#define NO_OF_LINES 480
+
+#define TXCOUNT_2 WORDS_PER_LINE * NO_OF_LINES
+
+extern uint32_t vga_1bit_data_array[TXCOUNT_2];
+
 
 // VGA primitives - usable in main
 // void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour);

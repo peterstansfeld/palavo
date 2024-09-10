@@ -18,8 +18,30 @@
  *
  */
 
+// #if PICO_BOARD == pico2 // Can't do this, so what are the alternatives?
+
+// USE_DVI chould be defined as 1, or not, in CMakeLists.txt depending on whether
+// PICO_BOARD is "pico2", or something else.
+
+// For developing with colour syntax highlighting it might be helpful to define it
+// here too, but don't forget to undo that when done.
+
+// There's probably a better way to do this, but I'm not aware of one. 
+
+#define USE_DVI 1 
+// #define USE_DVI 0
+
 // VGA graphics library
 #include "vga2_graphics.h"
+
+#if USE_DVI == 1
+
+#include "dvi64_graphics.h"
+
+#endif
+
+// #endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include "pico/stdlib.h"
@@ -75,7 +97,7 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 #define CAPTURE_PIN_BASE HSYNC2 // 16 = hsync, 17 = vsync // 22 = hsync2
 
 // const uint CAPTURE_PIN_COUNT = 4;
-#define CAPTURE_PIN_COUNT 8
+#define CAPTURE_PIN_COUNT 6
 
 // const uint CAPTURE_TRIGGER_PIN = VSYNC; // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
 #define CAPTURE_TRIGGER_PIN_BASE HSYNC2 // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
@@ -1206,6 +1228,12 @@ enum UI_COMMANDS {
     UIC_C,
     UIC_H,
     UIC_A,
+
+#if USE_DVI == 1    
+    UIC_V,
+    UIC_D,
+#endif
+
     UIC_SPACEBAR,
     UIC_UP,
     UIC_DOWN,
@@ -1573,6 +1601,16 @@ uint check_keyboard() {
                 // case 'A':
                     ui_command = UIC_A;
                     break;
+
+#if USE_DVI == 1    
+                case 'v':
+                    ui_command = UIC_V;
+                    break;
+
+                case 'd':
+                    ui_command = UIC_D;
+                    break;
+#endif
 
                 case '\t':
                     ui_command = UIC_TAB;
@@ -2131,6 +2169,56 @@ void init_line_colours() {
     }
 }
 
+#if USE_DVI == 1
+
+void mirror_VGA_data_to_DVI() {
+
+    uint32_t *vga_framebuf_ptr = (uint32_t*) &vga_1bit_data_array[0];
+    uint32_t *dvi_framebuf_ptr = (uint32_t*) &dvi_framebuf[0];
+
+    uint32_t sr = 0;
+    uint8_t shifts = 0;
+
+
+    for (int y = 0; y < MODE_V_ACTIVE_LINES; y++) {
+        // The first uint32 of each line contains colour information as well as other stuff.
+        uint32_t colours = *vga_framebuf_ptr++;
+
+        uint8_t fore_col = get_four_bit_col((colours >> 20) & 0x0f);  
+        uint8_t back_col = get_four_bit_col((colours >> 16) & 0x0f);  
+        uint8_t pixcol;
+
+        // get the 32-bit word
+        for (int x = 0; x < WORDS_PER_LINE - 1; x++) {
+            uint32_t vga_bit_word = *vga_framebuf_ptr;   
+            vga_framebuf_ptr++;    
+
+            uint32_t bitmask = 0x01;
+            for (uint32_t b = 0; b < 32; b++) {
+                if (vga_bit_word & bitmask) {
+                    pixcol = fore_col;
+                } else {
+                    pixcol = back_col;
+                }
+                // Shift the shift register and put the 6-bit colour into the most significant bits
+                sr = (sr >> 6) | (pixcol << 26);
+                if (++shifts == 5) {
+                    // Every 5 pixels the shift register consists of 5 6-bit values,
+                    // which we pack into four bytes (a uin32_t).
+                    *dvi_framebuf_ptr++ = sr;
+                    shifts = 0;
+                }
+                bitmask <<= 1;
+            }
+        }
+    }
+}
+
+
+void test_DVI_framebuf() {
+    dvi_testbars();
+}
+#endif
 
 void close_window() {
     fillRect(HELP_WINDOW_LEFT, HELP_WINDOW_TOP, HELP_WINDOW_WIDTH, HELP_WINDOW_HEIGHT, BLACK);
@@ -2202,9 +2290,35 @@ int main() {
     // uart_puts(UART_ID, right_rect_text);
 
 
-#ifdef SYS_CLOCK_FREQ_KHZ
-    int sys_clk_freq_khz = SYS_CLOCK_FREQ_KHZ;
-    uart_putcf(UART_ID, "SYS_CLOCK_FREQ_KHZ: %d\n", sys_clk_freq_khz);
+#ifdef SYS_CLK_KHZ
+    int sys_clk_freq_khz = SYS_CLK_KHZ;
+    uart_putcf(UART_ID, "SYS_CLOCK_KHZ: %d\n", sys_clk_freq_khz);
+#endif
+
+#ifdef PICO_SDK_VERSION_STRING
+    uart_puts(UART_ID, "SDK Version: ");
+    uart_puts(UART_ID, PICO_SDK_VERSION_STRING);
+    uart_puts(UART_ID, "\n");
+#endif
+
+#ifdef PICO_BOARD
+    uart_puts(UART_ID, "Board: ");
+    uart_puts(UART_ID, PICO_BOARD);
+    uart_puts(UART_ID, "\n");
+#endif
+
+
+#ifdef PICO_PLATFORM
+    uart_puts(UART_ID, "Platform: ");
+    uart_puts(UART_ID, PICO_PLATFORM);
+    uart_puts(UART_ID, "\n");
+#endif
+
+
+#if USE_DVI == 1
+    // Initialize the VGA screen
+    uart_puts(UART_ID, "Initialising DVI...\n");
+    dvi_init();
 #endif
 
     // Initialize the VGA screen
@@ -2242,7 +2356,8 @@ int main() {
 
     PIO pio = pio1;
     uint sm = 3;
-    uint dma_chan = dma_claim_unused_channel(true);
+    // uint dma_chan = dma_claim_unused_channel(true);
+    uint dma_chan = 5;
 
     // logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, 125000000 / (115200 * 4) /*271.267*/);
     logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency);
@@ -2685,6 +2800,17 @@ int main() {
                         show_about_window();
                         break;
 
+#if USE_DVI == 1
+                    case UIC_V:
+                        writeString("mirror VGA to DVI");
+                        mirror_VGA_data_to_DVI();
+                        break;
+
+                    case UIC_D:
+                        writeString("test DVI");
+                        test_DVI_framebuf();
+                        break;
+#endif
 
                 }
             }

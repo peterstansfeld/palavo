@@ -90,17 +90,8 @@ uint32_t * sync_buffer_address_pointer = &sync_buffer[0] ;
 
  // (16 bits (639) + 16 bits (2, 4-bit colors) + (20 * 32 = 640 bits)
 
-#define WORDS_PER_LINE (1 + 20)
-
 // any more than 48 and we get a weird vertical scrolling side-effet
 // suggest that this is ram overflow 
-
-
-#define NO_OF_LINES 480
-
-
-
-#define TXCOUNT_2 WORDS_PER_LINE * NO_OF_LINES
 
 uint32_t vga_1bit_data_array[TXCOUNT_2];
 uint32_t * address_pointer_2 = &vga_1bit_data_array[0] ;
@@ -592,6 +583,13 @@ for (int y = 0; y < NO_OF_LINES; y++) {
 
 
 #ifdef USE_RING_BUF
+
+    // The DVI uses irq_set_exclusive_handler(), so stops this working.
+    // By disabling it here will mean that eventually the VGA will stop
+    // woking and require a reset.
+
+#if USE_DVI == 0
+
     // Tell the DMA to raise IRQ line 0 when the channel finishes a block
     dma_channel_set_irq0_enabled(sync_test_chan_0, true);
 
@@ -599,6 +597,9 @@ for (int y = 0; y < NO_OF_LINES; y++) {
     irq_set_exclusive_handler(DMA_IRQ_0, dma_handler); // just setting this causes problems
 
     irq_set_enabled(DMA_IRQ_0, true);
+
+#endif
+
 #endif
 
     // Manually call the handler once, to trigger the first transfer
