@@ -28,8 +28,11 @@
 
 // There's probably a better way to do this, but I'm not aware of one. 
 
-#define USE_DVI 1 
+#define USE_DVI 1
+
 // #define USE_DVI 0
+
+#define USE_VGA_CAPTURE 1
 
 // VGA graphics library
 #include "vga2_graphics.h"
@@ -37,6 +40,11 @@
 #if USE_DVI == 1
 
 #include "dvi64_graphics.h"
+
+
+#if USE_VGA_CAPTURE == 1
+#include "vga_capture.pio.h"
+#endif
 
 #endif
 
@@ -56,11 +64,21 @@
 #define UART_ID uart1
 #define BAUD_RATE 115200
 
+#define DEBUG_PIN 28
+
 
 // We are using pins 4 and 5, but see the GPIO function select table in the
 // datasheet for information on which other pins can be used.
-#define UART_TX_PIN 4
-#define UART_RX_PIN 5
+
+// #define UART_TX_PIN 0
+// #define UART_RX_PIN 1
+
+// #define UART_TX_PIN 0
+// #define UART_RX_PIN 1
+
+#define UART_TX_PIN 20
+#define UART_RX_PIN 21
+
 #define LED_PIN PICO_DEFAULT_LED_PIN
 
 uint8_t last_uart_char = 0;
@@ -94,7 +112,8 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 #define SCREEN_HEIGHT 480
 
 // const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
-#define CAPTURE_PIN_BASE HSYNC2 // 16 = hsync, 17 = vsync // 22 = hsync2
+// #define CAPTURE_PIN_BASE HSYNC2 // 16 = hsync, 17 = vsync // 22 = hsync2
+#define CAPTURE_PIN_BASE HSYNC2 - 1 // 16 = hsync, 17 = vsync // 22 = hsync2
 
 // const uint CAPTURE_PIN_COUNT = 4;
 #define CAPTURE_PIN_COUNT 6
@@ -121,7 +140,7 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 
 // uint8_t g_trigger_type = TT_VGA_VSYNC;
 
-uint8_t g_trigger_type = TT_VGA_RGB;
+uint8_t g_trigger_type = TT_VGA_VSYNC;
 
 /*
     // uint total_sample_bits = g_capture_n_samples * g_no_of_captured_pins;
@@ -2258,6 +2277,109 @@ void close_window() {
 
 char * start_help_text = "Press h for help.\n";
 
+#if USE_VGA_CAPTURE == 1
+
+void init_vga_capture() {
+  
+    PIO vga_capture_pio = pio0;
+    uint vga_capture_sm = 0;
+
+    uint vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
+
+    // Call the initialization functions that are defined within each PIO file.
+    // Why not create these programs here? By putting the initialization function in
+    // the pio file, then all information about how to use/setup that state machine
+    // is consolidated in one place. Here in the C, we then just import and use it.
+    
+    vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, 26, 0, DEBUG_PIN /* LED_PIN */);
+
+    // pio_enable_sm_mask_in_sync(vga_capture_pio, ((1u << vga_capture_sm)));
+    
+    
+    // DMA stuff
+    
+    dma_channel_config c0;
+    dma_channel_config c1;
+    
+    // More DMA channels - test ones - 0 sends color data, 1 reconfigures and restarts 0
+    int rgb_test_chan_0 = dma_claim_unused_channel(true);
+    int rgb_test_chan_1 = dma_claim_unused_channel(true);
+
+    // Channel Zero (receives color data to PIO VGA machine)
+    c0 = dma_channel_get_default_config(rgb_test_chan_0);  // default configs
+    channel_config_set_transfer_data_size(&c0, DMA_SIZE_32);              // 32-bit txfers
+    channel_config_set_read_increment(&c0, false);                        // no read incrementing
+    channel_config_set_write_increment(&c0, true);                      // yes write incrementing
+
+    // channel_config_set_dreq(&c0, DREQ_PIO0_RX0) ;                        // DREQ_PIO0_RX0 pacing (FIFO)
+    channel_config_set_dreq(&c0, pio_get_dreq(vga_capture_pio, vga_capture_sm, false));     // vga_capture_sm rx FIFO pacing
+
+    channel_config_set_chain_to(&c0, rgb_test_chan_1);                        // chain to other channel
+
+    #define DVI_LINE_LENGTH_BYTES (640 * 4 / 5)
+    
+    #define DVI_BUF_TRANSFER_SIZE ((((640 * 4) / 5) * 480) / 4)
+
+    static uint32_t testReadValue = /* 0xffffffff */((RED_BITS) | (GREEN_BITS << 6) | (BLUE_BITS << 12)) << 2;
+
+     dma_channel_configure(
+        rgb_test_chan_0,            // Channel to be configured
+        &c0,                        // The configuration we just created
+        // &dvi_framebuf[DVI_LINE_LENGTH_BYTES],              // The initial write address (pixel color array)
+        &dvi_framebuf[0],              // The initial write address (pixel color array)
+        &vga_capture_pio->rxf[vga_capture_sm],       // read address (RGB PIO RX FIFO)
+        // &testReadValue,       // test memory location to read
+        // ((640 * 4) / 5) * 480 / 4,                  // Number of transfers in words; in this case each word is 4 byte.
+        // (DVI_BUF_TRANSFER_SIZE * 31 / 32),                  // Number of transfers in words; in this case each word is 4 byte. this crashes
+        // (DVI_LINE_LENGTH_BYTES * 239 / 4),                  // Number of transfers in words; in this case each word is 4 byte. this doesn't crash
+
+        // 0xf0000000 | (DVI_LINE_LENGTH_BYTES * 16 / 4),                  // Number of transfers in words; in this case each word is 4 byte. this doesn't crash
+
+        (0x0 << 28) | (DVI_LINE_LENGTH_BYTES * 480 / 4),                  // Number of transfers in words; in this case each word is 4 byte. this doesn't crash
+
+
+        false                       // Don't start immediately.
+    );
+
+    // Channel One (reconfigures the first channel)
+    c1 = dma_channel_get_default_config(rgb_test_chan_1);   // default configs
+    channel_config_set_transfer_data_size(&c1, DMA_SIZE_32);              // 32-bit txfers
+    channel_config_set_read_increment(&c1, false);                        // no read incrementing
+    channel_config_set_write_increment(&c1, false);                       // no write incrementing
+    channel_config_set_chain_to(&c1, rgb_test_chan_0);                    // chain to other channel
+
+    static char * dvi_framebuf_ptr = &dvi_framebuf[0];
+
+    dma_channel_configure(
+        rgb_test_chan_1,                        // Channel to be configured
+        &c1,                                // The configuration we just created
+        &dma_hw->ch[rgb_test_chan_0].write_addr,  // Write address (channel 0 write address)
+        &dvi_framebuf_ptr,                 // Read address (POINTER TO AN ADDRESS)
+        // &dvi_framebuf,                 // Read address (POINTER TO AN ADDRESS)
+        1,                                  // Number of transfers, in this case each is 4 byte
+        false                               // Don't start immediately.
+    );
+
+
+    // currently crashes for some reason
+    // only if 
+    
+    // dma_start_channel_mask((1u << rgb_test_chan_0) | (1u << rgb_test_chan_1)); 
+
+    dma_start_channel_mask((1u << rgb_test_chan_0) /* | (1u << rgb_test_chan_1) */ ); 
+
+    // end of DMA stuff
+  
+    pio_sm_set_enabled(vga_capture_pio, vga_capture_sm, true);
+
+
+    // try waiting for the channel to be complete
+
+    // uart_puts(UART_ID, "Waiting for rgb_test_chan_0 DMA channel to finish...\n");
+    // dma_channel_wait_for_finish_blocking(rgb_test_chan_0);
+    // uart_puts(UART_ID, "finished\n");
+}
+#endif
 
 int main() {
 
@@ -2276,6 +2398,24 @@ int main() {
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN, GPIO_OUT); // set LED_PIN GPIO to an output
     gpio_put(LED_PIN, 1); // set LED_PIN
+
+#if USE_VGA_CAPTURE == 1
+
+    #define GPIO_Inputs ((1 << 27) | (1 << 26) | 0b0111111) 
+    gpio_init_mask(GPIO_Inputs); // init GPIO 0 to 5, 26, 27
+    gpio_set_function_masked(GPIO_Inputs, GPIO_IN); // set GPIO 0 to 5, 26, 27 to inputs
+
+    // enable GPIO 0 to 5, 26, 27 pull-ups
+    gpio_set_pulls(0, true, false);
+    gpio_set_pulls(1, true, false);
+    gpio_set_pulls(2, true, false);
+    gpio_set_pulls(3, true, false);
+    gpio_set_pulls(4, true, false);
+    gpio_set_pulls(5, true, false);
+    gpio_set_pulls(26, true, false);
+    gpio_set_pulls(27, true, false);
+
+#endif
 
     uart_puts(UART_ID, "\n\n");
     // uart_puts(UART_ID, left_rect_text);
@@ -2326,8 +2466,6 @@ int main() {
     initVGA() ;
     init_line_colours();
 
-    // uart_puts(UART_ID, help_strings);
-
     // We're going to capture into a u32 buffer, for best DMA efficiency. Need
     // to be careful of rounding in case the number of pins being sampled
     // isn't a power of 2.
@@ -2356,8 +2494,8 @@ int main() {
 
     PIO pio = pio1;
     uint sm = 3;
-    // uint dma_chan = dma_claim_unused_channel(true);
-    uint dma_chan = 5;
+    uint dma_chan = dma_claim_unused_channel(true);
+    // uint dma_chan = 5;
 
     // logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, 125000000 / (115200 * 4) /*271.267*/);
     logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency);
@@ -2494,6 +2632,10 @@ int main() {
     plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
 
     draw_minimap_indicator();
+
+#if USE_VGA_CAPTURE == 1
+    init_vga_capture();
+#endif
 
     while(true) {
 

@@ -1,0 +1,244 @@
+; VGA (VGA222 6-bit) Capture
+
+; Currently this is designed for the RP2350 as it uses new fetures of PIO1.
+; It monitors when VSYNC goes low and then counts 23 high to low transitions of 
+; HSYNC (horizontal back porch) before taking 640 samples of the RRGGBB pins at
+; 25 MHz and then autopushing them to the RXFIFO every 5 samples (30 bits).
+
+; Program name
+.program vga_capture
+.side_set 1 opt                     ; one sideset pin - the Pico's LED
+; .origin 0                           ; we modify the PC, which needs absolute addresses
+
+
+; This doesn't work quite as I'd thought. Read the manual, Pete
+; .fifo txget                         ; 4 FIFO entries for mov osr, rxfifo[index] aka get
+
+.define DELAY_LOOPS 6
+.define SET_DELAY_LOOPS_DELAY 22
+.define DELAY_LOOP_DELAY 29
+.define GET_BIT_DELAY 1
+.define BLANK_DELAY 3
+
+.wrap_target
+start:
+; Wait for a VSYNC
+    wait 0 jmppin+1                 ; wait for VSYNC to be low (VSYNC must be 1 GPIO higher than HSYNC's GPIO)
+    wait 1 jmppin+1                 ; wait for VSYNC to be high
+
+; Wait for 32 HSYNCs
+    set x, 31                       ; turn on the LED for 8 clocks
+clock_count_loop:
+    wait 0 jmppin+0                 ; wait for HSYNC to be low
+    wait 1 jmppin+0                 ; wait for HSYNC to be high
+    jmp x-- clock_count_loop
+
+;    mov osr, rxfifo[1]
+;    mov y, osr                      ;load x with 479 (480 - 1)
+
+;    set y, 31                           ; 32 lines to read
+
+
+    set y, 0b1111
+;    set y, 0b0010
+    ; set y, 0b10111
+    mov osr, y
+    ; out null, 2                     ; 60 vertical lines
+    ; out null, 3                     ; 120 vertical lines
+;    out null, 4                     ; 240 vertical lines
+    out null, 5                     ; 240 vertical lines
+    mov y, osr
+    jmp y-- y_decremented           
+y_decremented:
+
+
+
+
+
+wait_for_hsync:
+
+; Wait for one more HSYNC (a total of 33 HSYNCS)
+    wait 0 jmppin+0                 ; wait for HSYNC to be low
+    wait 1 jmppin+0                 ; wait for HSYNC to be high
+
+
+; Before we take the first sample of the RRGGBB input pins we need to wait for the horizontal
+; back porch delay, which is 48 clocks at 25 Mhz, which is (6 * 48) at 150 MHz = 288 clocks.
+
+; We should ideally sample in the middle of the 6 clock cycle period of the colour pulse, so
+; 3 clocks later, ie 289 clocks. 
+
+; What we've got below is 6 + (31 * 9) + 5 = 290 clocks, which was fine tuned by hand as the
+; middle value between it being too low (and causing image corruption) and too high.
+
+
+; we need to wait for 203 (29 * 7) clock cycles, I believe
+    set x, 30 [5]
+ ;   nop [6] ; 4 works, 0 fails, 1 fails, 2 fails, 3 passes .. 7 passes, so choose 5
+    ; nop [0] ; this seems to work with the two above t [7]
+delay_loop:
+    nop
+    jmp x-- delay_loop [7] 
+
+;    mov y, x            ;y = 0xffffffff
+
+
+/*
+; We can achieve this be losing the nop with 4 + (35 * 8) + 5 = 289.
+; No we can't, we can set x to a maximum of 31 (I'm a fool).
+
+    set x, 34 [3]
+delay_loop:
+    jmp x-- delay_loop [7] 
+
+
+; But we could make this a mov osr, rxfifo[?] command with .fifo txget directive and 
+; allow the user to change the delay. For example:
+
+;   mov osr, rxfifo[2]
+;   mov x, osr
+;delay_loop:
+    jmp x--, delay_loop    
+
+; Also, we could save some state machine instructions (6, I believe) to store 640-1 
+; and 480-1 in rxfifo[0] and rxfifo[1]. But we'd need another SM and an IRQ to stream
+; the sampled pin values into RXFIFO.
+
+*/
+
+ ;   mov osr, rxfifo[0]
+;    mov x, osr                      ;load x with 319 ((640 / 2) - 1
+
+    set x, 0b1010                    
+    mov osr, x
+    out null, 5
+    ; out null, 4
+    mov x, osr
+    jmp x-- x_decremented
+x_decremented:
+
+
+sample_loop:
+    ; in null, 2
+    ; in pins, 4    [4]  side 1       ;
+    ; in null, 4    [4]  side 1       ;
+    ; in y, 4    [4]  side 1       ;
+    
+    in pins, 6    [5]  side 1       ;
+    
+    ; in null, 2
+    ; in pins, 4    [3]  side 0       ; 
+    ; in null, 4    [3]  side 0       ; 
+    ; in y, 4    [3]  side 0       ; 
+
+    in pins, 6    [4]  side 0       ;
+
+
+    ; nop
+    ; nop [4] side 1
+ 
+ 
+    ; nop
+    ; nop [3] side 0
+
+
+
+
+    jmp x-- sample_loop
+
+    jmp y-- wait_for_hsync
+
+.wrap
+
+
+% c-sdk {
+
+static inline void vga_capture_program_init(PIO pio, uint sm, uint offset, uint hsync_pin, uint rgb_pin, uint led_pin) {
+
+    // creates state machine configuration object c, sets
+    // to default configurations. I believe this function is auto-generated
+    // and gets a name of <program name>_program_get_default_config
+    // Yes, page 40 of SDK guide
+    pio_sm_config c = vga_capture_program_get_default_config(offset);
+
+    // Map the state machine's SET and OUT pin group to three pins, the `pin`
+    // parameter to this function is the lowest one. These groups overlap.
+//    sm_config_set_set_pins(&c, pin, 4);
+//    sm_config_set_out_pins(&c, pin, 4);
+
+
+// configure the input pin group to start at `rgb_pin`
+    sm_config_set_in_pins (&c, rgb_pin);
+
+
+    sm_config_set_jmp_pin(&c, hsync_pin);
+
+    sm_config_set_sideset_pins(&c, led_pin);
+
+    // Set clock division (Commented out, this one runs at full speed)
+    // sm_config_set_clkdiv(&c, 5) ;
+
+    // Set PIO clock frequency to 125 MHz
+    // float div = (float)clock_get_hz(clk_sys) / 125000000;
+    // sm_config_set_clkdiv(&c, div);
+
+    // shift OSR to the right, enable autopull, and set the pull threshold set to 32
+    // sm_config_set_out_shift(&c, true, true, 32);
+
+    // shift OSR to the left, disable autopull, and set the pull threshold set to 32
+    sm_config_set_out_shift(&c, false, false, 32);
+
+
+
+
+    // shift ISR to the right, enable autopush, and set the push threshold set to 30
+    sm_config_set_in_shift(&c, true, true, 30);
+
+    // shift ISR to the left, enable autopush, and set the push threshold set to 30
+    // sm_config_set_in_shift(&c, false, true, 30);
+
+
+    // Set this led_pin's GPIO function (connect PIO to the pad)
+    pio_gpio_init(pio, led_pin);
+//    pio_gpio_init(pio, pin+1);
+//    pio_gpio_init(pio, pin+2);
+//    pio_gpio_init(pio, pin+3);
+
+    // Set the pin direction to output at the PIO (1 pin)
+    pio_sm_set_consecutive_pindirs(pio, sm, led_pin, 1, true);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+
+  // these don't work
+//    pio_sm_put_blocking(pio, sm, 319); // put 320-1 into the TXFIFO for half the number of horizontal pixels 
+//    pio_sm_put_blocking(pio, sm, 319); // put 320-1 into the TXFIFO for half the number of horizontal pixels 
+//    pio_sm_put_blocking(pio, sm, 319); // put 320-1 into the TXFIFO for half the number of horizontal pixels 
+ 
+ 
+    pio_sm_put_blocking(pio, sm, 320 - 1); // put 639 into the TXFIFO for the number of horizontal pixels 
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1) pull 639 into the OSR
+
+
+    // There probably is an SDK function for these, something like this:
+    //    pio0->sm[0].rxf_putget0 = 319;
+    // but I can't find it, so...
+
+    // *(volatile uint32_t *)(PIO0_BASE + PIO_RXF0_PUTGET0_OFFSET /* RXF0_PUTGET0*/ ) = 319;
+    // *(volatile uint32_t *)(PIO0_BASE + PIO_RXF0_PUTGET1_OFFSET /* RXF0_PUTGET1*/ ) = 479;
+    // *(volatile uint32_t *)(PIO0_BASE + PIO_RXF0_PUTGET2_OFFSET /* RXF0_PUTGET2*/ ) = ((RED_BITS) | (GREEN_BITS << 6) | (BLUE_BITS << 12)) << 2;
+    // *(volatile uint32_t *)(PIO0_BASE + PIO_RXF0_PUTGET3_OFFSET /* RXF0_PUTGET3*/ ) = ((RED_BITS) | (GREEN_BITS << 6) | (BLUE_BITS << 12)) << 2;
+
+    // The above definitions are from pico-sdk/sdk/2.0.0/src/rp2_common/hardware_pio/include/hardware/pio.h
+    // This also helped with the above: raspberry-pi-pico-c-sdk.pdf - 2.3.4. Hardware Structs Library 
+    // These constants could be compressed into one of the 4 32-bit PUTGET registers, but at the cost of
+    // a few more PIO instructions to extract the appropriate bits.
+
+    // pico-sdk/sdk/2.0.0/src/rp2_common/hardware_pio/include/hardware/pio/h
+
+    // Set the state machine running (eventually this will be started after the DMA channel is enabled)
+    // pio_sm_set_enabled(pio, sm, true);
+}
+
+
+%}

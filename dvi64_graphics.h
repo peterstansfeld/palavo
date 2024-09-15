@@ -41,6 +41,7 @@
 #define RED_BITS        0b110000
 #define DARK_GREEN_BITS 0b000100
 #define MED_GREEN_BITS  0b001000
+#define GREEN_BITS      (MED_GREEN_BITS | DARK_GREEN_BITS)
 #define BLUE_BITS       0b000011
 
 enum DVI_COLOURS {
