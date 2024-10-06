@@ -28,11 +28,26 @@
 
 // There's probably a better way to do this, but I'm not aware of one. 
 
-#define USE_DVI 1
+// #define USE_DVI 1
 
 // #define USE_DVI 0
 
-#define USE_VGA_CAPTURE 1
+
+// The following is to allow the defines defined in CMakeLists.txt to be defined
+// here while editing, so that they don't get dimmed by the editor
+
+#ifndef USE_DVI
+
+#if PICO_RP2350
+
+#define USE_DVI 1
+
+#endif
+
+#endif
+
+
+#define USE_VGA_CAPTURE 0
 
 // VGA graphics library
 #include "vga2_graphics.h"
@@ -113,7 +128,7 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 
 // const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
 // #define CAPTURE_PIN_BASE HSYNC2 // 16 = hsync, 17 = vsync // 22 = hsync2
-#define CAPTURE_PIN_BASE HSYNC2 - 1 // 16 = hsync, 17 = vsync // 22 = hsync2
+#define CAPTURE_PIN_BASE HSYNC2 // 16 = hsync, 17 = vsync // 22 = hsync2
 
 // const uint CAPTURE_PIN_COUNT = 4;
 #define CAPTURE_PIN_COUNT 6
@@ -2279,11 +2294,17 @@ char * start_help_text = "Press h for help.\n";
 
 #if USE_VGA_CAPTURE == 1
 
+
+PIO vga_capture_pio = pio0;
+uint vga_capture_sm = 0;
+bool vga_capture_is_enabled = false;
+
+
+
+int rgb_test_chan_0;
+
 void init_vga_capture() {
   
-    PIO vga_capture_pio = pio0;
-    uint vga_capture_sm = 0;
-
     uint vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
 
     // Call the initialization functions that are defined within each PIO file.
@@ -2298,23 +2319,24 @@ void init_vga_capture() {
     
     // DMA stuff
     
-    dma_channel_config c0;
+
+    dma_channel_config vga_capture_dma_ch0;
     dma_channel_config c1;
     
     // More DMA channels - test ones - 0 sends color data, 1 reconfigures and restarts 0
-    int rgb_test_chan_0 = dma_claim_unused_channel(true);
+    rgb_test_chan_0 = dma_claim_unused_channel(true);
     int rgb_test_chan_1 = dma_claim_unused_channel(true);
 
     // Channel Zero (receives color data to PIO VGA machine)
-    c0 = dma_channel_get_default_config(rgb_test_chan_0);  // default configs
-    channel_config_set_transfer_data_size(&c0, DMA_SIZE_32);              // 32-bit txfers
-    channel_config_set_read_increment(&c0, false);                        // no read incrementing
-    channel_config_set_write_increment(&c0, true);                      // yes write incrementing
+    vga_capture_dma_ch0 = dma_channel_get_default_config(rgb_test_chan_0);  // default configs
+    channel_config_set_transfer_data_size(&vga_capture_dma_ch0, DMA_SIZE_32);              // 32-bit txfers
+    channel_config_set_read_increment(&vga_capture_dma_ch0, false);                        // no read incrementing
+    channel_config_set_write_increment(&vga_capture_dma_ch0, true);                      // yes write incrementing
 
     // channel_config_set_dreq(&c0, DREQ_PIO0_RX0) ;                        // DREQ_PIO0_RX0 pacing (FIFO)
-    channel_config_set_dreq(&c0, pio_get_dreq(vga_capture_pio, vga_capture_sm, false));     // vga_capture_sm rx FIFO pacing
+    channel_config_set_dreq(&vga_capture_dma_ch0, pio_get_dreq(vga_capture_pio, vga_capture_sm, false));     // vga_capture_sm rx FIFO pacing
 
-    channel_config_set_chain_to(&c0, rgb_test_chan_1);                        // chain to other channel
+    channel_config_set_chain_to(&vga_capture_dma_ch0, rgb_test_chan_1);                        // chain to other channel
 
     #define DVI_LINE_LENGTH_BYTES (640 * 4 / 5)
     
@@ -2324,7 +2346,7 @@ void init_vga_capture() {
 
      dma_channel_configure(
         rgb_test_chan_0,            // Channel to be configured
-        &c0,                        // The configuration we just created
+        &vga_capture_dma_ch0,                        // The configuration we just created
         // &dvi_framebuf[DVI_LINE_LENGTH_BYTES],              // The initial write address (pixel color array)
         &dvi_framebuf[0],              // The initial write address (pixel color array)
         &vga_capture_pio->rxf[vga_capture_sm],       // read address (RGB PIO RX FIFO)
@@ -2378,7 +2400,37 @@ void init_vga_capture() {
     // uart_puts(UART_ID, "Waiting for rgb_test_chan_0 DMA channel to finish...\n");
     // dma_channel_wait_for_finish_blocking(rgb_test_chan_0);
     // uart_puts(UART_ID, "finished\n");
+
+    vga_capture_is_enabled = true;
 }
+
+
+void toggle_vga_capture() {
+    pio_sm_set_enabled(vga_capture_pio, vga_capture_sm, !vga_capture_is_enabled);
+    vga_capture_is_enabled = !vga_capture_is_enabled;
+
+    if (!vga_capture_is_enabled) {
+        // We've just disabled the vga_capture state machine
+        // We should reset the DMA channel
+
+
+        // Reload the transfer count
+        // dma_hw->ch[rgb_test_chan_0].transfer_count = (DVI_LINE_LENGTH_BYTES * 480 / 4);
+
+        // Reload the write address
+        // dma_hw->ch[rgb_test_chan_0].write_addr = &dvi_framebuf[0];
+
+
+        // And restart the state machine
+
+        // Wow, the below doesn't do what I expected it to do at all - it shifts the display
+        // pio_sm_exec(vga_capture_pio, vga_capture_sm, pio_encode_jmp(0));
+
+    }
+
+}
+
+
 #endif
 
 int main() {
@@ -2943,10 +2995,21 @@ int main() {
                         break;
 
 #if USE_DVI == 1
+
+#if USE_VGA_CAPTURE == 1
+
                     case UIC_V:
-                        writeString("mirror VGA to DVI");
-                        mirror_VGA_data_to_DVI();
+                        toggle_vga_capture();
+                        if (vga_capture_is_enabled) {
+                            writeString("mirror VGA to DVI");
+                        } else {
+                            writeString("stop mirroring VGA to DVI");
+                            test_DVI_framebuf();
+
+                        }
+                        // mirror_VGA_data_to_DVI();
                         break;
+#endif
 
                     case UIC_D:
                         writeString("test DVI");
