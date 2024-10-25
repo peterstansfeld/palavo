@@ -82,7 +82,7 @@ repeat:
 
 
 % c-sdk {
-static inline void hsync5_program_init(PIO pio, uint sm, uint offset, uint pin) {
+static inline void hsync5_program_init(PIO pio, uint sm, uint offset, uint pin, uint no_of_pins) {
 
     // Creates state machine configuration object c, and sets it to
     // default values.
@@ -99,7 +99,7 @@ static inline void hsync5_program_init(PIO pio, uint sm, uint offset, uint pin) 
 
     // Map the state machine's SET pin group to two pins, namely the `pin`
     // parameter of this function.
-    sm_config_set_out_pins(&c, pin, 2);
+    sm_config_set_out_pins(&c, pin, no_of_pins);
 
     // Set PIO clock frequency to 25 MHz / 4 = 6,250 kHz
     // At either 125 MHz for the rp2040 or 150 MHz for the rp235x the clock divisor
@@ -108,8 +108,9 @@ static inline void hsync5_program_init(PIO pio, uint sm, uint offset, uint pin) 
     sm_config_set_clkdiv(&c, div);
 
     // Set this pin's GPIO function (connect PIO to the pad)
-    pio_gpio_init(pio, pin);
-    pio_gpio_init(pio, pin+1);
+    for (int i = 0; i < no_of_pins; i++) {
+        pio_gpio_init(pio, pin + i);
+    }
     
     // Set the pin direction to output at the PIO
     pio_sm_set_consecutive_pindirs(pio, sm, pin, 2, true);

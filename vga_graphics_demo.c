@@ -28,7 +28,7 @@
 
 // There's probably a better way to do this, but I'm not aware of one. 
 
-// #define USE_DVI 1
+#define USE_DVI 1
 
 // #define USE_DVI 0
 
@@ -46,8 +46,11 @@
 
 #endif
 
+#if USE_DVI == 1
 
-#define USE_VGA_CAPTURE 0
+#define USE_VGA_CAPTURE 1
+
+#endif
 
 // VGA graphics library
 #include "vga2_graphics.h"
@@ -144,7 +147,7 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 
 uint g_sample_frequency = CAPTURE_SAMPLE_FREQ_DIVISOR;
 uint8_t g_no_of_captured_pins = CAPTURE_PIN_COUNT;
-uint8_t g_pins_base = CAPTURE_PIN_BASE;
+uint8_t g_pins_base = CAPTURE_PIN_BASE - 2;
 uint g_capture_n_samples = CAPTURE_N_SAMPLES;
 
 uint8_t g_no_of_pins_to_capture = CAPTURE_PIN_COUNT;
@@ -2452,6 +2455,9 @@ int main() {
     gpio_put(LED_PIN, 1); // set LED_PIN
 
 #if USE_VGA_CAPTURE == 1
+
+    #define HSYNC_IN 26
+    #define VSYNC_IN 27
 
     #define GPIO_Inputs ((1 << 27) | (1 << 26) | 0b0111111) 
     gpio_init_mask(GPIO_Inputs); // init GPIO 0 to 5, 26, 27
