@@ -45,7 +45,7 @@ To make a script file (called `filename.sh`) executable, enter:
       VGA In Dark Green  GP2  4                  37 3V3 EN
      VGA In Light Green  GP3  5                  36 3V3 OUT
         VGA In Dark Red  GP4  6                  35 ADC VREF
-       VGA In Light Red  GP5  7                  34 GP28
+       VGA In Light Red  GP5  7                  34 GP28 VGA In CSYNC - not yet!
                          GND  8                  33 ADC GND
           VGA Out HSYNC  GP6  9                  32 GP27  VGA In VSYNC
           VGA Out VSYNC  GP7 10     PICO 2       31 GP26  VGA In HSYNC
@@ -60,3 +60,13 @@ To make a script file (called `filename.sh`) executable, enter:
                DVI CK+  GP14 19                  22 GP17  DVI D1+
                DVI CK-  GP15 20                  21 GP16  DVI D1-
 
+
+Strange thing I experienced just now
+
+I've been developing this project mainly on a Raspberry Pi 5. Every so often I need to be away and don't really
+want to take my Pi, so I copy the project folder with the git history etc. onto a Chromebook, on which
+I'm using Linux (Debian) and VS Code. This time when I copied the folder back to the Pi I found that
+the Git history wasn't working, either in VS Code or on the command line. I tried a number of times, thinking
+I was doing something wrong and each time the same thing would happen. Finally, I tried zipping the folder on the
+Chromebook and unzipping it on the Pi, and that worked. Chrome OS was updated since while I was away (using the
+Chromebook), so maybe that did something.

@@ -16,4 +16,7 @@ else
 # and mirroring them to the htsx dvi port the programming sometimes fails. Turn off the Pico and
 # programming seems to succeed every time.
 
+# The above issue does not seem to occur when using my Raspberry Pi 5 to program the target (as opposed 
+# to my Chromebook).
+
 fi

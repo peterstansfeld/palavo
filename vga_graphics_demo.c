@@ -131,13 +131,15 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 
 // const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
 // #define CAPTURE_PIN_BASE HSYNC2 // 16 = hsync, 17 = vsync // 22 = hsync2
-#define CAPTURE_PIN_BASE HSYNC2 // 16 = hsync, 17 = vsync // 22 = hsync2
+// #define CAPTURE_PIN_BASE HSYNC2 // 16 = hsync, 17 = vsync // 22 = hsync2
+#define CAPTURE_PIN_BASE 22 // 16 = hsync, 17 = vsync // 22 = hsync2
 
 // const uint CAPTURE_PIN_COUNT = 4;
 #define CAPTURE_PIN_COUNT 6
 
 // const uint CAPTURE_TRIGGER_PIN = VSYNC; // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
-#define CAPTURE_TRIGGER_PIN_BASE HSYNC2 // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
+// #define CAPTURE_TRIGGER_PIN_BASE HSYNC2 // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
+#define CAPTURE_TRIGGER_PIN_BASE 22 // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
 
 // const uint CAPTURE_N_SAMPLES = SCREEN_WIDTH * 96; // enough for 48 screen width's worth of data
 #define CAPTURE_N_SAMPLES SCREEN_WIDTH * 96 // enough for 48 screen width's worth of data
@@ -147,18 +149,18 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 
 uint g_sample_frequency = CAPTURE_SAMPLE_FREQ_DIVISOR;
 uint8_t g_no_of_captured_pins = CAPTURE_PIN_COUNT;
-uint8_t g_pins_base = CAPTURE_PIN_BASE - 2;
+uint8_t g_pins_base = CAPTURE_PIN_BASE;
 uint g_capture_n_samples = CAPTURE_N_SAMPLES;
 
 uint8_t g_no_of_pins_to_capture = CAPTURE_PIN_COUNT;
 
 uint8_t g_trigger_pin_base = CAPTURE_TRIGGER_PIN_BASE;
 
-enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_VSYNC, TT_VGA_RGB, TT_VGA_VFRONT_PORCH, TT_COUNT};
+enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_VSYNC, TT_VGA_RGB, TT_VGA_VFRONT_PORCH, TT_VGA_CSYNC, TT_VGA_CRGB, TT_VGA_CVFRONT_PORCH, TT_COUNT};
 
 // uint8_t g_trigger_type = TT_VGA_VSYNC;
 
-uint8_t g_trigger_type = TT_VGA_VSYNC;
+uint8_t g_trigger_type = TT_VGA_CSYNC;
 
 /*
     // uint total_sample_bits = g_capture_n_samples * g_no_of_captured_pins;
@@ -303,7 +305,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     bool triggered = false; // assume fail
 
 
-// enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_VSYNC, TT_VGA_RGB, TT_VGA_VFRONT_PORCH, TT_COUNT};
+// enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_VSYNC, TT_VGA_RGB, TT_VGA_VFRONT_PORCH, TT_VGA_CSYNC, TT_COUNT};
 
     switch (trigger_type) {
 
@@ -382,6 +384,99 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
             } else {
                 // uart_puts(UART_ID, "trigger 1 failed\n");
             }
+            break;
+
+        case TT_VGA_CSYNC:
+        case TT_VGA_CRGB:
+        case TT_VGA_CVFRONT_PORCH:
+
+            // int x = 1; // number of pulses 
+            // switch (trigger_type) {
+            //     case TT_VGA_VSYNC:
+            //         x = 524; // capture just before the next VSYNC pulse
+            //         break;
+            //     case TT_VGA_RGB:
+            //         x = 34; // capture just before the active phase
+            //         break;
+            //     case TT_VGA_VFRONT_PORCH:
+            //         x = 480 + 33 + 2 - 1; // capture just before the vertical front porch phase
+            //         break;
+            // }
+
+            // int x = 524; // number of pulses 
+
+            // uint32_t expiry_time = time_us_32() + TRIGGER_TIMEOUT_US;
+
+            x = 1; // number of pulses 
+
+            switch (trigger_type) {
+                case TT_VGA_CSYNC:
+                    x = 524; // capture just before the next VSYNC pulse
+                    break;
+                case TT_VGA_CRGB:
+                    x = 34; // capture just before the active phase
+                    break;
+                case TT_VGA_CVFRONT_PORCH:
+                    x = 480 + 33 + 2 - 1; // capture just before the vertical front porch phase
+                    break;
+            }
+
+            expiry_time = time_us_32() + TRIGGER_TIMEOUT_US;
+
+
+            // if we get a low pulse on CSYNC that is greater than 96 clks / 25 MHz = 3.84 us then
+            // chances are we have a "VSYNC" signal on CSYNC. It must also be less than 704 cls / 25 MHz = 28.16
+
+            if (pio_sm_exec_expiry_time_us(pio, sm, pio_encode_wait_gpio(1, trigger_pin), expiry_time)) {
+                // CSYNC is high
+                // wait for CSYNC to go low
+                while (1) {
+                    if (pio_sm_exec_expiry_time_us(pio, sm, pio_encode_wait_gpio(0, trigger_pin), expiry_time)) {
+                        // CSYNC is low
+                        uint32_t csync_pulse_low_start_time = time_us_32();
+
+                        // wait for CSYNC to go high again
+                        if (pio_sm_exec_expiry_time_us(pio, sm, pio_encode_wait_gpio(1, trigger_pin), expiry_time)) {
+                            // CSYNC is high again
+
+                            uint32_t csync_pulse_low_duration = time_us_32() - csync_pulse_low_start_time;
+                            
+                            // csync_pulse_low_duration should be between 
+                            
+                            #define CSYNC_WIDTH_IN_MS 4
+                            
+                            // 3 fails - good
+                            // 4, 5, 10, 25, 27, 28 works
+                            // 29, 30, 35, 50, 100 fails - good
+                            if (csync_pulse_low_duration > CSYNC_WIDTH_IN_MS) {
+                                triggered = true; // assume pass
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+
+                if (triggered) {
+                    // triggered = true; // assume pass
+                    // Wait for x CSYNC (HSYNC) pulses before starting the capture
+                    for (int i = 0; i < x; i++) {
+                        if (pio_sm_exec_expiry_time_us(pio, sm, pio_encode_wait_gpio(1, trigger_pin), expiry_time)) {
+                            if (!pio_sm_exec_expiry_time_us(pio, sm, pio_encode_wait_gpio(0, trigger_pin), expiry_time)) {
+                                triggered = false;
+                                break;
+                            }
+                        } else {
+                            triggered = false;
+                            break;
+                        }
+                    }
+                }
+            }
+
             break;
     }
 
@@ -1375,7 +1470,7 @@ void draw_trigger_type() {
 
 // enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_VSYNC, TT_VGA_RGB, TT_VGA_VFRONT_PORCH, TT_COUNT};
 
-    unsigned char tt_chars[9][8] = {" NONE ", " LOW ", " HIGH ", " RISE ", " FALL ", " EDGE ", " VSYNC ", " RGB ", " VFPOR "};
+    unsigned char tt_chars[TT_COUNT][8] = {" NONE ", " LOW ", " HIGH ", " RISE ", " FALL ", " EDGE ", " VSYNC ", " RGB ", " VFPOR ", " CSYNC ",  " CRGB ", " CFPOR "};
     draw_setting_helper(TRIGGER_TYPE_LEFT, 4, 7);
     if (settings_state == SS_TRIGGER_TYPE) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
