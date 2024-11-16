@@ -47,18 +47,35 @@ To make a script file (called `filename.sh`) executable, enter:
         VGA In Dark Red  GP4  6                  35 ADC VREF
        VGA In Light Red  GP5  7                  34 GP28 VGA In CSYNC - not yet!
                          GND  8                  33 ADC GND
-          VGA Out HSYNC  GP6  9                  32 GP27  VGA In VSYNC
-          VGA Out VSYNC  GP7 10     PICO 2       31 GP26  VGA In HSYNC
+      VGA Out Dark Blue  GP6  9                  32 GP27  VGA In VSYNC
+     VGA Out Light Blue  GP7 10     PICO 2       31 GP26  VGA In HSYNC
      VGA Out Dark Green  GP8 11                  30 RUN   CAPTAIN RESETTI
     VGA Out Light Green  GP9 12                  29 GP22  VGA Out CSYNC
                          GND 13                  28 GND
-          VGA Out Blue  GP10 14                  27 GP21  Serial RX
-       VGA Out Red Out  GP11 15                  26 GP20  Serial TX
+      VGA Out Dark Red  GP10 14                  27 GP21  Serial RX
+     VGA Out Light Red  GP11 15                  26 GP20  Serial TX
                DVI D0+  GP12 16                  25 GP19  DVI D2+
                DVI D0-  GP13 17                  24 GP18  DVI D2-
                         GND  18                  23 GND
                DVI CK+  GP14 19                  22 GP17  DVI D1+
                DVI CK-  GP15 20                  21 GP16  DVI D1-
+
+VGA Out GPIO                           VGA 15-way Socket
+
+
+VGA Out Dark Blue    ---  1K  ---      3 Blue
+VGA Out Light Blue   --- 470R ---      3 Blue
+
+VGA Out Dark Green   ---  1K  ---      2 Green
+VGA Out Light Green  --- 470R ---      2 Green
+
+VGA Out Dark Red     ---  1K  ---      1 Red 
+VGA Out Light Red    --- 470R ---      1 Red
+
+
+VGA Out CSYNC        ---  47R ---      13 HSYNC
+
+
 
 
 Strange thing I experienced just now

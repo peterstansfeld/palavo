@@ -35,10 +35,87 @@
  enum test_vga_pins {HSYNC2=6, VSYNC2, LO_GRN2, HI_GRN2, BLUE2_PIN, RED2_PIN};
 
 // We can only produce 16 (4-bit) colors, so let's give them readable names - usable in main()
+
+/* 
 enum colors {BLACK, DARK_GREEN, MED_GREEN, GREEN,
             DARK_BLUE, BLUE, LIGHT_BLUE, CYAN,
             RED, DARK_ORANGE, ORANGE, YELLOW, 
             MAGENTA, PINK, LIGHT_PINK, WHITE} ;
+
+*/
+
+#define DARK_BLUE_BIT 0
+#define MED_BLUE_BIT 1
+
+#define DARK_GREEN_BIT 2 
+#define MED_GREEN_BIT 3
+
+#define DARK_RED_BIT 4 
+#define MED_RED_BIT 5 
+
+
+// Hunter Adams' 16-colour palette definitions as 64-bit colours
+
+#define BLACK       0
+// #define DARK_GREEN  0b000001
+#define DARK_GREEN  (1 << DARK_GREEN_BIT)
+
+// #define MED_GREEN  0b000010
+#define MED_GREEN   (1 << MED_GREEN_BIT)
+
+// #define GREEN  0b000011
+#define GREEN       (MED_GREEN | DARK_GREEN)
+
+// #define DARK_BLUE   0b001100
+#define DARK_BLUE   ((1 << MED_BLUE_BIT) | (1 << DARK_BLUE_BIT))
+
+// #define BLUE        0b001101
+#define BLUE        (DARK_BLUE | DARK_GREEN)
+
+// #define LIGHT_BLUE  0b001110
+#define LIGHT_BLUE  (DARK_BLUE | MED_GREEN)
+
+// #define CYAN        0b001111
+#define CYAN        (DARK_BLUE | GREEN)
+
+// #define RED         0b110000
+#define RED         ((1 << MED_RED_BIT) | (1 << DARK_RED_BIT))
+
+// #define DARK_ORANGE 0b110001
+#define DARK_ORANGE (RED | DARK_GREEN)
+
+// #define ORANGE      0b110010
+#define ORANGE      (RED | MED_GREEN)
+
+// #define YELLOW      0b110011
+#define YELLOW      (RED | GREEN)
+
+// #define MAGENTA     0b111100
+#define MAGENTA     (RED | DARK_BLUE)
+
+// #define PINK        0b111101
+#define PINK        ((RED | DARK_BLUE) | DARK_GREEN)
+
+// #define LIGHT_PINK  0b111110
+#define LIGHT_PINK  ((RED | DARK_BLUE) | MED_GREEN)
+
+// #define WHITE       0b111111
+#define WHITE       (RED | DARK_BLUE | GREEN)
+
+// end of Hunter Adams' 16-colour palette definitions as 64-bit colours
+
+
+// 64-bit colour palette
+
+#define DARK_RED_64    (1 << DARK_RED_BIT)
+
+#define DARK_GREEN_64  (1 << DARK_GREEN_BIT)
+
+#define DARK_BLUE_64  (1 << DARK_BLUE_BIT)
+
+#define DARK_GREY_64  DARK_BLUE_64 | DARK_GREEN_64 | DARK_BLUE_64
+
+
 
 #define WORDS_PER_LINE (1 + 20)
 

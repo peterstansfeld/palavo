@@ -213,10 +213,10 @@ jmp_table_0:
     jmp set_rgb_pins                ; can't use wrap
 
 jmp_table_1:
-    in null, 4                      ; shift the ISR 4 places to the right
+    in null, 6                      ; shift the ISR 6 places to the right
 
 set_rgb_pins:
-    mov pins, isr                   ; put the 4 colour bits on the colour pins
+    mov pins, isr                   ; put the 6 colour bits on the colour pins
 
 test_end_of_line:
     jmp x-- get_bit
@@ -224,8 +224,9 @@ test_end_of_line:
 
 
 public start:
-    out x, 16 [BLANK_DELAY]         ; load x with 639 repeats (640 loops) and wait for the last pixel
-    set pins, 0                     ; blank the colour pins
+    nop [BLANK_DELAY]                ; wait for the last pixel. bit of a waste, but we can't blank all 8 pins with 'set pins,'   
+    mov pins, !x                     ; blank the colour pins
+    out x, 16                        ; load x with 639 repeats (640 loops)
 
     wait 1 irq 5 [0]                ; wait for vsync active mode
 
@@ -234,7 +235,7 @@ delay_loop:
     jmp y-- delay_loop [DELAY_LOOP_DELAY]         ; delay, delay, delay
 
 get_colours:
-    out y, 16                       ; save the 2 or 4, 4-bit colours for this line
+    out y, 16                       ; save the 2 or 4, 4-bit, or 6-bit colours for this line
 
 get_bit:
     mov isr, y                      ; put the 4-bit colours in the ISR
@@ -427,7 +428,7 @@ static inline void rgb5_150_mhz_program_init(PIO pio, uint sm, uint offset, uint
 }
 
 
-static inline void rgb5_150_mhz_rp235x_program_init(PIO pio, uint sm, uint offset, uint pin) {
+static inline void rgb5_150_mhz_rp235x_program_init(PIO pio, uint sm, uint offset, uint pin, uint no_of_pins) {
 
     // creates state machine configuration object c, sets
     // to default configurations. I believe this function is auto-generated
@@ -437,8 +438,8 @@ static inline void rgb5_150_mhz_rp235x_program_init(PIO pio, uint sm, uint offse
 
     // Map the state machine's SET and OUT pin group to three pins, the `pin`
     // parameter to this function is the lowest one. These groups overlap.
-    sm_config_set_set_pins(&c, pin, 4);
-    sm_config_set_out_pins(&c, pin, 4);
+    sm_config_set_set_pins(&c, pin, no_of_pins);
+    sm_config_set_out_pins(&c, pin, no_of_pins);
 
     // Set clock division (Commented out, this one runs at full speed)
     // sm_config_set_clkdiv(&c, 5) ;
@@ -454,18 +455,18 @@ static inline void rgb5_150_mhz_rp235x_program_init(PIO pio, uint sm, uint offse
     sm_config_set_in_shift(&c, true, false, 32);
 
     // Set this pin's GPIO function (connect PIO to the pad)
-    pio_gpio_init(pio, pin);
-    pio_gpio_init(pio, pin+1);
-    pio_gpio_init(pio, pin+2);
-    pio_gpio_init(pio, pin+3);
+    for (int i = 0; i < no_of_pins; i++) {
+        pio_gpio_init(pio, pin + i);
+    }
 
-    // Set the pin direction to output at the PIO (3 pins)
-    pio_sm_set_consecutive_pindirs(pio, sm, pin, 4, true);
+    // Set the RGB GPIO pins' direction to output
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, no_of_pins, true);
 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset + rgb5_offset_start, &c);
 
-    // pio_sm_exec(pio_encode_mov(enum pio_src_dest dest, enum pio_src_dest src))
+    // set x to !y, ie !0, ie 0xffffffff, as the RGB pins are initialised to !x on start
+    pio_sm_exec(pio, sm, pio_encode_mov_not(pio_x, pio_y));
 
     // Set the state machine running (commented out, I'll start this in the C)
     // pio_sm_set_enabled(pio, sm, true);

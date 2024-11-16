@@ -132,7 +132,7 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 // const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
 // #define CAPTURE_PIN_BASE HSYNC2 // 16 = hsync, 17 = vsync // 22 = hsync2
 // #define CAPTURE_PIN_BASE HSYNC2 // 16 = hsync, 17 = vsync // 22 = hsync2
-#define CAPTURE_PIN_BASE 22 // 16 = hsync, 17 = vsync // 22 = hsync2
+#define CAPTURE_PIN_BASE 6 // 16 = hsync, 17 = vsync // 22 = hsync2
 
 // const uint CAPTURE_PIN_COUNT = 4;
 #define CAPTURE_PIN_COUNT 6
@@ -704,7 +704,12 @@ void set_plot_line_colors(uint pin_count) {
 
             char line_col = colours[pin];
 
-            for (uint16_t l = 0; l < trace_height; l++){
+            // char back_col = BLACK;
+            // if (pin == g_channel) {
+            //     back_col = DARK_GREY_64;
+            // }
+
+            for (uint16_t l = 0; l < trace_height; l++) {
                 set_line_colors(y + l,  BLACK, line_col, 0, 0);
             }
 
@@ -2286,9 +2291,8 @@ void init_line_colours() {
         char fore_colour;
         char back_colour;
         
-        if (((y >= TOOLBAR_TOP) && (y <= TOOLBAR_TOP + TOOLBAR_HEIGHT)) || (y >= STATUSBAR_TOP)) {
+        if (((y >= 0) && (y <= TOOLBAR_TOP + TOOLBAR_HEIGHT)) || (y >= STATUSBAR_TOP)) {
             fore_colour = WHITE;
-            // back_colour = DARK_BLUE;
             back_colour = BLACK;
             
         } else {

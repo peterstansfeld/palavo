@@ -34,6 +34,7 @@
 #include "hsync5.pio.h"
 #include "rgb5.pio.h"
 
+#define USE_HSYNC_AND_VSYNC 0
 
 #define USE_CSYNC 1
 
@@ -172,7 +173,7 @@ void __not_in_flash_func(dma_handler)() {
 void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour, uint8_t colour_2, uint8_t colour_3) {
     if ((line < 0) || (line >= NO_OF_LINES)) 
         return;
-     vga_1bit_data_array[line * WORDS_PER_LINE] = (((colour_3 << 12) | (colour_2 << 8) | (fore_colour << 4) | (back_colour)) << 16) | (639);
+     vga_1bit_data_array[line * WORDS_PER_LINE] = (((fore_colour << 6) | (back_colour)) << 16) | 639;
 }
 
 void initVGA() {
@@ -205,7 +206,12 @@ void initVGA() {
 
     // Manually select a couple of state machines from pio instance pio1
 
+#if USE_HSYNC_AND_VSYNC
+
     uint hsync5_sm = 0;
+
+#endif    
+    
     uint rgb5_sm = 1;
 
 #ifdef USE_CSYNC
@@ -230,7 +236,9 @@ void initVGA() {
     // the pio file, then all information about how to use/setup that state machine
     // is consolidated in one place. Here in the C, we then just import and use it.
     
+#if USE_HSYNC_AND_VSYNC
       hsync5_program_init(pio_2, hsync5_sm, hsync5_offset, HSYNC2, 2);
+#endif
 
       // bi_decl(bi_program_feature("This is a feature?"));
 
@@ -253,8 +261,10 @@ void initVGA() {
       bi_decl(bi_1pin_with_name(27, "VSYNC"));
 
       bi_decl(bi_pin_mask_with_name((1 << 22)| (1 << 11)| (1 << 10)| (1 << 9)| (1 << 8)| (1 << 7)| (1 << 6), "VGA Out"));
+#if USE_HSYNC_AND_VSYNC
       bi_decl(bi_1pin_with_name(6, "HSYNC"));
       bi_decl(bi_1pin_with_name(7, "VSYNC"));
+#endif
       bi_decl(bi_1pin_with_name(8, "Dark Green"));
       bi_decl(bi_1pin_with_name(9, "Light Green"));
       bi_decl(bi_1pin_with_name(10, "Blue"));
@@ -290,7 +300,7 @@ void initVGA() {
       rgb5_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN);
 #elif SYS_CLK_KHZ == 150000u
     //   rgb5_150_mhz_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN);
-      rgb5_150_mhz_rp235x_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN2);
+      rgb5_150_mhz_rp235x_program_init(pio_2, rgb5_sm, rgb5_offset, 6, 6);
 #elif SYS_CLK_KHZ == 250000u
       rgb5_250_mhz_program_init(pio_2, rgb5_250_mhz_sm, rgb5_offset, LO_GRN);
 #endif
@@ -298,7 +308,7 @@ void initVGA() {
 #ifdef PICO_PLATFORM
 
 #else
-    #warning no PICO_PLATFORM defined
+    // #warning no PICO_PLATFORM defined
 #endif
 
 #ifdef PICO_BOARD
@@ -360,6 +370,8 @@ void initVGA() {
         1,                                  // Number of transfers, in this case each is 4 byte
         false                               // Don't start immediately.
     );
+
+#if USE_HSYNC_AND_VSYNC
 
     // More DMA channels - test ones - 0 sends color data, 1 reconfigures and restarts 0
     int sync_test_chan_0 = dma_claim_unused_channel(true);
@@ -431,6 +443,8 @@ void initVGA() {
     );
 
 #endif
+
+#endif 
 
 #ifdef USE_CSYNC
 
@@ -741,7 +755,14 @@ for (int y = 0; y < NO_OF_LINES; y++) {
 #ifndef USE_CSYNC
     pio_enable_sm_mask_in_sync(pio_2, ((1u << hsync5_sm) | (1u << rgb5_sm)));
 #else
+
+#if USE_HSYNC_AND_VSYNC
     pio_enable_sm_mask_in_sync(pio_2, ((1u << hsync5_sm) | (1u << rgb5_sm) | (1u << csync_sm)));
+#else
+    pio_enable_sm_mask_in_sync(pio_2, ((1u << rgb5_sm) | (1u << csync_sm)));
+#endif
+
+
 #endif
 
     // Start DMA channel 0. Once started, the contents of the pixel color array
