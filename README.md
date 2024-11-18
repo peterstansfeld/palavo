@@ -31,13 +31,17 @@ Update. When another Pico is generating VGA logic level signals and this Pico 2 
 and mirroring them to the htsx dvi port the programming sometimes fails. If the Pico
 generating the VGA signals is not powered the programming seems to succeed every time.
 
+Update. What I said above no longer seems to be true. When the Pico generating the VGA is
+not powered on but still connected, it takes two or more attempts to program the Pico 2.
+When the Pico is connected, powered on, and held in reset (!RUN) the programming Pico 2 is
+successful on the first attempt... Maybe the Pico is being parasitically powered through
+its GPIO, or something like that?  
 
 To make a script file (called `filename.sh`) executable, enter:
 
 `chmod +x filename.sh`
 
-
-# Pinout
+## Pinout
 
        VGA In Dark Blue  GP0  1                  40 VBUS
       VGA In Light Blue  GP1  2                  39 VSYS
@@ -45,7 +49,7 @@ To make a script file (called `filename.sh`) executable, enter:
       VGA In Dark Green  GP2  4                  37 3V3 EN
      VGA In Light Green  GP3  5                  36 3V3 OUT
         VGA In Dark Red  GP4  6                  35 ADC VREF
-       VGA In Light Red  GP5  7                  34 GP28 VGA In CSYNC - not yet!
+       VGA In Light Red  GP5  7                  34 GP28  VGA In CSYNC - not yet!
                          GND  8                  33 ADC GND
       VGA Out Dark Blue  GP6  9                  32 GP27  VGA In VSYNC
      VGA Out Light Blue  GP7 10     PICO 2       31 GP26  VGA In HSYNC
@@ -76,7 +80,18 @@ VGA Out Light Red    --- 470R ---      1 Red
 VGA Out CSYNC        ---  47R ---      13 HSYNC
 
 
+## UART Comms
+I use a Raspberry Pi Debug Probe (link) for programming the Pico (2) and for UART comms.
 
+I prefer to use minicom as a serial monitor. Some - the one included with VS code for example - prevent
+some keystrokes from being transmitted.
+
+`$ minicom -b 115200 -w -D /dev/ttyACM0` 
+
+Then enable carriage returns with Ctrl-A U.
+
+
+## Weird Issues
 
 Strange thing I experienced just now
 

@@ -2396,38 +2396,25 @@ char * start_help_text = "Press h for help.\n";
 
 #if USE_VGA_CAPTURE == 1
 
+enum vc_modes {VC_NONE, VC_HSYNC_AND_VSYNC, VC_CSYNC} ;
 
 PIO vga_capture_pio = pio0;
 uint vga_capture_sm = 0;
-bool vga_capture_is_enabled = false;
-
-
-
+uint8_t vga_capture_mode = VC_NONE;
+uint vga_capture_offset;
 int rgb_test_chan_0;
+int rgb_test_chan_1;
 
-void init_vga_capture() {
-  
-    uint vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
 
-    // Call the initialization functions that are defined within each PIO file.
-    // Why not create these programs here? By putting the initialization function in
-    // the pio file, then all information about how to use/setup that state machine
-    // is consolidated in one place. Here in the C, we then just import and use it.
-    
-    vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, 26, 0, DEBUG_PIN /* LED_PIN */);
-
-    // pio_enable_sm_mask_in_sync(vga_capture_pio, ((1u << vga_capture_sm)));
-    
-    
+void init_vga_capture_dma_and_start_capturing() {    
     // DMA stuff
-    
 
     dma_channel_config vga_capture_dma_ch0;
     dma_channel_config c1;
     
     // More DMA channels - test ones - 0 sends color data, 1 reconfigures and restarts 0
     rgb_test_chan_0 = dma_claim_unused_channel(true);
-    int rgb_test_chan_1 = dma_claim_unused_channel(true);
+    rgb_test_chan_1 = dma_claim_unused_channel(true);
 
     // Channel Zero (receives color data to PIO VGA machine)
     vga_capture_dma_ch0 = dma_channel_get_default_config(rgb_test_chan_0);  // default configs
@@ -2484,52 +2471,81 @@ void init_vga_capture() {
         false                               // Don't start immediately.
     );
 
-
-    // currently crashes for some reason
-    // only if 
-    
-    // dma_start_channel_mask((1u << rgb_test_chan_0) | (1u << rgb_test_chan_1)); 
-
-    dma_start_channel_mask((1u << rgb_test_chan_0) /* | (1u << rgb_test_chan_1) */ ); 
+    dma_start_channel_mask((1u << rgb_test_chan_0)); 
 
     // end of DMA stuff
   
+    // start capturing the VGA
     pio_sm_set_enabled(vga_capture_pio, vga_capture_sm, true);
-
-
-    // try waiting for the channel to be complete
-
-    // uart_puts(UART_ID, "Waiting for rgb_test_chan_0 DMA channel to finish...\n");
-    // dma_channel_wait_for_finish_blocking(rgb_test_chan_0);
-    // uart_puts(UART_ID, "finished\n");
-
-    vga_capture_is_enabled = true;
 }
 
 
-void toggle_vga_capture() {
-    pio_sm_set_enabled(vga_capture_pio, vga_capture_sm, !vga_capture_is_enabled);
-    vga_capture_is_enabled = !vga_capture_is_enabled;
-
-    if (!vga_capture_is_enabled) {
-        // We've just disabled the vga_capture state machine
-        // We should reset the DMA channel
-
-
-        // Reload the transfer count
-        // dma_hw->ch[rgb_test_chan_0].transfer_count = (DVI_LINE_LENGTH_BYTES * 480 / 4);
-
-        // Reload the write address
-        // dma_hw->ch[rgb_test_chan_0].write_addr = &dvi_framebuf[0];
-
-
-        // And restart the state machine
-
-        // Wow, the below doesn't do what I expected it to do at all - it shifts the display
-        // pio_sm_exec(vga_capture_pio, vga_capture_sm, pio_encode_jmp(0));
-
+// capture the RGB of pins 0 to 5 using HSYNC and VSYNC of pins 26 & 27.
+void init_pio_vga_capture_with_hsync_and_vsync() {
+    if (vga_capture_mode == VC_NONE) {
+        uint vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
+        vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, 26, 0);
+        init_vga_capture_dma_and_start_capturing();
+        vga_capture_mode = VC_HSYNC_AND_VSYNC;
     }
+}
 
+
+// capture the RGB of pins 6 to 11 using CSYNC of pins 22.
+void init_pio_vga_capture_with_csync() {
+    if (vga_capture_mode == VC_NONE) {
+        vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_with_csync_program);
+        vga_capture_with_csync_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, 22, 6);
+        init_vga_capture_dma_and_start_capturing();
+        vga_capture_mode = VC_CSYNC;
+    }
+}
+
+
+void deinit_vga_capture() {
+    if ((vga_capture_mode == VC_HSYNC_AND_VSYNC) || (vga_capture_mode == VC_CSYNC)) {
+        // stop the state machine
+        pio_sm_set_enabled(vga_capture_pio, vga_capture_sm, false);
+
+        // free the state machine
+        if (vga_capture_mode == VC_HSYNC_AND_VSYNC) {
+            pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
+        } else {
+            pio_remove_program(vga_capture_pio, &vga_capture_with_csync_program, vga_capture_offset);
+        }
+
+        // not sure why we need this as I would thought `pio_remove_program()` would achieve the same thing
+        pio_clear_instruction_memory(vga_capture_pio);
+
+        // stop and free the dma channels
+
+        dma_channel_cleanup(rgb_test_chan_1);
+        dma_channel_cleanup(rgb_test_chan_0);
+
+        dma_channel_unclaim(rgb_test_chan_1);
+        dma_channel_unclaim(rgb_test_chan_0);
+
+        vga_capture_mode = VC_NONE;
+    }
+}
+
+
+void set_vga_capture(uint8_t new_capture_mode) {
+
+    deinit_vga_capture();
+
+    switch (new_capture_mode) {
+        case VC_NONE:
+            break;
+
+        case VC_HSYNC_AND_VSYNC:
+            init_pio_vga_capture_with_hsync_and_vsync();
+            break;
+
+        case VC_CSYNC:
+            init_pio_vga_capture_with_csync();
+            break;
+    }
 }
 
 
@@ -2791,7 +2807,7 @@ int main() {
     draw_minimap_indicator();
 
 #if USE_VGA_CAPTURE == 1
-    init_vga_capture();
+    set_vga_capture(VC_HSYNC_AND_VSYNC);
 #endif
 
     while(true) {
@@ -3104,15 +3120,23 @@ int main() {
 #if USE_VGA_CAPTURE == 1
 
                     case UIC_V:
-                        toggle_vga_capture();
-                        if (vga_capture_is_enabled) {
-                            writeString("mirror VGA to DVI");
-                        } else {
-                            writeString("stop mirroring VGA to DVI");
-                            test_DVI_framebuf();
+                        switch (vga_capture_mode) {
+                            case VC_NONE:
+                                set_vga_capture(VC_HSYNC_AND_VSYNC);
+                                writeString("capture VGA IN to DVI");
+                                break;
 
+                            case VC_HSYNC_AND_VSYNC:
+                                set_vga_capture(VC_CSYNC);
+                                writeString("mirror VGA OUT to DVI");
+                                break;
+
+                            case VC_CSYNC:
+                                set_vga_capture(VC_NONE);
+                                writeString("display DVI test pattern");
+                                test_DVI_framebuf();
+                                break;
                         }
-                        // mirror_VGA_data_to_DVI();
                         break;
 #endif
 
