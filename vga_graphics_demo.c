@@ -135,14 +135,14 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 #define CAPTURE_PIN_BASE 6 // 16 = hsync, 17 = vsync // 22 = hsync2
 
 // const uint CAPTURE_PIN_COUNT = 4;
-#define CAPTURE_PIN_COUNT 6
+#define CAPTURE_PIN_COUNT 4
 
 // const uint CAPTURE_TRIGGER_PIN = VSYNC; // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
 // #define CAPTURE_TRIGGER_PIN_BASE HSYNC2 // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
 #define CAPTURE_TRIGGER_PIN_BASE 22 // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
 
 // const uint CAPTURE_N_SAMPLES = SCREEN_WIDTH * 96; // enough for 48 screen width's worth of data
-#define CAPTURE_N_SAMPLES SCREEN_WIDTH * 96 // enough for 48 screen width's worth of data
+// #define CAPTURE_N_SAMPLES SCREEN_WIDTH * 96 // enough for 48 screen width's worth of data
 
 //set the default sample rate to the pixel clock rate of 25 MHz
 #define CAPTURE_SAMPLE_FREQ_DIVISOR (SYS_CLK_KHZ / 25000u)
@@ -150,7 +150,31 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 uint g_sample_frequency = CAPTURE_SAMPLE_FREQ_DIVISOR;
 uint8_t g_no_of_captured_pins = CAPTURE_PIN_COUNT;
 uint8_t g_pins_base = CAPTURE_PIN_BASE;
-uint g_capture_n_samples = CAPTURE_N_SAMPLES;
+
+#define HORIZONTAL_BLANKING_PIXELS 160
+#define VERTICAL_BLANKING_PIXELS 45
+
+// 800 * 525 = 420,000
+#define SAMPLES_IN_640_480_FRAME ((SCREEN_WIDTH + HORIZONTAL_BLANKING_PIXELS) * \
+                                  (SCREEN_HEIGHT + VERTICAL_BLANKING_PIXELS))
+
+// 420,000
+#define SAMPLES_TO_CAPTURE SAMPLES_IN_640_480_FRAME
+
+
+#define CHANNELS_PER_SAMPLE 4
+
+// 1,680,000
+#define TOTAL_SAMPLE_BITS (SAMPLES_TO_CAPTURE * CHANNELS_PER_SAMPLE)
+
+// 52,500
+#define BUF_SIZE_WORDS (TOTAL_SAMPLE_BITS / 32)
+
+// // equivalent to: uint8_t array[210,000] 
+// uint32_t capture_buffer[BUF_SIZE_WORDS];
+// use malloc to create the 'capture_buffer' in case we need to resize it at any stage
+
+uint g_capture_n_samples = SAMPLES_TO_CAPTURE;
 
 uint8_t g_no_of_pins_to_capture = CAPTURE_PIN_COUNT;
 
@@ -160,7 +184,7 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 
 // uint8_t g_trigger_type = TT_VGA_VSYNC;
 
-uint8_t g_trigger_type = TT_VGA_CSYNC;
+uint8_t g_trigger_type = TT_VGA_CRGB;
 
 /*
     // uint total_sample_bits = g_capture_n_samples * g_no_of_captured_pins;
@@ -2642,13 +2666,23 @@ int main() {
     // We're going to capture into a u32 buffer, for best DMA efficiency. Need
     // to be careful of rounding in case the number of pins being sampled
     // isn't a power of 2.
-    uint total_sample_bits = g_capture_n_samples * g_no_of_captured_pins;
-    total_sample_bits += bits_packed_per_word(g_no_of_captured_pins) - 1;
 
-    uint buf_size_words = total_sample_bits / bits_packed_per_word(g_no_of_captured_pins);
+    // uint total_sample_bits = g_capture_n_samples * g_no_of_captured_pins;
+    // total_sample_bits += bits_packed_per_word(g_no_of_captured_pins) - 1;
+    
+    // uint buf_size_words = total_sample_bits / bits_packed_per_word(g_no_of_captured_pins);
+
+    // As we know that BUF_SIZE_WORDS is a power of 2 we don't need to bother with bits_packed_per_word()
+    uint buf_size_words = BUF_SIZE_WORDS; // todo - replace buf_size_words with BUF_SIZE_WORDS
+
+    // equivalent to: uint8_t array[210,000] 
     uint32_t *capture_buf = malloc(buf_size_words * sizeof(uint32_t));
     hard_assert(capture_buf);
 
+    uint total_sample_bits = buf_size_words * bits_packed_per_word(g_no_of_captured_pins);
+
+    g_capture_n_samples = total_sample_bits / g_no_of_captured_pins;    
+    
     // if we change the no of pins during the program then our CAPTURE_N_SAMPLES will possibly be wrong
     // so let's try and reverse the maths to give us CAPTURE_N_SAMPLES given buf_size_words and g_no_of_pins...
 
