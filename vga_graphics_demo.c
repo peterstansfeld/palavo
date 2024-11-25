@@ -755,6 +755,15 @@ void set_plot_line_colors(uint pin_count) {
 }
 
 
+// Returns the number of characters a uint would take if printed as ascii (with no separators).
+uint8_t uint_width(uint32_t num) {
+    uint8_t width = 0;
+    do {
+        width += 1;
+        num = num / 10;
+    } while (num);
+    return width;
+}
 
 
 void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples, int magnification,
@@ -767,6 +776,21 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
     // Each FIFO record may be only partially filled with bits, depending on
     // whether pin_count is a factor of 32.
 
+    // Define a structure for pulse width values
+    struct PulseWidth {
+        int16_t x;
+        int32_t value;
+    };
+
+    struct PulseWidth pws[64];
+    uint8_t no_of_pws;
+
+    // 20
+    #define PIXEL_WORDS_PER_LINE 640 / 32
+
+    uint32_t top_pixels [PIXEL_WORDS_PER_LINE];
+    uint32_t mid_pixels [PIXEL_WORDS_PER_LINE];
+    uint32_t bot_pixels [PIXEL_WORDS_PER_LINE];
 
     uint record_size_bits = bits_packed_per_word(pin_count);
 
@@ -822,6 +846,8 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 #endif
 
     for (int pin = 0; pin < pin_count; ++pin) {
+
+        no_of_pws = 0;
 
         int x = 0;
 
@@ -929,7 +955,12 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
         int next_start = -1;
 
-        fillRect(0, y, SCREEN_WIDTH, (trace_height), BLACK); // clear plot area
+        // fillRect(0, y, SCREEN_WIDTH, (trace_height), BLACK); // clear plot area
+
+        // clear the buffered top, middle and bottom lines of the plot
+        memset(&top_pixels[0], 0, PIXEL_WORDS_PER_LINE * sizeof(uint32_t));
+        memset(&mid_pixels[0], 0, PIXEL_WORDS_PER_LINE * sizeof(uint32_t));
+        memset(&bot_pixels[0], 0, PIXEL_WORDS_PER_LINE * sizeof(uint32_t));
 
         // paint the windowed part of the plot
 
@@ -948,17 +979,36 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
                 if (x != last_v_line_x) {
                     // We've not yet drawn a vertical line at this x location, so let's draw one.
-                    drawVLine(x, y, trace_height, line_col);
+                    // drawVLine(x, y, trace_height, line_col);
+
+                    // Or rather, let's buffer it now, and memcpy it later
+                    // calculate the word index (0 - 19)
+                    int wi = (x / 32);
+                    
+                    // calculate the bit index (0 - 31) and then the or mask 
+                    int or_mask = 1 << (x & 0x1f);
+                    
+                    top_pixels[wi] |= (or_mask);
+                    mid_pixels[wi] |= (or_mask);
+                    bot_pixels[wi] |= (or_mask);
+
                     last_v_line_x = x;
                     last_pixel_x = x;
 
                     if (show_numbers) {
-                        sprintf(str,"%d", i - last_i);
-                        int str_width = strlen(str) * FONT_WIDTH;
+                        // sprintf(str,"%d", i - last_i);
+                        // int str_width = strlen(str) * FONT_WIDTH;
+
+                        int str_width =  uint_width(i - last_i) * FONT_WIDTH;
 
                         if (str_width < (x - last_x)) {
                             // the string fits between the two edges
-                            cursor_x = last_x + ((x - last_x - str_width) / 2) + 1;
+
+                            int x_offset = ((x - last_x - str_width) / 2) + 1;
+                            if (x_offset < 2) {
+                                x_offset = 2;
+                            }
+                            cursor_x = last_x +  x_offset;
 
                             if (cursor_x < 0) {
                                 cursor_x = 0;
@@ -972,8 +1022,13 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                             // }
 
                             if (cursor_x - str_width < SCREEN_WIDTH) {
-                                setCursor(cursor_x, y + (trace_height / 2) - (FONT_HEIGHT / 2));
-                                writeString(str);
+                                // setCursor(cursor_x, y + (trace_height / 2) - (FONT_HEIGHT / 2));
+                                // writeString(str);
+
+                                // buffer the value and draw it later
+                                pws[no_of_pws].x = cursor_x;
+                                pws[no_of_pws].value = i - last_i;
+                                no_of_pws++;
                             }
                         }
                     }
@@ -985,7 +1040,20 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
             } else {
                 if (x != last_pixel_x) {
                     // We've not yet drawn a pixel at this x location, so let's draw one.
-                    drawPixel(x, y + (sample ? 0 : trace_height - 1), line_col);
+                    // drawPixel(x, y + (sample ? 0 : trace_height - 1), line_col);
+
+                    // calculate the word index 0 - 19
+                    int wi = (x / 32);
+                    
+                    // calculate the bit index (0 - 31) and then the or mask 
+                    int or_mask = 1 << (x & 0x1f);
+                    
+                    if (sample) {
+                        top_pixels[wi] |= or_mask;
+                    } else {
+                        bot_pixels[wi] |= or_mask;
+                    }
+
                     last_pixel_x = x;
                 }
             }
@@ -1060,8 +1128,10 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                 x = ((i - scrollx) * (magnification + 1));
             }
 
-            sprintf(str,"%d", i - last_i);
-            int str_width = strlen(str) * FONT_WIDTH;
+            // sprintf(str,"%d", i - last_i);
+            // int str_width = strlen(str) * FONT_WIDTH;
+
+            int str_width =  uint_width(i - last_i) * FONT_WIDTH;
 
 /*
             if (str_width < (x - last_x)) {
@@ -1098,7 +1168,32 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                 // else if (cursor_x <= last_x) {
                 //     cursor_x = last_x + 1;
                 // } 
-                setCursor(cursor_x, y + (trace_height / 2) - (FONT_HEIGHT / 2));
+                // setCursor(cursor_x, y + (trace_height / 2) - (FONT_HEIGHT / 2));
+                // writeString(str);
+
+                pws[no_of_pws].x = cursor_x;
+                pws[no_of_pws].value = i - last_i;
+                no_of_pws++;
+            }
+        }
+
+        // copy the buffer top, all the middle and the bottom lines in quick succession 
+        memcpy(&vga_1bit_data_array[(y * WORDS_PER_LINE) + 1], &top_pixels[0], PIXEL_WORDS_PER_LINE * sizeof(uint32_t));
+        
+        for (int i = 1; i < trace_height - 1; i++) {    
+            memcpy(&vga_1bit_data_array[((y + i) * WORDS_PER_LINE) + 1], &mid_pixels[0], PIXEL_WORDS_PER_LINE * sizeof(uint32_t));
+        }
+
+        memcpy(&vga_1bit_data_array[((y + trace_height - 1) * WORDS_PER_LINE) + 1], &bot_pixels[0], PIXEL_WORDS_PER_LINE * sizeof(uint32_t));
+
+        if (show_numbers) {
+            // calculate the y position for the text
+            uint16_t cursor_y = y + ((trace_height - FONT_HEIGHT) / 2);
+            
+            // draw all the buffered pulse widths
+            for (int i = 0; i < no_of_pws; i++) {
+                setCursor(pws[i].x, cursor_y);
+                sprintf(str,"%d", pws[i].value);
                 writeString(str);
             }
         }
@@ -1959,6 +2054,9 @@ char* help_strings =
     "m to measure VGA timings\n"
     "h to show this help window\n"
     "a to show the about window\n"
+#if USE_DVI == 1
+    "v to cycle DVI modes: mirror VGA out -> test -> VGA in\n"
+#endif
     "SPACE to play / pause graphics demo\n";
 
 char* press_any_key_string = 
@@ -1969,7 +2067,11 @@ bool showing_window = false;
 
 #define HELP_WINDOW_PADDING 2
 #define HELP_WINDOW_WIDTH (56 + 2) * FONT_WIDTH
+#if USE_DVI == 1
+#define HELP_WINDOW_HEIGHT (21 + 2) * (FONT_HEIGHT + HELP_WINDOW_PADDING)
+#else
 #define HELP_WINDOW_HEIGHT (20 + 2) * (FONT_HEIGHT + HELP_WINDOW_PADDING)
+#endif
 #define HELP_WINDOW_TOP (SCREEN_HEIGHT - HELP_WINDOW_HEIGHT) / 2
 #define HELP_WINDOW_LEFT (SCREEN_WIDTH - HELP_WINDOW_WIDTH) / 2 
 
@@ -2841,7 +2943,8 @@ int main() {
     draw_minimap_indicator();
 
 #if USE_VGA_CAPTURE == 1
-    set_vga_capture(VC_HSYNC_AND_VSYNC);
+    // set_vga_capture(VC_HSYNC_AND_VSYNC);
+    set_vga_capture(VC_CSYNC);
 #endif
 
     while(true) {
