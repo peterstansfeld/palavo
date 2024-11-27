@@ -49,10 +49,10 @@ To make a script file (called `filename.sh`) executable, enter:
       VGA In Dark Green  GP2  4                  37 3V3 EN
      VGA In Light Green  GP3  5                  36 3V3 OUT
         VGA In Dark Red  GP4  6                  35 ADC VREF
-       VGA In Light Red  GP5  7                  34 GP28  VGA In CSYNC - not yet!
+       VGA In Light Red  GP5  7                  34 GP28 Spare
                          GND  8                  33 ADC GND
       VGA Out Dark Blue  GP6  9                  32 GP27  VGA In VSYNC
-     VGA Out Light Blue  GP7 10     PICO 2       31 GP26  VGA In HSYNC
+     VGA Out Light Blue  GP7 10     PICO 2       31 GP26  VGA In HSYNC or CSYNC
      VGA Out Dark Green  GP8 11                  30 RUN   CAPTAIN RESETTI
     VGA Out Light Green  GP9 12                  29 GP22  VGA Out CSYNC
                          GND 13                  28 GND
@@ -89,6 +89,25 @@ some keystrokes from being transmitted.
 `$ minicom -b 115200 -w -D /dev/ttyACM0` 
 
 Then enable carriage returns with Ctrl-A U.
+
+
+# PIO State Machine Usage
+
+PIO      SM       Size  Usage
+0        0        2     vga_capture_grab_sm
+0        1        24/29 vga_capture_program (could save about 8 cycles) or vga_capture_with_csync_program (could save about 11 cycles)
+0        2              Not much space left, especially with vga_capture_with_csync_program
+0        3              Not much space left, especially with vga_capture_with_csync_program
+
+1        0        29    vga_capture_with_csync_program
+1        1              
+1        2              
+1        3        1     logic_capture
+
+2        0              
+2        1        13    rgb5_150_mhz_rp235x_program_instructions (rrggbb for vga out)
+2        2        15    hsync5_program (csync for vga out)
+2        3
 
 
 ## Weird Issues

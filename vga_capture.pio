@@ -73,8 +73,12 @@ wait_for_hsync:
 
 
 ; we need to wait for 203 (29 * 7) clock cycles, I believe
-    set x, 30 [5]
+    set x, 30 [4]
  ;   nop [6] ; 4 works, 0 fails, 1 fails, 2 fails, 3 passes .. 7 passes, so choose 5
+
+    ; 5 was original, but we've changed the timing due to irq'ing to a second state machine
+    ; 1 fails, 2 fails, 3... 6, so choose, 4 
+
     ; nop [0] ; this seems to work with the two above t [7]
 delay_loop:
     nop
@@ -111,7 +115,7 @@ delay_loop:
 
     set x, 0b1010                    
     mov osr, x
-    out null, 5
+    out null, 6
     ; out null, 4
     mov x, osr
     jmp x-- x_decremented
@@ -119,36 +123,26 @@ x_decremented:
 
 
 sample_loop:
-    ; in null, 2
-    ; in pins, 4    [4]  side 1       ;
-    ; in null, 4    [4]  side 1       ;
-    ; in y, 4    [4]  side 1       ;
+    ; in pins, 6    [4]
     
-    ; in pins, 6    [5]  side 1       ;
-    in pins, 6    [5]
-    
-    ; in null, 2
-    ; in pins, 4    [3]  side 0       ; 
-    ; in null, 4    [3]  side 0       ; 
-    ; in y, 4    [3]  side 0       ; 
-
-    ; in pins, 6    [4]  side 0       ;
-    in pins, 6    [4]
-
-
-    ; nop
-    ; nop [4] side 1
- 
- 
-    ; nop
-    ; nop [3] side 0
-
-
-
+    irq 4         [4]     ; Set IRQ to signal to another state machine to grab the pixel value
 
     jmp x-- sample_loop
 
     jmp y-- wait_for_hsync
+
+.wrap
+
+
+.program vga_capture_grab
+;.side_set 1 opt                     ; one sideset pin - the Pico's LED
+; .origin 0                           ; we modify the PC, which needs absolute addresses
+
+.wrap_target
+start:
+; Wait for irq from vga_capture, which is doing all the triggering, timing etc.
+    wait 1 irq 4                  
+    in pins, 6    [4]                 ; grab the pixel data
 
 .wrap
 
@@ -214,17 +208,20 @@ test_low_pulse_width:
     jmp x-- test_low_pulse_width
     
 ; csync has been low for longer than 968 clocks, so assume it's the start of vsync (on csync)
-    wait 1 jmppin                   ; wait for csync to be high (end of "656" cycle pulse)
+    ; wait 1 jmppin                   ; wait for csync to be high (end of "656" cycle pulse)
 
-; Load 33 into x for 34 pulses
+; Instead, save two instructions by waiting for one more hsync, ie  total of 35 hsyncs
+
+
+; Load 34 into x for 35 pulses
     set x, 17                       ; x = 17
     mov osr, x                      ; osr = 17
     out null, 1                     ; osr = 17 << 1 = 34
     mov x, osr                      ; x = 34
-    jmp x-- x_decremented           ; x = 33  
-x_decremented:
+;     jmp x-- x_decremented           ; x = 33  
+; x_decremented:
 
-count_34_hsyncs:
+count_35_hsyncs:
 
 ; Wait for 32 hsyncs (on csync)
 clock_count_loop:
@@ -246,7 +243,10 @@ wait_for_hsync:
 ; What we've got below takes 7 + (31 * 9) + 5 = 291 clocks, and was verified by fine tuning
 ; the middle value between it being too low (and causing image corruption) and too high.
 
-    set x, 30 [6]       ; 0, 1, 2 = too short. 3, 4, 5, 6, 7 & 8 ok, 9 too long
+    ; set x, 30 [6]       ; 0, 1, 2 = too short. 3, 4, 5, 6, 7 & 8 ok, 9 too long
+ 
+   
+    set x, 30 [4]       ; 0 = too short. 1, 2, 3, 4, 5, & 6 ok, 7 too long
 
  delay_loop:
     jmp x-- delay_loop [8] 
@@ -260,7 +260,8 @@ wait_for_hsync:
 x_decremented_2:
 
 sample_loop:
-    in pins, 6 [4]               
+;    in pins, 6 [4]
+    irq 4         [4]     ; Set IRQ to signal to another state machine to grab the pixel value
     jmp x-- sample_loop
 
     jmp y-- wait_for_hsync
@@ -355,6 +356,21 @@ static inline void vga_capture_program_init(PIO pio, uint sm, uint offset, uint 
 
     // Set the state machine running (eventually this will be started after the DMA channel is enabled)
     // pio_sm_set_enabled(pio, sm, true);
+}
+
+
+static inline void vga_capture_grab_program_init(PIO pio, uint sm, uint offset, uint rgb_pin) {
+
+    pio_sm_config c = vga_capture_grab_program_get_default_config(offset);
+
+    // configure the input pin group to start at `rgb_pin`
+    sm_config_set_in_pins (&c, rgb_pin);
+
+    // shift ISR to the right, enable autopush, and set the push threshold set to 30
+    sm_config_set_in_shift(&c, true, true, 30);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
 }
 
 
