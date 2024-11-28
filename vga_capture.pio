@@ -39,25 +39,24 @@ clock_count_loop:
 ;    set y, 31                           ; 32 lines to read
 
 
-    set y, 0b1111
+    ; set y, 0b1111
 ;    set y, 0b0010
     ; set y, 0b10111
-    mov osr, y
+    ; mov osr, y
     ; out null, 2                     ; 60 vertical lines
     ; out null, 3                     ; 120 vertical lines
 ;    out null, 4                     ; 240 vertical lines
-    out null, 5                     ; 480 vertical lines
-    mov y, osr
-    jmp y-- y_decremented           
-y_decremented:
+    ; out null, 5                     ; 480 vertical lines
+    ; mov y, osr
+;     jmp y-- y_decremented      
+; y_decremented:
 
+    mov y, isr                      ; y = 479 for 480 vertical lines
 
-
-
+; Wait for one more HSYNC (a total of 33 HSYNCS)
 
 wait_for_hsync:
 
-; Wait for one more HSYNC (a total of 33 HSYNCS)
     wait 0 jmppin+0                 ; wait for HSYNC to be low
     wait 1 jmppin+0                 ; wait for HSYNC to be high
 
@@ -73,16 +72,18 @@ wait_for_hsync:
 
 
 ; we need to wait for 203 (29 * 7) clock cycles, I believe
-    set x, 30 [4]
+    ; set x, 30 [4]
+    ;add 5, as we're losing 5 instructions below
+    ; set x, 30 [9]
  ;   nop [6] ; 4 works, 0 fails, 1 fails, 2 fails, 3 passes .. 7 passes, so choose 5
 
     ; 5 was original, but we've changed the timing due to irq'ing to a second state machine
     ; 1 fails, 2 fails, 3... 6, so choose, 4 
 
     ; nop [0] ; this seems to work with the two above t [7]
-delay_loop:
-    nop
-    jmp x-- delay_loop [7] 
+; delay_loop:
+    ; nop
+    ; jmp x-- delay_loop [8] 
 
 ;    mov y, x            ;y = 0xffffffff
 
@@ -113,21 +114,21 @@ delay_loop:
  ;   mov osr, rxfifo[0]
 ;    mov x, osr                      ;load x with 319 ((640 / 2) - 1
 
-    set x, 0b1010                    
-    mov osr, x
-    out null, 6
-    ; out null, 4
-    mov x, osr
-    jmp x-- x_decremented
-x_decremented:
+    ; set x, 0b1010                    
+    ; mov osr, x
+    ; out null, 6
+    ; ; out null, 4
+    ; mov x, osr
+    ; jmp x-- x_decremented
+; x_decremented:
 
 
 sample_loop:
     ; in pins, 6    [4]
     
-    irq 4         [4]     ; Set IRQ to signal to another state machine to grab the pixel value
+    irq 4                          ; Set IRQ to signal to another state machine to grab the pixel value
 
-    jmp x-- sample_loop
+    ; jmp x-- sample_loop
 
     jmp y-- wait_for_hsync
 
@@ -141,8 +142,24 @@ sample_loop:
 .wrap_target
 start:
 ; Wait for irq from vga_capture, which is doing all the triggering, timing etc.
-    wait 1 irq 4                  
+    mov y, osr                          ; load y with 479 for 480 loops
+wait_for_hsync:
+    wait 1 irq 4
+
+    set x, 30 [9]
+ ;   nop [6] ; 4 works, 0 fails, 1 fails, 2 fails, 3 passes .. 7 passes, so choose 5
+
+    ; 5 was original, but we've changed the timing due to irq'ing to a second state machine
+    ; 1 fails, 2 fails, 3... 6, so choose, 4 
+
+    ; nop [0] ; this seems to work with the two above t [7]
+delay_loop:
+    ; nop
+    jmp x-- delay_loop [8]
+
+sample_rgb_pins:
     in pins, 6    [4]                 ; grab the pixel data
+    jmp y-- sample_rgb_pins           ; repeat 479 more times  
 
 .wrap
 
@@ -189,16 +206,18 @@ wait_for_vsync_csync:
 ; csync has gone low and needs to be low for more than 96 * 6 = 576 cycles, and less than 656 * 6 = 3936 cycles
 
 ; Load 479 into y for 480 vertical lines
-    set y, 0b1111                   ; y = 15
-    mov osr, y                      ; osr = 15 for shifting
-    out null, 5                     ; osr = 15 << 5 = 32 = 480
-    mov y, osr                      ; y = 480
-    jmp y-- y_decremented           ; y = 479
+    ; set y, 0b1111                   ; y = 15
+    ; mov osr, y                      ; osr = 15 for shifting
+    ; out null, 5                     ; osr = 15 << 5 = 32 = 480
+    ; mov y, osr                      ; y = 480
+    ; jmp y-- y_decremented           ; y = 479
 y_decremented:
 
-; Load 480 into x for a pulse of greater than 6 + (481 * 2) = 968 cycles
+    mov y, isr
+
+; Load 479 into x for a pulse of greater than 2 + (480 * 2) = 962 cycles
 ; and satisfies: 576 < 968 < 3936
-    mov x, osr                      ; x = 480
+    mov x, y                    ; x = 479
 
 test_low_pulse_width:
 ; if csync has gone high too soon the pulse is too short for a vsync (on csync),
@@ -214,16 +233,18 @@ test_low_pulse_width:
 
 
 ; Load 34 into x for 35 pulses
-    set x, 17                       ; x = 17
-    mov osr, x                      ; osr = 17
-    out null, 1                     ; osr = 17 << 1 = 34
-    mov x, osr                      ; x = 34
+    ; set x, 17                       ; x = 17
+    ; mov osr, x                      ; osr = 17
+    ; out null, 1                     ; osr = 17 << 1 = 34
+    ; mov x, osr                      ; x = 34
 ;     jmp x-- x_decremented           ; x = 33  
 ; x_decremented:
 
-count_35_hsyncs:
+    mov x, osr
 
-; Wait for 32 hsyncs (on csync)
+count_33_hsyncs:
+
+; Wait for 33 hsyncs (on csync)
 clock_count_loop:
     wait 0 jmppin                   ; wait for HSYNC to be low
     wait 1 jmppin                   ; wait for HSYNC to be high
@@ -246,23 +267,27 @@ wait_for_hsync:
     ; set x, 30 [6]       ; 0, 1, 2 = too short. 3, 4, 5, 6, 7 & 8 ok, 9 too long
  
    
-    set x, 30 [4]       ; 0 = too short. 1, 2, 3, 4, 5, & 6 ok, 7 too long
+    ; set x, 30 [4]       ; 0 = too short. 1, 2, 3, 4, 5, & 6 ok, 7 too long
 
- delay_loop:
-    jmp x-- delay_loop [8] 
+
+    ;add 5, as we're losing 5 instructions below
+    ; set x, 30 [9]
+
+;  delay_loop:
+;     jmp x-- delay_loop [8] 
 
 ; load x with 640 - 1 = 639
-    set x, 0b1010                   ; x = 10                    
-    mov osr, x                      ; osr = 10
-    out null, 6                     ; osr = 10 << 6 = 640
-    mov x, osr                      ; x = 640
-    jmp x-- x_decremented_2         ; x = 639
-x_decremented_2:
+;     set x, 0b1010                   ; x = 10                    
+;     mov osr, x                      ; osr = 10
+;     out null, 6                     ; osr = 10 << 6 = 640
+;     mov x, osr                      ; x = 640
+;     jmp x-- x_decremented_2         ; x = 639
+; x_decremented_2:
 
-sample_loop:
+; sample_loop:
 ;    in pins, 6 [4]
-    irq 4         [4]     ; Set IRQ to signal to another state machine to grab the pixel value
-    jmp x-- sample_loop
+    irq 4         [0]     ; Set IRQ to signal to another state machine to grab the pixel value
+;    jmp x-- sample_loop
 
     jmp y-- wait_for_hsync
 
@@ -332,11 +357,10 @@ static inline void vga_capture_program_init(PIO pio, uint sm, uint offset, uint 
 //    pio_sm_put_blocking(pio, sm, 319); // put 320-1 into the TXFIFO for half the number of horizontal pixels 
 //    pio_sm_put_blocking(pio, sm, 319); // put 320-1 into the TXFIFO for half the number of horizontal pixels 
 //    pio_sm_put_blocking(pio, sm, 319); // put 320-1 into the TXFIFO for half the number of horizontal pixels 
- 
- 
-    pio_sm_put_blocking(pio, sm, 320 - 1); // put 639 into the TXFIFO for the number of horizontal pixels 
-    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1) pull 639 into the OSR
 
+    pio_sm_put_blocking(pio, sm, 480 - 1); // put 479 into the TXFIFO for the number of lines
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // OSR = 479
+    pio_sm_exec(pio, sm, pio_encode_mov(pio_isr, pio_osr)); // ISR = 479
 
     // There probably is an SDK function for these, something like this:
     //    pio0->sm[0].rxf_putget0 = 319;
@@ -371,6 +395,10 @@ static inline void vga_capture_grab_program_init(PIO pio, uint sm, uint offset, 
 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
+
+    pio_sm_put_blocking(pio, sm, 640 - 1); // put 639 into the TXFIFO for the number of horizontal pixels
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // OSR = 639
+
 }
 
 
@@ -436,10 +464,11 @@ static inline void vga_capture_with_csync_program_init(PIO pio, uint sm, uint of
 //    pio_sm_put_blocking(pio, sm, 319); // put 320-1 into the TXFIFO for half the number of horizontal pixels 
 //    pio_sm_put_blocking(pio, sm, 319); // put 320-1 into the TXFIFO for half the number of horizontal pixels 
  
- 
-    pio_sm_put_blocking(pio, sm, 320 - 1); // put 639 into the TXFIFO for the number of horizontal pixels 
-    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1) pull 639 into the OSR
-
+    pio_sm_put_blocking(pio, sm, 480 - 1); // put 479 into the TXFIFO for the number of lines
+    pio_sm_put_blocking(pio, sm, 35 - 1); // put 34 into the TXFIFO for the number hsync on csync pusles
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // OSR = 479
+    pio_sm_exec(pio, sm, pio_encode_mov(pio_isr, pio_osr)); // ISR = 479
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // OSR = 35
 
     // There probably is an SDK function for these, something like this:
     //    pio0->sm[0].rxf_putget0 = 319;

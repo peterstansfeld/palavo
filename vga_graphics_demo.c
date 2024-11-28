@@ -2535,8 +2535,8 @@ uint vga_capture_grab_offset;
 int rgb_test_chan_0;
 int rgb_test_chan_1;
 
-PIO vga_capture_timing_csync_pio = pio1;
-uint vga_capture_timing_csync_sm = 0;
+PIO vga_capture_timing_csync_pio = pio0;
+uint vga_capture_timing_csync_sm = 3;
 uint vga_capture_timing_csync_offset;
 
 void init_vga_capture_dma_and_start_capturing() {    

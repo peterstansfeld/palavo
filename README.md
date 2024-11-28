@@ -93,21 +93,26 @@ Then enable carriage returns with Ctrl-A U.
 
 # PIO State Machine Usage
 
-PIO      SM       Size  Usage
-0        0        2     vga_capture_grab_sm
-0        1        24/29 vga_capture_program (could save about 8 cycles) or vga_capture_with_csync_program (could save about 11 cycles)
-0        2              Not much space left, especially with vga_capture_with_csync_program
-0        3              Not much space left, especially with vga_capture_with_csync_program
+PIO      SM       Size  Needs PIO1*  Usage
+0        0        6         y       vga_capture_grab_sm
+0        1        11                vga_capture_program
+0        2        14                vga_capture_with_csync_program
+0        3                          
+Total             31                              
 
-1        0        29    vga_capture_with_csync_program
-1        1              
-1        2              
-1        3        1     logic_capture
+1        0                       
+1        1        13                rgb5_150_mhz_rp235x_program_instructions (rrggbb for vga out) 
+1        2        15                hsync5_program (csync for vga out)      
+1        3        1                 logic_capture
+Total             29                  
 
 2        0              
-2        1        13    rgb5_150_mhz_rp235x_program_instructions (rrggbb for vga out)
-2        2        15    hsync5_program (csync for vga out)
+2        1        
+2        2        
 2        3
+Total             0                  
+
+* PIO1 has PIO features that were introduced in RP235x devices; RP2040 uses PIO0.
 
 
 ## Weird Issues

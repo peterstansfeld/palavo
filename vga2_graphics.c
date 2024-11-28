@@ -342,7 +342,7 @@ void initVGA() {
     channel_config_set_read_increment(&c0, true);                        // yes read incrementing
     channel_config_set_write_increment(&c0, false);                      // no write incrementing
 
-    channel_config_set_dreq(&c0, DREQ_PIO1_TX1) ;                        // DREQ_PIO1_TX1 pacing (FIFO)
+    channel_config_set_dreq(&c0, pio_get_dreq(pio_2, rgb5_sm, true));     // rgb5_sm tx FIFO pacing
 
     channel_config_set_chain_to(&c0, rgb_test_chan_1);                        // chain to other channel
 
