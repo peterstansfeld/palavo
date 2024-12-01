@@ -38,7 +38,7 @@ wait_for_hsync:
 
 % c-sdk {
 
-static inline void vga_detect_vsync_program_init(PIO pio, uint sm, uint offset, uint hsync_pin, uint rgb_pin /* , uint led_pin*/) {
+static inline void vga_detect_vsync_program_init(PIO pio, uint sm, uint offset, uint hsync_pin) {
 
     pio_sm_config c = vga_detect_vsync_program_get_default_config(offset);
 

@@ -1,4 +1,6 @@
-# How to create a build directory
+#PALAVO
+
+## How to create a build directory
 
 The target for this example is an RP2350 on a Pico 2
 
@@ -91,7 +93,7 @@ some keystrokes from being transmitted.
 Then enable carriage returns with Ctrl-A U.
 
 
-# PIO State Machine Usage
+## PIO State Machine Usage
 
 PIO      SM       Size  Needs PIO1*  Usage
 0        0        6         y       vga_capture_grab_sm

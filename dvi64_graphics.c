@@ -285,6 +285,187 @@ const uint8_t FOUR_BIT_COLS[16] = {
     RED_BITS, RED_BITS | DARK_GREEN_BITS, RED_BITS | MED_GREEN_BITS, RED_BITS | DARK_GREEN_BITS | MED_GREEN_BITS,
     RED_BITS | BLUE_BITS, RED_BITS | BLUE_BITS | DARK_GREEN_BITS, RED_BITS | BLUE_BITS | MED_GREEN_BITS, RED_BITS | BLUE_BITS | DARK_GREEN_BITS | MED_GREEN_BITS };
 
+
+#define MED_RED_BIT    0b100000
+#define DARK_RED_BIT   0b010000
+#define MED_GREEN_BIT  0b001000
+#define DARK_GREEN_BIT 0b000100
+#define MED_BLUE_BIT   0b000010
+#define DARK_BLUE_BIT  0b000001
+
+
+// #define RED_BITS MED_RED_BIT | DARK_RED_BIT
+// #define GREEN_BITS MED_GREEN_BIT | DARK_GREEN_BIT
+// #define BLUE_BITS MED_BLUE_BIT | DARK_BLUE_BIT
+
+// primary colours
+#define C64_DARK_RED DARK_RED_BIT
+#define C64_RED MED_RED_BIT
+#define C64_BRIGHT_RED C64_DARK_RED | C64_RED
+
+#define C64_DARK_GREEN DARK_GREEN_BIT
+#define C64_GREEN MED_GREEN_BIT
+#define C64_BRIGHT_GREEN C64_DARK_GREEN | C64_GREEN
+
+#define C64_DARK_BLUE DARK_BLUE_BIT
+#define C64_BLUE MED_BLUE_BIT
+#define C64_BRIGHT_BLUE C64_DARK_BLUE | C64_BLUE
+
+// secondary colours
+#define C64_DARK_YELLOW C64_DARK_RED | C64_DARK_GREEN
+#define C64_YELLOW C64_RED | C64_GREEN
+#define C64_BRIGHT_YELLOW C64_BRIGHT_RED | C64_BRIGHT_GREEN
+
+#define C64_DARK_MAGENTA C64_DARK_RED | C64_DARK_BLUE
+#define C64_MAGENTA C64_RED | C64_BLUE
+#define C64_BRIGHT_MAGENTA C64_BRIGHT_RED | C64_BRIGHT_BLUE
+
+#define C64_DARK_CYAN C64_DARK_GREEN | C64_DARK_BLUE
+#define C64_CYAN C64_GREEN | C64_BLUE
+#define C64_BRIGHT_CYAN C64_BRIGHT_GREEN | C64_BRIGHT_BLUE
+
+// others  pure secondary?
+
+#define C64_DARK_GREY C64_DARK_RED | C64_DARK_GREEN | C64_DARK_BLUE
+#define C64_GREY C64_RED | C64_GREEN | C64_BLUE
+#define C64_BRIGHT_GREY C64_BRIGHT_RED | C64_BRIGHT_GREEN | C64_BRIGHT_BLUE
+
+// others
+#define C64_BRIGHTER_RED C64_BRIGHT_RED | C64_DARK_GREEN // DARK ORANGE
+#define C64_BRIGHTEST_RED C64_BRIGHT_RED | C64_GREEN // ORANGE
+
+
+#define C64_BRIGHTER_RED C64_BRIGHT_RED | C64_DARK_GREEN // DARK ORANGE
+#define C64_BRIGHTEST_RED C64_BRIGHT_RED | C64_GREEN // ORANGE
+
+#define C64_ANOTHER_BRIGHTER_RED C64_BRIGHT_RED | C64_DARK_BLUE //
+#define C64_ANOTHER_BRIGHTEST_RED C64_BRIGHT_RED | C64_BLUE //
+
+// #define C64_EVEN_BRIGHTER_RED C64_BRIGHT_RED  | C64_DARK_GREEN | C64_DARK_BLUE //
+
+#define C64_BRIGHTER_GREEN C64_DARK_RED | C64_BRIGHT_GREEN // LIME
+#define C64_BRIGHTEST_GREEN C64_RED | C64_BRIGHT_GREEN // BRIGHT LIME
+
+#define C64_ANOTHER_BRIGHTER_GREEN C64_DARK_RED | C64_BRIGHT_GREEN //   
+#define C64_ANOTHER_BRIGHTEST_GREEN C64_RED | C64_BRIGHT_GREEN // 
+
+#define C64_BRIGHTER_BLUE C64_DARK_GREEN | C64_BRIGHT_BLUE
+#define C64_BRIGHTEST_BLUE C64_GREEN | C64_BRIGHT_BLUE
+
+#define C64_ANOTHER_BRIGHTER_BLUE C64_DARK_RED | C64_BRIGHT_BLUE // 
+#define C64_ANOTHER_BRIGHTEST_BLUE C64_RED | C64_BRIGHT_BLUE // 
+
+// #define C64_EVEN_BRIGHTEST_BLUE C64_GREEN | C64_BRIGHT_BLUE
+
+
+
+#define C64_BRIGHTER_YELLOW C64_BRIGHT_RED | C64_BRIGHT_GREEN | C64_DARK_BLUE
+#define C64_BRIGHTEST_YELLOW C64_BRIGHT_RED | C64_BRIGHT_GREEN | C64_BLUE
+
+#define C64_BRIGHTER_MAGENTA C64_BRIGHT_RED | C64_DARK_GREEN | C64_BRIGHT_BLUE
+#define C64_BRIGHTEST_MAGENTA C64_BRIGHT_RED | C64_GREEN | C64_BRIGHT_BLUE
+
+#define C64_BRIGHTER_CYAN C64_DARK_RED | C64_BRIGHT_GREEN | C64_BRIGHT_BLUE
+#define C64_BRIGHTEST_CYAN C64_RED | C64_BRIGHT_GREEN | C64_BRIGHT_BLUE
+
+
+
+
+const uint8_t SIX_BIT_COLS[64] = {
+
+    C64_BRIGHT_RED,
+    C64_BRIGHT_RED | C64_DARK_GREEN,
+    C64_BRIGHT_RED | C64_GREEN,
+    C64_BRIGHT_RED | C64_BRIGHT_GREEN,
+
+    // C64_BRIGHT_GREEN,
+
+    C64_RED | C64_BRIGHT_GREEN,
+    C64_DARK_RED | C64_BRIGHT_GREEN,
+    C64_BRIGHT_GREEN,
+
+    C64_DARK_BLUE | C64_BRIGHT_GREEN,
+    C64_BLUE | C64_BRIGHT_GREEN,
+    C64_BRIGHT_BLUE | C64_BRIGHT_GREEN,
+
+    C64_BRIGHT_BLUE | C64_GREEN,
+    C64_BRIGHT_BLUE | C64_DARK_GREEN,
+    C64_BRIGHT_BLUE,
+
+     C64_DARK_RED | C64_BRIGHT_BLUE,
+     C64_RED | C64_BRIGHT_BLUE,
+     C64_BRIGHT_RED | C64_BRIGHT_BLUE,
+
+     C64_BRIGHT_RED | C64_BLUE,
+     C64_BRIGHT_RED | C64_DARK_BLUE,
+     C64_BRIGHT_RED,
+
+     
+
+    // C64_DARK_RED, C64_RED, C64_BRIGHT_RED, 0,
+    // C64_DARK_GREEN, C64_GREEN, C64_BRIGHT_GREEN, 0,
+    // C64_DARK_BLUE, C64_BLUE, C64_BRIGHT_BLUE, 0,
+
+    // C64_DARK_YELLOW, C64_YELLOW, C64_BRIGHT_YELLOW, 0,
+    /* C64_DARK_MAGENTA, C64_MAGENTA, C64_BRIGHT_MAGENTA,*/ 0,
+    C64_DARK_CYAN, C64_CYAN, C64_BRIGHT_CYAN, 0,
+
+    C64_DARK_GREY, C64_GREY, C64_BRIGHT_GREY, 0,
+
+
+    // C64_BRIGHT_RED, C64_BRIGHTER_RED, C64_BRIGHTEST_RED, 0,
+
+    C64_BRIGHT_RED, C64_BRIGHTER_RED, C64_BRIGHTEST_RED, 0,
+    C64_BRIGHT_GREEN, C64_BRIGHTER_GREEN, C64_BRIGHTEST_GREEN, 0,
+    C64_BRIGHT_BLUE, C64_BRIGHTER_BLUE, C64_BRIGHTEST_BLUE, 0,
+
+    C64_BRIGHT_YELLOW, C64_BRIGHTER_YELLOW, C64_BRIGHTEST_YELLOW, 0,
+
+    C64_BRIGHT_MAGENTA, C64_BRIGHTER_MAGENTA, C64_BRIGHTEST_MAGENTA, 0,
+
+    C64_BRIGHT_CYAN, C64_BRIGHTER_CYAN, C64_BRIGHTEST_CYAN, 0,
+
+
+    C64_BRIGHT_RED, C64_ANOTHER_BRIGHTER_RED, C64_ANOTHER_BRIGHTEST_RED, 0,
+    C64_BRIGHT_GREEN, C64_ANOTHER_BRIGHTER_GREEN, C64_ANOTHER_BRIGHTEST_GREEN, 0,
+
+    C64_BRIGHT_BLUE, C64_ANOTHER_BRIGHTER_BLUE, C64_ANOTHER_BRIGHTEST_BLUE, 0,
+
+    // DARK_RED_BIT | DARK_GREEN_BIT, MED_RED_BIT | MED_GREEN_BIT, DARK_RED_BIT | MED_RED_BIT | DARK_GREEN_BIT | MED_GREEN_BIT, 0,
+
+    // DARK_RED_BIT | DARK_BLUE_BIT, MED_RED_BIT | MED_BLUE_BIT, DARK_RED_BIT | MED_RED_BIT | DARK_BLUE_BIT | MED_BLUE_BIT, 0,
+
+    // DARK_GREEN_BIT | DARK_BLUE_BIT, MED_GREEN_BIT | MED_BLUE_BIT, DARK_GREEN_BIT | MED_GREEN_BIT | DARK_BLUE_BIT | MED_BLUE_BIT, 0,
+
+    // DARK_RED_BIT | DARK_GREEN_BIT | DARK_BLUE_BIT, MED_RED_BIT | MED_GREEN_BIT | MED_BLUE_BIT, RED_BITS | GREEN_BITS | BLUE_BITS, 0,
+
+    // BLUE_BITS, BLUE_BITS | DARK_GREEN_BITS, BLUE_BITS | MED_GREEN_BITS, BLUE_BITS | DARK_GREEN_BITS | MED_GREEN_BITS,
+    // RED_BITS, RED_BITS | DARK_GREEN_BITS, RED_BITS | MED_GREEN_BITS, RED_BITS | DARK_GREEN_BITS | MED_GREEN_BITS,
+    // RED_BITS | BLUE_BITS, RED_BITS | BLUE_BITS | DARK_GREEN_BITS, RED_BITS | BLUE_BITS | MED_GREEN_BITS, RED_BITS | BLUE_BITS | DARK_GREEN_BITS | MED_GREEN_BITS,
+
+
+    // 0x00, DARK_GREEN_BITS, MED_GREEN_BITS, DARK_GREEN_BITS | MED_GREEN_BITS,
+    // BLUE_BITS, BLUE_BITS | DARK_GREEN_BITS, BLUE_BITS | MED_GREEN_BITS, BLUE_BITS | DARK_GREEN_BITS | MED_GREEN_BITS,
+    // RED_BITS, RED_BITS | DARK_GREEN_BITS, RED_BITS | MED_GREEN_BITS, RED_BITS | DARK_GREEN_BITS | MED_GREEN_BITS,
+    // RED_BITS | BLUE_BITS, RED_BITS | BLUE_BITS | DARK_GREEN_BITS, RED_BITS | BLUE_BITS | MED_GREEN_BITS, RED_BITS | BLUE_BITS | DARK_GREEN_BITS | MED_GREEN_BITS,
+
+
+    // 0x00, DARK_GREEN_BITS, MED_GREEN_BITS, DARK_GREEN_BITS | MED_GREEN_BITS,
+    // BLUE_BITS, BLUE_BITS | DARK_GREEN_BITS, BLUE_BITS | MED_GREEN_BITS, BLUE_BITS | DARK_GREEN_BITS | MED_GREEN_BITS,
+    // RED_BITS, RED_BITS | DARK_GREEN_BITS, RED_BITS | MED_GREEN_BITS, RED_BITS | DARK_GREEN_BITS | MED_GREEN_BITS,
+    // RED_BITS | BLUE_BITS, RED_BITS | BLUE_BITS | DARK_GREEN_BITS, 
+    
+    
+    // 0, 0, RED_BITS | BLUE_BITS | MED_GREEN_BITS, RED_BITS | BLUE_BITS | DARK_GREEN_BITS | MED_GREEN_BITS,
+
+
+    // 0x00, DARK_GREEN_BITS, MED_GREEN_BITS, DARK_GREEN_BITS | MED_GREEN_BITS,
+    // BLUE_BITS, BLUE_BITS | DARK_GREEN_BITS, BLUE_BITS | MED_GREEN_BITS, BLUE_BITS | DARK_GREEN_BITS | MED_GREEN_BITS,
+    // RED_BITS, RED_BITS | DARK_GREEN_BITS, RED_BITS | MED_GREEN_BITS, RED_BITS | DARK_GREEN_BITS | MED_GREEN_BITS,
+    // RED_BITS | BLUE_BITS, RED_BITS | BLUE_BITS | DARK_GREEN_BITS, RED_BITS | BLUE_BITS | MED_GREEN_BITS, RED_BITS | BLUE_BITS | DARK_GREEN_BITS | MED_GREEN_BITS
+    };
+
+
 #endif
 
 uint8_t get_four_bit_col(uint8_t col) {
@@ -296,10 +477,48 @@ uint8_t get_four_bit_col(uint8_t col) {
 
 #if COLOUR_MODE == 2226
 
+uint8_t get_half_rgb(uint8_t rgb) {
+    return ((((rgb >> 4) >> 1) << 4) | ((((rgb >> 2) & 0b11) >> 1) << 2) | ((rgb & 0b11) >> 1));
+}
+
+
+uint8_t get_three_quarters_rgb(uint8_t rgb) {
+    return ((((rgb >> 4)  * 3 / 4) << 4) | ((((rgb >> 2) & 0b11) * 3 / 4) << 2) | ((rgb & 0b11) * 3 / 4));
+}
+
+uint8_t get_three_eighths_rgb(uint8_t rgb) {
+    return ((((rgb >> 4)  * 3 / 8) << 4) | ((((rgb >> 2) & 0b11) * 3 / 8) << 2) | ((rgb & 0b11) * 3 / 8));
+}
+
+uint8_t get_fract_rgb(uint8_t rgb, int8_t quot, int8_t div) {
+
+    uint8_t r = (rgb >> 4) * quot / div;
+    uint8_t g = ((rgb >> 2) & 3) * quot / div;
+    uint8_t b = (rgb & 3) * quot / div;
+
+
+    if (r > 3) {
+        r = 3;
+    }
+
+    if (g > 3) {
+        g = 3;
+    }
+
+    if (b > 3) {
+        b = 3;
+    }
+
+    return (r << 4) | (g << 2) | b;
+
+}
+
+
+
 void dvi_testbars() {
     uint32_t *framebuf_ptr = (uint32_t*) &dvi_framebuf[0]; 
 
-    for (int y = 0; y < MODE_V_ACTIVE_LINES; y++) {
+    for (int y = 0; y < MODE_V_ACTIVE_LINES / 2 ; y++) {
         uint32_t sr = 0;
         uint8_t shifts = 0;
         uint8_t pixcol;
@@ -312,7 +531,92 @@ void dvi_testbars() {
                 shifts = 0;
             }
         }
-    }    
+    }
+
+    for (int y = MODE_V_ACTIVE_LINES /2; y < MODE_V_ACTIVE_LINES * 5 / 8; y++) {
+        uint32_t sr = 0;
+        uint8_t shifts = 0;
+        uint8_t pixcol;
+        for (int x = 0; x < MODE_H_ACTIVE_PIXELS; x++) {
+            pixcol = SIX_BIT_COLS[x / 10];
+            // pixcol = 21;
+            sr = (sr >> 6) | (pixcol << 26);
+            if (++shifts == 5) {
+                // Every 5 shifts (pixels) save the shift register into the frame buffer
+                *framebuf_ptr++ = sr;
+                shifts = 0;
+            }
+        }
+    }
+    
+    // for (int y = MODE_V_ACTIVE_LINES / 2; y < MODE_V_ACTIVE_LINES * 3 / 4; y++) {
+    //     uint32_t sr = 0;
+    //     uint8_t shifts = 0;
+    //     uint8_t pixcol;
+    //     for (int x = 0; x < MODE_H_ACTIVE_PIXELS; x++) {
+    //         // pixcol = x / 10;
+    //         pixcol = 0b010101; // dark grey?
+    //         sr = (sr >> 6) | (pixcol << 26);
+    //         if (++shifts == 5) {
+    //             // Every 5 shifts (pixels) save the shift register into the frame buffer
+    //             *framebuf_ptr++ = sr;
+    //             shifts = 0;
+    //         }
+    //     }
+    // }
+
+    for (int y = MODE_V_ACTIVE_LINES * 5 / 8; y < MODE_V_ACTIVE_LINES * 6 / 8; y++) {
+        uint32_t sr = 0;
+        uint8_t shifts = 0;
+        uint8_t pixcol;
+        for (int x = 0; x < MODE_H_ACTIVE_PIXELS; x++) {
+
+            // pixcol = get_fract_rgb(SIX_BIT_COLS[x / 10], 3, 2);
+
+            pixcol = get_three_quarters_rgb(SIX_BIT_COLS[x / 10]);
+            // pixcol = 0b101010; // light grey?
+            sr = (sr >> 6) | (pixcol << 26);
+            if (++shifts == 5) {
+                // Every 5 shifts (pixels) save the shift register into the frame buffer
+                *framebuf_ptr++ = sr;
+                shifts = 0;
+            }
+        }
+    }
+
+    for (int y = MODE_V_ACTIVE_LINES * 6 / 8; y < MODE_V_ACTIVE_LINES * 7 / 8; y++) {
+        uint32_t sr = 0;
+        uint8_t shifts = 0;
+        uint8_t pixcol;
+        for (int x = 0; x < MODE_H_ACTIVE_PIXELS; x++) {
+            pixcol = get_half_rgb(SIX_BIT_COLS[x / 10]);
+            // pixcol = 0b101010; // light grey?
+            sr = (sr >> 6) | (pixcol << 26);
+            if (++shifts == 5) {
+                // Every 5 shifts (pixels) save the shift register into the frame buffer
+                *framebuf_ptr++ = sr;
+                shifts = 0;
+            }
+        }
+    }
+
+    for (int y = MODE_V_ACTIVE_LINES * 7 / 8; y < MODE_V_ACTIVE_LINES; y++) {
+        uint32_t sr = 0;
+        uint8_t shifts = 0;
+        uint8_t pixcol;
+        for (int x = 0; x < MODE_H_ACTIVE_PIXELS; x++) {
+            pixcol = get_three_eighths_rgb(SIX_BIT_COLS[x / 10]);
+            // pixcol = 0b101010; // light grey?
+            sr = (sr >> 6) | (pixcol << 26);
+            if (++shifts == 5) {
+                // Every 5 shifts (pixels) save the shift register into the frame buffer
+                *framebuf_ptr++ = sr;
+                shifts = 0;
+            }
+        }
+    }
+
+
 }
 
 #endif
