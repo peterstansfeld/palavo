@@ -51,7 +51,7 @@ To make a script file (called `filename.sh`) executable, enter:
       VGA In Dark Green  GP2  4                  37 3V3 EN
      VGA In Light Green  GP3  5                  36 3V3 OUT
         VGA In Dark Red  GP4  6                  35 ADC VREF
-       VGA In Light Red  GP5  7                  34 GP28 Spare
+       VGA In Light Red  GP5  7                  34 GP28 IR RX
                          GND  8                  33 ADC GND
       VGA Out Dark Blue  GP6  9                  32 GP27  VGA In VSYNC
      VGA Out Light Blue  GP7 10     PICO 2       31 GP26  VGA In HSYNC or CSYNC
@@ -96,23 +96,23 @@ Then enable carriage returns with Ctrl-A U.
 ## PIO State Machine Usage
 
 PIO      SM       Size  Needs PIO1*  Usage
-0        0        6         y       vga_capture_grab_sm
-0        1        11                vga_capture_program
-0        2        14                vga_capture_with_csync_program
-0        3                          
-Total             31                              
+0        0        6         y       vga_capture_program
+0        1        11                vga_detect_vsync_program
+0        2        14                vga_detect_vsync_on_csync_program
+0        3
+Total             31
 
-1        0                       
-1        1        13                rgb5_150_mhz_rp235x_program_instructions (rrggbb for vga out) 
+1        0
+1        1        13                rgb5_150_mhz_rp235x_program (rrggbb for vga out) 
 1        2        15                hsync5_program (csync for vga out)      
 1        3        1                 logic_capture
-Total             29                  
+Total             29
 
-2        0              
-2        1        
-2        2        
+2        0        31                nec_ir_rx_program
+2        1
+2        2
 2        3
-Total             0                  
+Total             31
 
 * PIO1 has PIO features that were introduced in RP235x devices; RP2040 uses PIO0.
 

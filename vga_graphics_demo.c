@@ -36,6 +36,8 @@
 // The following is to allow the defines defined in CMakeLists.txt to be defined
 // here while editing, so that they don't get dimmed by the editor
 
+#define USE_LED_AS_IR_DEBUG 1
+
 #ifndef USE_DVI
 
 #if PICO_RP2350
@@ -67,6 +69,9 @@
 #endif
 
 // #endif
+
+#include "hardware/clocks.h"
+#include "nec_ir_rx.pio.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -121,13 +126,24 @@ uint8_t settings_state = SS_CHANNEL;
 
 // Timer interrupt
 bool repeating_timer_callback(struct repeating_timer *t) {
-
     time_accum += 1 ;
+
+#if USE_LED_AS_IR_DEBUG == 0
+    gpio_xor_mask(1u << LED_PIN); // toggle LED_PIN
+#endif
+
     return true;
 }
 
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
+
+enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE,
+    TT_VGA_VSYNC, TT_VGA_RGB, TT_VGA_VFRONT_PORCH, TT_VGA_CSYNC, TT_VGA_CRGB, TT_VGA_CVFRONT_PORCH, TT_COUNT};
+
+#define SETTINGS 1
+
+#if SETTINGS == 0
 
 // const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
 // #define CAPTURE_PIN_BASE HSYNC2 // 16 = hsync, 17 = vsync // 22 = hsync2
@@ -146,6 +162,25 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 
 //set the default sample rate to the pixel clock rate of 25 MHz
 #define CAPTURE_SAMPLE_FREQ_DIVISOR (SYS_CLK_KHZ / 25000u)
+
+
+#define CAPTUTRE_TRIGGER_TYPE TT_VGA_CRGB
+
+
+#elif SETTINGS == 1
+
+#define CAPTURE_PIN_BASE 25 // LED
+
+#define CAPTURE_PIN_COUNT 4
+
+#define CAPTURE_TRIGGER_PIN_BASE 28 // IR RX
+
+#define CAPTURE_SAMPLE_FREQ_DIVISOR (SYS_CLK_KHZ / 480)
+
+#define CAPTUTRE_TRIGGER_TYPE TT_FALLING_EDGE
+
+#endif
+
 
 uint g_sample_frequency = CAPTURE_SAMPLE_FREQ_DIVISOR;
 uint8_t g_no_of_captured_pins = CAPTURE_PIN_COUNT;
@@ -180,11 +215,10 @@ uint8_t g_no_of_pins_to_capture = CAPTURE_PIN_COUNT;
 
 uint8_t g_trigger_pin_base = CAPTURE_TRIGGER_PIN_BASE;
 
-enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_VSYNC, TT_VGA_RGB, TT_VGA_VFRONT_PORCH, TT_VGA_CSYNC, TT_VGA_CRGB, TT_VGA_CVFRONT_PORCH, TT_COUNT};
 
 // uint8_t g_trigger_type = TT_VGA_VSYNC;
 
-uint8_t g_trigger_type = TT_VGA_CRGB;
+uint8_t g_trigger_type = CAPTUTRE_TRIGGER_TYPE;
 
 /*
     // uint total_sample_bits = g_capture_n_samples * g_no_of_captured_pins;
@@ -565,6 +599,13 @@ int mag_factor(int value) {
 
 
 void uart_putcf(uart_inst_t *uart, const char *s, int c) {
+    char str[80];
+    sprintf(str, s, c);
+    uart_puts(uart, str);
+}
+
+
+void uart_putuif(uart_inst_t *uart, const char *s, uint c) {
     char str[80];
     sprintf(str, s, c);
     uart_puts(uart, str);
@@ -2690,6 +2731,96 @@ void set_vga_capture(uint8_t new_capture_mode) {
 
 #endif
 
+PIO ir_rx_pio = pio2;
+uint ir_rx_sm = 0;
+uint ir_rx_offset;
+
+uint32_t last_ir_command = 0;
+
+// receive ir on pin 28
+void init_ir_rx() {
+    ir_rx_offset = pio_add_program(ir_rx_pio, &nec_ir_rx_program);
+
+#if USE_LED_AS_IR_DEBUG
+    nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, ir_rx_offset, 28, LED_PIN);
+#else
+    nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, ir_rx_offset, 28, -1);
+#endif
+
+    pio_enable_sm_mask_in_sync(ir_rx_pio, (1u << ir_rx_sm));
+}
+
+
+uint check_ir() {
+    uint ui_command = pio_sm_is_rx_fifo_empty(ir_rx_pio, ir_rx_sm);
+    if (!ui_command) {
+
+        uint32_t ir_command = pio_sm_get_blocking(ir_rx_pio, ir_rx_sm);
+
+        uart_putuif(UART_ID, "ir: %#x\n", ir_command);
+
+        // uart_putuif(UART_ID, "  ir: %#x\n", ir_command & 0xffff);
+
+        if (ir_command == 0) {
+            ir_command = last_ir_command;
+        }
+
+        if ((ir_command & 0xffff) == 0xbf00) {
+            // Adafruit Mini Remote Control (https://www.adafruit.com/product/389)
+
+            uint8_t ir_button = (ir_command >> 16) & 0xff;
+
+            uart_putcf(UART_ID, "  btn: %d\n", ir_button);
+
+            switch (ir_button) {
+
+                case 1:
+                    // 'play/pause'
+                    ui_command = UIC_C; // capture
+                    break;
+
+                case 8:
+                    ui_command = UIC_LEFT;
+                    break;
+
+                case 10:
+                    ui_command = UIC_RIGHT;
+                    break;
+
+                case 9:
+                    // 'enter/save'
+                    break;
+
+#if USE_DVI
+
+                case 16:
+                    // '1'
+                    set_vga_capture(VC_NONE);
+                    test_DVI_framebuf();
+                    break;
+
+                case 17:
+                    set_vga_capture(VC_VSYNC_AND_VSYNC_ON_CSYNC);
+                    // '2'
+                    break;
+
+                case 18:
+                    // '3'
+                    set_vga_capture(VC_VSYNC_ON_CSYNC);
+                    break;
+
+#endif
+
+            }
+
+            last_ir_command = ir_command;
+
+        }
+    }
+    return ui_command;
+}
+
+
 int main() {
 
     // Initialize stdio
@@ -2704,16 +2835,18 @@ int main() {
     gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
     // gpio_set_function(LED_PIN, GPIO_FUNC_UART);
 
+#if USE_LED_AS_IR_DEBUG == 0
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN, GPIO_OUT); // set LED_PIN GPIO to an output
     gpio_put(LED_PIN, 1); // set LED_PIN
+#endif
 
 #if USE_VGA_CAPTURE == 1
 
     #define HSYNC_IN 26
     #define VSYNC_IN 27
 
-    #define GPIO_Inputs ((1 << 27) | (1 << 26) | 0b0111111) 
+    #define GPIO_Inputs ((1 << 28) | (1 << 27) | (1 << 26) | 0b0111111) 
     gpio_init_mask(GPIO_Inputs); // init GPIO 0 to 5, 26, 27
     gpio_set_function_masked(GPIO_Inputs, GPIO_IN); // set GPIO 0 to 5, 26, 27 to inputs
 
@@ -2726,7 +2859,7 @@ int main() {
     gpio_set_pulls(5, true, false);
     gpio_set_pulls(26, true, false);
     gpio_set_pulls(27, true, false);
-
+    gpio_set_pulls(28, true, false);
 #endif
 
     uart_puts(UART_ID, "\n\n");
@@ -2935,8 +3068,8 @@ int main() {
     uart_puts(UART_ID, start_help_text);
 
     // Setup a 1Hz timer
-    // struct repeating_timer timer;
-    // add_repeating_timer_ms(-1000, repeating_timer_callback, NULL, &timer);
+    struct repeating_timer timer;
+    add_repeating_timer_ms(-1000, repeating_timer_callback, NULL, &timer);
 
     // Wait for the pios to get warmed up. Probably not necessary.
     sleep_ms(10);
@@ -2961,6 +3094,10 @@ int main() {
     set_vga_capture(VC_NONE);
 #endif
 
+    init_ir_rx();
+
+    // mainloop
+
     while(true) {
 
         if (!demo_paused && !showing_window) {
@@ -2981,6 +3118,10 @@ int main() {
         // }
 
         uint ui_command = check_keyboard();
+
+        if (!ui_command) {
+            ui_command = check_ir();
+        }
 
         if (ui_command) {
 

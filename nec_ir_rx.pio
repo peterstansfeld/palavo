@@ -1,0 +1,307 @@
+
+;undo marker
+
+.program nec_ir_rx
+
+.side_set 1                        ; for debugging
+
+;sample data bits every 8 clock cycles
+
+; #if timing_level == 2
+;    pull                              ; get 32, which is stored in osr
+; #endif
+
+
+
+wait_for_start_bit:
+
+; #if strong_start
+    wait 1 pin 0 side 0                     ; wait for rx to be high (could probably do without this)
+; #endif
+
+wait_for_start_bit_lo:
+    wait 0 pin 0 side 0                     ; wait for rx to be low
+
+; rx is low, start bit has started
+; land in the middle of next sample cycle, 4 cycles (ish) from the 1 to 0 transition... ( the [extra cycles])
+
+    mov isr, null side 0                    ; clear the input shift counter
+    set x, 15 side 0                        ; 16 start mark bits to sample
+start_bit_loop:
+    jmp pin wait_for_start_bit_lo side 1 [6]; jump if rx high too soon
+; rx is low
+    jmp x-- start_bit_loop side 0
+
+; 16 low samples of rx in a row have been read, now expecting high samples,
+; either 4 for a repeat code, or 8 for a 32-bit data code
+
+    set y, 7 side 0                         ; 8 start space bits to sample
+start_space_loop:
+    jmp pin test_space_counter side 1
+
+; #if can_repeat
+
+; rx has gone low, test for repeat
+
+    set x, 3 side 0                         ; the 5th sample is when y = 7, 6, 5, 4, *3*
+    jmp x!=y wait_for_start_bit side 0      ; test the 5th sample
+
+; Should probably comment the above instruction and uncomment the following three as
+; they check that the length of the stop bit is ok. But seeing as the data detection
+; doesn't do this there seems little point, and we can save some pio code space.
+
+;    jmp x!=y wait_for_start_bit [5]   ; test the 5th sample
+;    jmp pin repeat_detected side 1    ; pin must be high for valid start bit
+;    jmp wait_for_start_bit
+
+repeat_detected:
+    in null, 32 side 0                      ; clock in 32 zeros which triggers an auto-push
+    jmp wait_for_start_bit side 0
+
+; #endif
+
+
+test_space_counter:
+    jmp y-- start_space_loop [6] side 0
+
+    jmp pin wait_for_start_bit_lo side 1 ; sample possible data start bit
+
+; data start bit is low, y is 0xffffffff and is used to shift in logical 1s
+
+; #if timing_level == 0
+        ; set x, 31 [6]                     ; 32 loops [delay to land in the middle of the first data bit0]
+; #elif timing_level == 1
+
+; ; at this point x is 3 and y is 0xffffffff
+; ;    set x, 31                         ; 32 loops
+; ;    wait 1 pin 0 [3]                  ; wait for rx to be high, then delay to middle of data bit
+; ; at this point x is 31 and y is 0xffffffff
+
+;     wait 1 pin 0 [2]                  ; wait for rx to be high, then delay to middle of data bit
+;     set x, 31                         ; 32 loops
+; ; if we could get x to 32 we could jump to wait_for_pin_hi instead of using 'wait 1 pin 0' ins., above
+
+; #elif timing_level == 2
+    mov x, osr side 0                       ; osr should be 32, giving us 33 loops (1 extra for the stop bit?)
+    jmp wait_for_pin_hi [2] side 0          ; time limited 'wait 1 pin 0' instruction
+; #endif
+
+data_bit0:
+    jmp pin data_bit1 side 1 [7]     ; must be high
+    jmp wait_for_start_bit side 0           ; error if low
+
+data_bit1:
+; if (low) log a 0 and then start a new data bit
+; else it could be a logical 1 which needs another high
+
+; #if timing_level == 0
+    ; jmp pin data_bit2 [5]
+; #elif timing_level == 1 or timing_level == 2
+    jmp pin data_bit2 [2] side 0
+; #endif
+
+log_a_0:
+    in null, 1 side 0                       ; shift in a 0
+.wrap_target
+
+; #if timing_level == 1
+    ; wait 1 pin 0 [0]                  ; wait for rx to be high
+; #elif timing_level == 2
+wait_for_pin_hi:
+    jmp pin test_bit_count side 0
+    jmp pin test_bit_count side 0
+    jmp pin test_bit_count side 0
+    jmp wait_for_start_bit side 0
+; #endif
+
+
+test_bit_count:
+
+; #if timing_level == 0
+    ; jmp x-- data_bit0                 ; jump if more data bits to sample
+; #elif timing_level == 1 or timing_level == 2
+    jmp x-- data_bit0 [2] side 0            ; jump if more data bits to sample
+; #endif
+; all 32 data bits have been shifted in, which will have triggered an auto-push
+    jmp wait_for_start_bit_lo side 1
+
+data_bit2:
+
+;if timing_level == 0
+    ; nop [1]                           ; wait to sample in middle of bit (ooh, it hurts to waste an instruction)
+; #elif timing_level == 1 or timing_level == 2
+;    nop [5]                           ; wait to sample in middle of bit (ooh, it hurts to waste an instruction)
+    nop [4] side 0                          ; wait to sample in middle of bit (ooh, it hurts to waste an instruction)
+; #endif
+
+    jmp pin maybe_log_a_1 side 1 [7]  ; maybe shift in a 1 (if the next sample is low)
+    jmp wait_for_start_bit side 0           ; error if low
+
+maybe_log_a_1:
+
+; #if timing_level == 0
+    ; jmp pin wait_for_start_bit_lo [4] ; error if high
+    ; in y, 1 [1]                       ; shift in a 1 from y [delay due to 'wrap']
+; #elif timing_level == 1 or timing_level == 2
+    jmp pin wait_for_start_bit_lo side 0       ; error if high
+    in y, 1 [1] side 0                      ; shift in a 1 from y [not sure about the delay]
+; #endif
+
+; rx is low, ie either the start of a data bit or the stop bit
+.wrap                                 ; magic zero cycle and invisible 'jmp wrap_target'
+
+
+
+% c-sdk {
+
+static inline void nec_ir_rx_program_init(PIO pio, uint sm, uint offset, uint rx_pin, int debug_pin) {
+
+    // Set the GPIO function of the pin (connect the PIO to the pad)
+    //
+    pio_gpio_init(pio, rx_pin);
+
+    // Set the pin direction to `input` at the PIO
+    //
+    pio_sm_set_consecutive_pindirs(pio, sm, rx_pin, 1, false);
+
+    if (debug_pin >= 0) {
+        // Set this pin's GPIO function (connect PIO to the pad)
+        pio_gpio_init(pio, debug_pin);
+
+        // Set the pin direction to output at the PIO
+        pio_sm_set_consecutive_pindirs(pio, sm, debug_pin, 1, true);
+    }
+
+
+    pio_sm_config c = nec_ir_rx_program_get_default_config(offset);
+
+    // Configure the in pins to start at `rx_pin`
+    sm_config_set_in_pins(&c, rx_pin);
+
+    // Configure the jmp pin to start at `rx_pin`
+    sm_config_set_jmp_pin(&c, rx_pin);
+
+    // Set PIO clock frequency to 25 MHz / 4 = 6,250 kHz
+    // At either 125 MHz for the rp2040 or 150 MHz for the rp235x the clock divisor
+    // is a whole number, ie either 20 or 24
+    // float div = clock_get_hz(clk_sys) / ((1000000 * 8) / 562.5);
+
+    float div = clock_get_hz(clk_sys) / ((985070 * 8) / 562.5);
+
+//            ; # frequency=int((985_070 * 8) / 562.5), # this works for the sparkfun remote... oh dear, what do we do???
+//            ; # adaptive 
+
+    sm_config_set_clkdiv(&c, div);
+
+    // If specified configure the sideset pin to start at `debug_pin`
+    if (debug_pin >= 0) {
+        sm_config_set_sideset_pins(&c, debug_pin);
+    }
+
+    // join the FIFOs to make a single large receive FIFO
+    //
+    sm_config_set_fifo_join (&c, PIO_FIFO_JOIN_RX);
+
+    // Shift OSR to the left, disable autopull, and set the pull threshold set to 32
+    sm_config_set_out_shift(&c, false, false, 32);
+
+    // Shift ISR to the right, enable autopush, and set the push threshold set to 32
+    sm_config_set_in_shift(&c, true, true, 32);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+
+    // Write values into the osr and the isr
+    // pio_sm_put_blocking(pio, sm, 35 - 1); // put 34 into the txfifo for the number hsync on csync pulses
+    // pio_sm_put_blocking(pio, sm, 480 - 1); // put 479 into the txfifo for the number of lines
+    // pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // osr = 34
+    // pio_sm_exec(pio, sm, pio_encode_mov(pio_isr, pio_osr)); // isr = 34
+    // pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // osr = 479
+
+    // load osr with 32
+    // set x, 16                         ; x = 16
+    // mov osr, x                        ; osr = 16
+    // out null, 1                       ; osr = osr << 1 (if out_shift_right=False) = 32
+
+    pio_sm_exec(pio, sm, pio_encode_set(pio_x, 16)); // x = 16
+    pio_sm_exec(pio, sm, pio_encode_mov(pio_osr, pio_x)); // osr = 16
+    pio_sm_exec(pio, sm, pio_encode_out(pio_null, 1)); // osr = 32
+
+}
+
+/*
+program_with_debug = adafruit_pioasm.Program(get_pio_asm(STRONG_START, TIMING_LEVEL, CAN_REPEAT))
+
+program = adafruit_pioasm.Program(get_pio_asm(STRONG_START, TIMING_LEVEL, CAN_REPEAT))
+pio_utils.remove_sidesets(program)
+
+pio_init_asm = """
+; load osr with 32
+    set x, 16                         ; x = 16
+    mov osr, x                        ; osr = 16
+    out null, 1                       ; osr = osr << 1 (if out_shift_right=False) = 32
+"""
+
+class IrReceiver(object):
+
+    _sm = 0 # state machine variable
+
+    _program = None
+
+    def __init__(self, inpin, debug_pin=None, strong_start=True, timing_level=2, can_repeat=True):
+
+        self._program = program
+        kwargs = pio_utils.copy_kwargs(self._program.pio_kwargs)
+
+        if debug_pin:
+            self._program = program_with_debug
+            kwargs = pio_utils.copy_kwargs(self._program.pio_kwargs)
+            kwargs["first_sideset_pin"] = debug_pin
+            kwargs["initial_sideset_pin_state"] = 0
+            kwargs["initial_sideset_pin_direction"] = 1
+
+        if timing_level == 2:
+            program_init = adafruit_pioasm.Program(pio_init_asm)
+            kwargs["init"] = program_init.assembled
+
+        self._sm = rp2pio.StateMachine(
+            self._program.assembled,
+            frequency=int((1_000_000 * 8) / 562.5),
+
+            # init = program_init.assembled,
+
+            # testing Sparkfun remote, which fails, except for repeat. It takes 68.523 ms to send a code. Expecting 67.5
+            # 67.5 / 68.523 = 0.98507070618624403484961253885557
+
+            # frequency=int((985_070 * 8) / 562.5), # this works for the sparkfun remote... oh dear, what do we do???
+            # adaptive 
+
+            first_in_pin=inpin,
+            in_pin_count=1,
+            jmp_pin=inpin,
+
+            auto_push=True,
+            push_threshold=32,
+
+            out_shift_right=False,    # to get the init code working
+
+            **kwargs
+        )
+
+    def codes_received(self):
+        return self._sm.in_waiting
+
+    def get_code(self):
+        # data is 32 bits
+        buf = array.array("L", [1234])
+        if self._sm.in_waiting:
+            self._sm.readinto(buf, start=0)
+            return buf[0]
+        else:
+            return -1
+
+    def deinit(self):
+        self._sm.deinit()
+*/
+
+%}

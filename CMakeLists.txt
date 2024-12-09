@@ -24,6 +24,7 @@ add_executable(palavo)
 # pico_generate_pio_header(palavo ${CMAKE_CURRENT_LIST_DIR}/rgb4.pio)
 pico_generate_pio_header(palavo ${CMAKE_CURRENT_LIST_DIR}/hsync5.pio)
 pico_generate_pio_header(palavo ${CMAKE_CURRENT_LIST_DIR}/rgb5.pio)
+pico_generate_pio_header(palavo ${CMAKE_CURRENT_LIST_DIR}/nec_ir_rx.pio)
 if (PICO_RP2350)
     # vga_capture.pio currently uses some of the new PIO instructions in the RP235x
     pico_generate_pio_header(palavo ${CMAKE_CURRENT_LIST_DIR}/vga_capture.pio)
