@@ -63,4 +63,18 @@ void dvi_testbars();
 // and then calls dvi_testbars().
 void dvi_init();
 
+
+void dvi_reinit();
+
+void dvi_deinit();
+
+uint32_t dvi_get_expand_tmds();
+
+uint32_t dvi_get_expand_shift();
+
+uint32_t dvi_get_csr();
+
+uint32_t dvi_get_v_scanline();
+
+
 #endif

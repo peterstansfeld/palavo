@@ -1,4 +1,4 @@
-#PALAVO
+# PALAVO
 
 ## How to create a build directory
 
@@ -128,3 +128,24 @@ the Git history wasn't working, either in VS Code or on the command line. I trie
 I was doing something wrong and each time the same thing would happen. Finally, I tried zipping the folder on the
 Chromebook and unzipping it on the Pi, and that worked. Chrome OS was updated since while I was away (using the
 Chromebook), so maybe that did something.
+
+
+The HSTX DVI output is sometimes locking up. Very occasionally it will recover by itself (it just did it 3 times within a couple of minutes), but more often than not
+it needs to be dvi_deinit()'ed and dvi_init()'ed., which has so far worked 77 times in a row. You can get it to fail
+by playing the graphics demo (Hunter Adams'). It doesn't fail, however, when capturing the VGA from another
+Pico that's running the same demo (only, in 16 colours rather than 2 per line on the Pico2). ie when we're 
+writing stuff to the VGA memory, which is constantly going out to the VGA pins at 60Hz and then being captured by
+a state machine and writes to the DVI memory, which is constantly going out to the DIV pins.
+
+Also, there are times when I just can't get it to lock up at all.
+
+
+I think I've found the issue. I've found something that certainly makes things worse and that is the 'sleep_ms()' SDK function.
+If I stop using that with the graphics demo running, the dvi output is never lost. I've seen it flicker off very briefly, but then on again all by itself.
+I have managed to lose it once, by scrolling the captured plot with an ir remote control. I had to reset it manually, with the 'r' key on the keyboard.
+
+Arrgh, I've just done it again using ir - actually two remotes for double the auto-repeat rate. I wonder if it could be a power / noise issue?
+
+
+
+There's also another bug, which occurs if you scroll way past the end of the trace of the logic analyser.

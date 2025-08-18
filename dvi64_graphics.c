@@ -684,11 +684,9 @@ void dvi_testbars() {
 
 #endif
 
-void dvi_init() {
 
-    dma_channel_claim(DMACH_PING);
-    dma_channel_claim(DMACH_PONG);
 
+void dvi_init_hstx_regs() {
     // modify the first horizontal line to be red
     // memset(&framebuf, 0xe0, MODE_H_ACTIVE_PIXELS);
 
@@ -749,7 +747,7 @@ void dvi_init() {
 
 #elif COLOUR_MODE == 2226
 
-    dvi_testbars();
+    // dvi_testbars();
 
 #endif
 
@@ -948,10 +946,20 @@ void dvi_init() {
         hstx_ctrl_hw->bit[bit + 1] = lane_data_sel_bits | HSTX_CTRL_BIT0_INV_BITS;
     }
 
+}
 
+
+void dvi_init_hstx_gpio() {
     for (int i = 12; i <= 19; ++i) {
         gpio_set_function(i, 0); // HSTX
     }
+}
+
+
+void dvi_init_hstx_dma() {
+
+    dma_channel_claim(DMACH_PING);
+    dma_channel_claim(DMACH_PONG);
 
 
     // Both channels are set up identically, to transfer a whole scanline and
@@ -1006,10 +1014,176 @@ void dvi_init() {
 
     irq_set_enabled(DMA_IRQ_0, true);
 
+    // this was in the original RPi example, but it seems fine without it. todo work out what's what
+    // no, it still crashes (dvi is lost). let's put it back and work out what the real problem is
+    // it's not just outputting black, the signal is lost, or has just stopped.
+
+    // maybe deinit the div and reinit - currently having to reset each time it crashes
+
     bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
+    // bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_R_BITS; // it still crashed with just this enabled
 
     dma_channel_start(DMACH_PING);
 
 // #endif
 
 }
+
+
+void dvi_init_vars() {
+    // First we ping. Then we pong. Then... we ping again.
+    dma_pong = false;
+
+// A ping and a pong are cued up initially, so the first time we enter this
+// handler it is to cue up the second ping after the first ping has completed.
+// This is the third scanline overall (-> =2 because zero-based).
+    v_scanline = 2;
+
+// During the vertical active period, we take two IRQs per scanline: one to
+// post the command list, and another to post the pixels.
+    vactive_cmdlist_posted = false;
+}
+
+
+void dvi_init() {
+    dvi_init_vars();
+    dvi_init_hstx_regs();
+    dvi_init_hstx_gpio();
+    dvi_init_hstx_dma();
+}
+
+
+void dvi_deinit_hstx_regs() {
+    hstx_ctrl_hw->csr = 0;
+}
+
+
+void dvi_deinit_hstx_dma() {
+    // disable the irq
+    irq_set_enabled(DMA_IRQ_0, false);
+
+    // stop and free the dma channels
+    dma_channel_cleanup(DMACH_PONG);
+    dma_channel_cleanup(DMACH_PING);
+
+    // and unclaim them
+    dma_channel_unclaim(DMACH_PONG);
+    dma_channel_unclaim(DMACH_PING);
+}
+
+void dvi_deinit() {
+    
+    dvi_deinit_hstx_dma();
+
+    // hstx_ctrl_hw->csr = 0;
+
+    dvi_deinit_hstx_regs();
+
+    // dvi_init_vars();
+}
+
+
+uint32_t dvi_get_expand_tmds() {
+    return hstx_ctrl_hw->expand_tmds;
+}
+
+
+uint32_t dvi_get_expand_shift() {
+    return hstx_ctrl_hw->expand_shift;
+}
+
+
+uint32_t dvi_get_csr() {
+    return hstx_ctrl_hw->csr;
+}
+
+
+uint32_t dvi_get_v_scanline() {
+    return v_scanline;
+}
+
+
+void dvi_reinit() {
+
+    // dvi_configure_hstx_regs();
+
+// this doesn't work
+    // hstx_ctrl_hw->csr = 0;
+    // sleep_ms(100) ;
+    // dvi_init_hstx_regs();
+
+// this does
+    // dvi_deinit();
+    // sleep_ms(100) ;
+    // dvi_init();
+
+// this doesn't
+    // dvi_deinit_hstx_dma();
+    // sleep_ms(100) ;
+    // dvi_init_vars();
+    // dvi_init_hstx_dma();
+
+// this doesn't
+    // dvi_deinit_hstx_regs();
+    // dvi_deinit_hstx_dma();
+    // sleep_ms(100) ;
+    // dvi_init_vars();
+    // dvi_init_hstx_regs();
+    // dvi_init_hstx_dma();
+
+// this does, but is the same as the other one that worked
+    // dvi_deinit_hstx_dma();
+    // dvi_deinit_hstx_regs();
+    // sleep_ms(100);
+    // dvi_init_vars();
+    // dvi_init_hstx_regs();
+    // dvi_init_hstx_dma();
+
+// this works, no delay needed
+    // dvi_deinit_hstx_dma();
+    // dvi_deinit_hstx_regs();
+    // dvi_init_vars();
+    // dvi_init_hstx_regs();
+    // dvi_init_hstx_dma();
+
+
+// this works, dvi_init_hstx_gpio isn't reqd
+    // dvi_deinit_hstx_dma();
+    // dvi_deinit_hstx_regs();
+    // dvi_init_vars();
+    // dvi_init_hstx_regs();
+    // dvi_init_hstx_dma();
+
+// this doesn't, resetting the hstx regs are reqd.
+    // dvi_deinit_hstx_dma();
+    // // dvi_deinit_hstx_regs();
+    // dvi_init_vars();
+    // // dvi_init_hstx_regs();
+    // dvi_init_hstx_dma();
+
+// this works
+    // dvi_deinit_hstx_dma();
+    // // dvi_deinit_hstx_regs();
+    // uint32_t prev_hstx_regs = hstx_ctrl_hw->csr;
+    // hstx_ctrl_hw->csr &= ~HSTX_CTRL_CSR_EN_BITS;
+    // dvi_init_vars();
+    // // dvi_init_hstx_regs();
+    // hstx_ctrl_hw->csr = prev_hstx_regs;
+    // dvi_init_hstx_dma();
+
+
+// this
+    dvi_deinit_hstx_dma();
+    // dvi_deinit_hstx_regs();
+    uint32_t prev_hstx_regs = hstx_ctrl_hw->csr;
+    hstx_ctrl_hw->csr &= ~HSTX_CTRL_CSR_EN_BITS;
+    dvi_init_vars();
+    // dvi_init_hstx_regs();
+    hstx_ctrl_hw->csr = prev_hstx_regs;
+    dvi_init_hstx_dma();
+
+
+// so, something is upsetting the 
+
+}
+

@@ -799,6 +799,7 @@ for (int y = 0; y < NO_OF_LINES; y++) {
 
 #endif
 
+
 #endif
 
     // Manually call the handler once, to trigger the first transfer
@@ -1279,11 +1280,15 @@ void fillRect(short x, short y, short w, short h, char color) {
                   h = NO_OF_LINES - y;
               }
 
-              bool on = get_1bit_color(y, color);
-
               if ((x == 0) && (w == _width)) {
+
+                  uint8_t bits = 0;
+                  if (get_1bit_color(y, color)) {
+                      bits = 0xff;
+                  }
+
                   for (int i = 0; i < h; i++) {
-                      memset(&vga_1bit_data_array[((y + i) * WORDS_PER_LINE) + 1], on ? 0xff : 0, (WORDS_PER_LINE - 1) * sizeof(uint32_t));
+                      memset(&vga_1bit_data_array[((y + i) * WORDS_PER_LINE) + 1], bits, (WORDS_PER_LINE - 1) * sizeof(uint32_t));
                   }
                   // drawHLine(x, y + i, w, color);
               } else {

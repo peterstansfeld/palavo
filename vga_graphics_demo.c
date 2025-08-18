@@ -1460,6 +1460,8 @@ int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next
 }
 
 
+uint32_t last_demo_time;
+
 // Demonstrates the graphics primitives.
 void demo() {
     // color chooser
@@ -1529,6 +1531,7 @@ enum UI_COMMANDS {
 #if USE_DVI == 1    
     UIC_V,
     UIC_D,
+    UIC_R,
 #endif
 
     UIC_SPACEBAR,
@@ -1906,6 +1909,10 @@ uint check_keyboard() {
 
                 case 'd':
                     ui_command = UIC_D;
+                    break;
+
+                case 'r':
+                    ui_command = UIC_R;
                     break;
 #endif
 
@@ -2736,6 +2743,7 @@ uint ir_rx_sm = 0;
 uint ir_rx_offset;
 
 uint32_t last_ir_command = 0;
+uint32_t last_ir_button_time;
 
 // receive ir on pin 28
 void init_ir_rx() {
@@ -2752,17 +2760,40 @@ void init_ir_rx() {
 
 
 uint check_ir() {
-    uint ui_command = pio_sm_is_rx_fifo_empty(ir_rx_pio, ir_rx_sm);
-    if (!ui_command) {
+    uint ui_command = UIC_NONE;
+    if (!pio_sm_is_rx_fifo_empty(ir_rx_pio, ir_rx_sm)) {
 
         uint32_t ir_command = pio_sm_get_blocking(ir_rx_pio, ir_rx_sm);
 
         uart_putuif(UART_ID, "ir: %#x\n", ir_command);
 
         // uart_putuif(UART_ID, "  ir: %#x\n", ir_command & 0xffff);
+        char str[80];
+        clear_statusbar_hint();
 
-        if (ir_command == 0) {
-            ir_command = last_ir_command;
+        if (ir_command) {
+            // button press code, ie not a repeat code
+            sprintf(str, "%#x ", ir_command);
+            writeString(str);
+
+            last_ir_button_time = time_us_32();
+
+        } else {
+            // ir_command == 0, ie repeat code
+            if (last_ir_command) {
+                uint32_t time_now = time_us_32();
+                if (time_now - last_ir_button_time < 500000) {
+                    // less than half a second since last repeat code
+                    ir_command = last_ir_command;
+                    last_ir_button_time = time_now;
+                    sprintf(str, "repeat %#x ", ir_command);
+                    writeString(str);
+
+                } else {
+                    // more than half a second since last repeat code
+                    last_ir_command = 0;
+                }
+            }
         }
 
         if ((ir_command & 0xffff) == 0xbf00) {
@@ -2785,6 +2816,10 @@ uint check_ir() {
 
                 case 10:
                     ui_command = UIC_RIGHT;
+                    break;
+
+                case 14:
+                    ui_command = UIC_R; // reset DVI
                     break;
 
                 case 9:
@@ -2815,13 +2850,42 @@ uint check_ir() {
 
             last_ir_command = ir_command;
 
+        } else {
+            // from a different ir remote
+            last_ir_command = 0;
         }
     }
     return ui_command;
 }
 
 
+void ir_flush() {
+    pio_sm_clear_fifos(ir_rx_pio, ir_rx_sm);
+}
+
+void print_dvi_regs() {
+    uart_putcf(UART_ID, "expand_tmds: %#x\n", dvi_get_expand_tmds());
+    uart_putcf(UART_ID, "expand_shift: %#x\n", dvi_get_expand_shift());
+    uart_putcf(UART_ID, "csr: %#x\n", dvi_get_csr());
+    uart_putcf(UART_ID, "v_scanline: %d\n", dvi_get_v_scanline());
+}
+
+
 int main() {
+
+// hw_write_masked(
+// 		&clocks_hw->clk[clk_hstx].div,
+// 		2 << CLOCKS_CLK_HSTX_DIV_INT_LSB,
+// 		CLOCKS_CLK_HSTX_DIV_INT_BITS
+// 	);
+
+
+    // this does not work
+    // CLK_HSTX = clk_sys. Transmit bit clock for the HSTX peripheral.
+    clock_configure_undivided(clk_hstx,
+                    0,
+                    CLOCKS_CLK_HSTX_CTRL_AUXSRC_VALUE_CLK_SYS,
+                    125000000); // reports as changed to this value, but makes no difference to hstx dvi refresh rate - it's still 72 Hz and trying for 60 Hz
 
     // Initialize stdio
     
@@ -2903,7 +2967,75 @@ int main() {
 #if USE_DVI == 1
     // Initialize the VGA screen
     uart_puts(UART_ID, "Initialising DVI...\n");
+
+    uart_putcf(UART_ID, "clk_hstx: %d\n", clock_get_hz (clk_hstx));
+    // uart_putcf(UART_ID, "HSTX Frequency: %d\n", clock_get_hz (CLK_DEST_HSTX));
+
+
+    // clock_stop(clk_hstx);
+
+/*
+        clock_configure(
+            clk_peri,                                   //clock_handle
+            0,                                          //
+            CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, //
+            150000000,                                  // src_freq
+            150000000                                   // freq
+        );
+
+        clock_configure(
+            clk_hstx,                                   //clock_handle
+            0,                                          //
+            CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, //
+            150000000,                                  // src_freq
+            125000000                                   // freq
+        );
+*/
+
+    // this does not work
+    // CLK_HSTX = clk_sys. Transmit bit clock for the HSTX peripheral.
+    // clock_configure_undivided(clk_hstx,
+    //                 0,
+    //                 CLOCKS_CLK_HSTX_CTRL_AUXSRC_VALUE_CLK_SYS,
+    //                 125000000); // reports as changed to this value, but makes no difference to hstx dvi refresh rate - it's still 72Hz and tring for 60 Hz
+
+
+// this does not work
+
+        // clock_configure(
+        //     clk_hstx,                                   //clock_handle
+        //     0,                                          //
+        //     CLOCKS_CLK_HSTX_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, //
+        //     150000000,                                  // src_freq
+        //     125000000                                   // freq
+        // );
+
+
+// this does not work
+
+    // clock_configure(
+    //     clk_hstx,
+    //     0,                                                // No glitchless mux
+    //     // CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, // System PLL on AUX mux
+
+    //     CLOCKS_CLK_HSTX_CTRL_AUXSRC_VALUE_CLK_SYS,
+    //     // Option.CPU_Speed * 1000,                               // Input frequency
+    //     // Option.CPU_Speed * 500                                // Output (must be same as no divider)
+    //     250000000,                               // Input frequency
+    //     125000000                                // Output (must be same as no divider)
+    // );
+    uart_putcf(UART_ID, "clk_peri: %d\n", clock_get_hz(clk_peri));
+
+    uart_putcf(UART_ID, "clk_hstx: %d\n", clock_get_hz(clk_hstx));
+
+    sleep_ms(100) ;
+
     dvi_init();
+
+    print_dvi_regs();
+
+    dvi_testbars();
+
 #endif
 
     // Initialize the VGA screen
@@ -3100,10 +3232,6 @@ int main() {
 
     while(true) {
 
-        if (!demo_paused && !showing_window) {
-            demo();
-        }
-
         // Timing text
         
         // if (time_accum != time_accum_old) {
@@ -3284,6 +3412,10 @@ int main() {
                         plot_required = true;
 
                         mini_map_redraw_required = true;
+
+                        ir_flush();
+                        last_ir_command = 0;
+
                         break;
 
                     case UIC_DOWN:
@@ -3436,27 +3568,73 @@ int main() {
                         writeString("test DVI");
                         test_DVI_framebuf();
                         break;
+
+                    case UIC_R:
+
+                        print_dvi_regs();
+
+                        // writeString("reset DVI");
+                        // dvi_deinit();
+                        // sleep_ms(100) ;
+                        // dvi_init();
+                        // print_dvi_regs();
+
+                        writeString("reinit DVI");
+                        dvi_reinit();
+                        // sleep_ms(100) ;
+                        // dvi_init();
+                        print_dvi_regs();
+                        break;
+
 #endif
 
                 }
             }
 
-            if (plot_required) {
-                plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, true);
-            }
+            if ((plot_required) || (mini_map_redraw_required)) {
 
-            if (mini_map_redraw_required){
-                plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
-            }
+                if (plot_required) {
+                    plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, true);
+                }
 
+                if (mini_map_redraw_required){
+                    plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
+                }
+
+                // A brief nap
+                // sleep_ms(10);
+                // busy_wait_us(10000);
+            }
 
         } else {
-            // A brief nap
-            sleep_ms(10) ;
+
+            if (!demo_paused && !showing_window) {
+                // uint32_t time_us_now = 
+                if (time_us_32() - last_demo_time >= 10000) {
+                    // {
+
+                    demo();
+                    last_demo_time = time_us_32();
+
+                    // sleep_ms(1); // this crashes the hstx-dvi
+                    // sleep_ms(10); // this seems not to crash the hstx-dvi
+                    // sleep_ms(1); // any sleep seems to crash the hstx-dvi
+
+                // A brief nap
+                    // sleep_ms(10);
+                    // reduce the sleep time to test the hstx-dvi lockup issue
+                    // sleep_ms(2);
+
+                    // sleep_ms(10);
+
+                    // busy_wait_us(10000);
+                }
+            }
+            // NB sleep_ms, which trys to use the arm's wfe instruction, seems to be the thing
+            // that causes the hstx-dvi to fall over.
+
+            // uart_putc(UART_ID, 'B');
         }
-
-
-        // uart_putc(UART_ID, 'B');
 
    }
 
