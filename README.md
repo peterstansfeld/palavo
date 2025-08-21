@@ -10,11 +10,24 @@ The target for this example is an RP2350 on a Pico 2
 
 Specify where the pico-sdk directory can be found.
 
-`export PICO_SDK_PATH=~/pico2/pico/pico-sdk`
+`export PICO_SDK_PATH=~/pico2.2/pico/pico-sdk`
 
 Specify where the top level CMakeLists.txt file can be found. In this case it's the parent directory (`..`). Also, specify the board (`pico2`). For a list of possible boards search the `pico-sdk/src/boards/include/boards` directory.
 
 `cmake .. -DPICO_BOARD=pico2`
+
+or
+
+`cmake .. -DPICO_BOARD=pimoroni_pga2350`
+
+or
+
+`cmake .. -DPICO_BOARD=solderparty_rp2350_stamp_xl`
+
+or
+
+`cmake .. -DPICO_BOARD=pimoroni_pico_plus2_rp2350`
+
 
 `make -j4`
 
@@ -55,7 +68,7 @@ To make a script file (called `filename.sh`) executable, enter:
                          GND  8                  33 ADC GND
       VGA Out Dark Blue  GP6  9                  32 GP27  VGA In VSYNC
      VGA Out Light Blue  GP7 10     PICO 2       31 GP26  VGA In HSYNC or CSYNC
-     VGA Out Dark Green  GP8 11                  30 RUN   CAPTAIN RESETTI
+     VGA Out Dark Green  GP8 11                  30 RUN  CAPTAIN RESETTI
     VGA Out Light Green  GP9 12                  29 GP22  VGA Out CSYNC
                          GND 13                  28 GND
       VGA Out Dark Red  GP10 14                  27 GP21  Serial RX
@@ -65,6 +78,41 @@ To make a script file (called `filename.sh`) executable, enter:
                         GND  18                  23 GND
                DVI CK+  GP14 19                  22 GP17  DVI D1+
                DVI CK-  GP15 20                  21 GP16  DVI D1-
+
+
+## Pinout for Pimoroni Pico LiPo 2 W XL
+
+   VGA In HSYNC or CSYNC  GP0  1                  60 VBUS
+            VGA In VSYNC  GP1  2                  59 VSYS
+                          GND  3                  58 GND
+        VGA In Dark Blue  GP2  4                  57 3V3 EN
+       VGA In Light Blue  GP3  5                  56 3V3 OUT
+       VGA In Dark Green  GP4  6                  55 ADC VREF
+      VGA In Light Green  GP5  7                  54 GP28 IR RX
+                          GND  8                  53 ADC GND
+        VGA In Dark Blue  GP6  9                  52 GP27
+       VGA In Light Blue  GP7 10 PICO LIPO 2 W XL 51 GP26
+                          GP8 11                  30 RUN  CAPTAIN RESETTI (maybe not with PWR switch?)
+                          GP9 12                  49 GP22
+                          GND 13                  48 GND
+                         GP10 14                  47 GP21
+                         GP11 15                  46 GP20  
+                DVI D0+  GP12 16                  45 GP19  DVI D2+
+                DVI D0-  GP13 17                  44 GP18  DVI D2-
+                         GND  18                  43 GND
+                DVI CK+  GP14 19                  42 GP17  DVI D1+
+                DVI CK-  GP15 20 ________________ 41 GP16  DVI D1-
+                      GND 3V3 21                  40 BT
+          VGA Out CSYNC  GP31 22                  39 GP47
+                          GND 23                  38 GND
+      VGA Out Dark Blue  GP32 24                  37 GP46
+     VGA Out Light Blue  GP33 25        XL        36 GP45
+     VGA Out Dark Green  GP34 26                  34 GP44
+    VGA Out Light Green  GP35 27                  33 GP43
+                          GND 28                  32 GND
+       VGA Out Dark Red  GP36 29                  31 GP39  Serial RX
+      VGA Out Light Red  GP37 30                  31 GP38  Serial TX
+
 
 VGA Out GPIO                           VGA 15-way Socket
 
@@ -93,7 +141,7 @@ some keystrokes from being transmitted.
 Then enable carriage returns with Ctrl-A U.
 
 
-## PIO State Machine Usage
+## PIO State Machine Usage for Pico2
 
 PIO      SM       Size  Needs PIO1*  Usage
 0        0        6         y       vga_capture_program
@@ -114,7 +162,47 @@ Total             29
 2        3
 Total             31
 
+
+## PIO State Machine Usage for Pico LiPo 2 W XL
+
+PIO      SM       Size  Needs PIO1*  GPIO(s)  Usage
+0        0        6         y                 vga_capture_program
+0        1        11                          vga_detect_vsync_program
+0        2        14                          vga_detect_vsync_on_csync_program
+0        3
+Total             1
+
+1        0         
+1        1        13                          rgb5_150_mhz_rp235x_program (rrggbb for vga out) 
+1        2        15                          hsync5_program (csync for vga out)      
+;1        3        1                           logic_capture (moved to PIO0)
+Total             28
+
+2        0        31                          nec_ir_rx_program
+2        1
+2        2
+;2        3
+2        3        1                           logic_capture (moved from PIO1)
+
+
+
+
+Total             31
+
 * PIO1 has PIO features that were introduced in RP235x devices; RP2040 uses PIO0.
+
+
+
+
+
+
+
+
+* PIO1 has PIO features that were introduced in RP235x devices; RP2040 uses PIO0.
+
+
+
+
 
 
 ## Weird Issues

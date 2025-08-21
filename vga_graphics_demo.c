@@ -28,7 +28,7 @@
 
 // There's probably a better way to do this, but I'm not aware of one. 
 
-#define USE_DVI 1
+// #define USE_DVI 1
 
 // #define USE_DVI 0
 
@@ -99,8 +99,14 @@
 // #define UART_TX_PIN 0
 // #define UART_RX_PIN 1
 
-#define UART_TX_PIN 20
-#define UART_RX_PIN 21
+#if PICO_PIO_USE_GPIO_BASE==0
+    #define UART_TX_PIN 20
+    #define UART_RX_PIN 21
+#else
+    #define UART_TX_PIN 38
+    #define UART_RX_PIN 39
+#endif
+
 
 #define LED_PIN PICO_DEFAULT_LED_PIN
 
@@ -169,15 +175,15 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 
 #elif SETTINGS == 1
 
-#define CAPTURE_PIN_BASE 25 // LED
+#define CAPTURE_PIN_BASE 0 // HSYNC
 
-#define CAPTURE_PIN_COUNT 4
+#define CAPTURE_PIN_COUNT 8 // HSYNC, VSYNC and BBGGRR (blue, green, red)
 
-#define CAPTURE_TRIGGER_PIN_BASE 28 // IR RX
+#define CAPTURE_TRIGGER_PIN_BASE 0 // HSYNC
+// #define CAPTURE_SAMPLE_FREQ_DIVISOR (SYS_CLK_KHZ / 480)
+#define CAPTURE_SAMPLE_FREQ_DIVISOR 5
 
-#define CAPTURE_SAMPLE_FREQ_DIVISOR (SYS_CLK_KHZ / 480)
-
-#define CAPTUTRE_TRIGGER_TYPE TT_FALLING_EDGE
+#define CAPTUTRE_TRIGGER_TYPE TT_VGA_VSYNC
 
 #endif
 
@@ -2646,18 +2652,30 @@ void init_vga_capture_dma_and_start_capturing() {
     dma_start_channel_mask((1u << rgb_test_chan_0)); 
 }
 
+#if PICO_PIO_USE_GPIO_BASE==0
+    #define HSYNC_IN 26
+    #define VSYNC_IN 27
+    #define RGB_IN_FIRST_PIN 0
+#else
+    #define HSYNC_IN 0
+    #define VSYNC_IN 1
+    #define RGB_IN_FIRST_PIN 2
+#endif
 
 // capture the RGB of pins 0 to 5 using HSYNC and VSYNC of pins 26 & 27, or CSYNC on pin 26.
 void init_pio_vga_capture_with_vsync_and_vsync_on_csync() {
     if (vga_capture_mode == VC_NONE) {
         vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
-        vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, 0);
+
+        vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, RGB_IN_FIRST_PIN);
 
         vga_detect_vsync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_program);
-        vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, 26);
+        vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, HSYNC_IN);
+        // vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, 0);
 
         vga_detect_vsync_on_csync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_on_csync_program);
-        vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, 26);
+        vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, HSYNC_IN);
+        // vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, 0);
 
         init_vga_capture_dma_and_start_capturing();
 
@@ -2669,13 +2687,29 @@ void init_pio_vga_capture_with_vsync_and_vsync_on_csync() {
 
 
 // capture the RGB of pins 6 to 11 using CSYNC of pins 22.
+// or the RGB of pins 33 to 38 using CSYNC of pin 32
 void init_pio_vga_detect_vsync_on_csync() {
+
+    #if PICO_PIO_USE_GPIO_BASE==0
+    #define CSYNC_IN_PIN 22
+    #define RGB_OUT_FIRST_PIN 6
+    #else
+    #define CSYNC_IN_PIN 31
+    #define RGB_OUT_FIRST_PIN 32
+    #endif
+
     if (vga_capture_mode == VC_NONE) {
+
+        #if PICO_PIO_USE_GPIO_BASE==1
+        pio_set_gpio_base(vga_capture_pio, 16);
+        // #warning pio_set_gpio_base(vga_capture_pio, 16)
+        #endif
+
         vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
-        vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, 6);
+        vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, RGB_OUT_FIRST_PIN);
 
         vga_detect_vsync_on_csync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_on_csync_program);
-        vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, 22);
+        vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, CSYNC_IN_PIN);
 
         init_vga_capture_dma_and_start_capturing();
 
@@ -2712,6 +2746,10 @@ void deinit_vga_capture() {
         dma_channel_unclaim(rgb_test_chan_1);
         dma_channel_unclaim(rgb_test_chan_0);
 
+        #if PICO_PIO_USE_GPIO_BASE==1
+        pio_set_gpio_base(vga_capture_pio, 0);
+        #endif
+
         vga_capture_mode = VC_NONE;
     }
 }
@@ -2738,7 +2776,23 @@ void set_vga_capture(uint8_t new_capture_mode) {
 
 #endif
 
-PIO ir_rx_pio = pio2;
+
+#define IR_RX_PIN 28
+
+#if IR_RX_PIN >= 32
+    #if PICO_PIO_USE_GPIO_BASE==0
+        #error IR_RX_PIN must be in range 0-31
+    #endif
+#endif
+
+#if PICO_PIO_USE_GPIO_BASE==0
+    PIO ir_rx_pio = pio2;
+    // #warning IR_RX is using pio2
+#else
+    PIO ir_rx_pio = pio2;
+    // #warning IR_RX is using pio1
+#endif
+
 uint ir_rx_sm = 0;
 uint ir_rx_offset;
 
@@ -2750,9 +2804,11 @@ void init_ir_rx() {
     ir_rx_offset = pio_add_program(ir_rx_pio, &nec_ir_rx_program);
 
 #if USE_LED_AS_IR_DEBUG
-    nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, ir_rx_offset, 28, LED_PIN);
+// todo tidy this up into one line and work out what we're doing with the LED
+    // nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, ir_rx_offset, IR_RX_PIN, LED_PIN);
+    nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, ir_rx_offset, IR_RX_PIN, -1);
 #else
-    nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, ir_rx_offset, 28, -1);
+    nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, ir_rx_offset, IR_RX_PIN, -1);
 #endif
 
     pio_enable_sm_mask_in_sync(ir_rx_pio, (1u << ir_rx_sm));
@@ -2818,15 +2874,17 @@ uint check_ir() {
                     ui_command = UIC_RIGHT;
                     break;
 
+#if USE_DVI==1
                 case 14:
                     ui_command = UIC_R; // reset DVI
                     break;
+#endif
 
                 case 9:
                     // 'enter/save'
                     break;
 
-#if USE_DVI
+#if USE_DVI==1
 
                 case 16:
                     // '1'
@@ -2863,13 +2921,15 @@ void ir_flush() {
     pio_sm_clear_fifos(ir_rx_pio, ir_rx_sm);
 }
 
+
+#if USE_DVI==1
 void print_dvi_regs() {
     uart_putcf(UART_ID, "expand_tmds: %#x\n", dvi_get_expand_tmds());
     uart_putcf(UART_ID, "expand_shift: %#x\n", dvi_get_expand_shift());
     uart_putcf(UART_ID, "csr: %#x\n", dvi_get_csr());
     uart_putcf(UART_ID, "v_scanline: %d\n", dvi_get_v_scanline());
 }
-
+#endif
 
 int main() {
 
@@ -2891,6 +2951,10 @@ int main() {
     
     stdio_init_all();
 
+    #if PICO_PIO_USE_GPIO_BASE==0
+
+    // todo - we can probably and should use the code below (in the #else), which is from the SDK docs
+
     uart_init(UART_ID, BAUD_RATE);
 
     // Set the TX and RX pins by using the function select on the GPIO
@@ -2898,6 +2962,14 @@ int main() {
     gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
     gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
     // gpio_set_function(LED_PIN, GPIO_FUNC_UART);
+
+    #else
+
+    gpio_set_function(UART_TX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_TX_PIN));
+    gpio_set_function(UART_RX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_RX_PIN));
+    uart_init(UART_ID, BAUD_RATE);
+
+    #endif
 
 #if USE_LED_AS_IR_DEBUG == 0
     gpio_init(LED_PIN);
@@ -2907,12 +2979,34 @@ int main() {
 
 #if USE_VGA_CAPTURE == 1
 
+
+// todo - all this GPIO initialisation needs a lot of tidying 
+
+#if PICO_PIO_USE_GPIO_BASE==0
     #define HSYNC_IN 26
     #define VSYNC_IN 27
+    #define GPIO_Inputs ((1 << VSYNC_IN) | (1 << HSYNC_IN) | 0b0111111) 
+#else
+    #define HSYNC_IN 0
+    #define VSYNC_IN 1
+    #define GPIO_Inputs ((1 << VSYNC_IN) | (1 << HSYNC_IN) | 0b011111111) 
+ #endif
 
-    #define GPIO_Inputs ((1 << 28) | (1 << 27) | (1 << 26) | 0b0111111) 
     gpio_init_mask(GPIO_Inputs); // init GPIO 0 to 5, 26, 27
     gpio_set_function_masked(GPIO_Inputs, GPIO_IN); // set GPIO 0 to 5, 26, 27 to inputs
+
+    // #if IR_RX_PIN >= 32
+
+    // #define More_GPIO_Inputs (1 << IR_RX_PIN)
+    // #define More_GPIO_Inputs 0x10000
+    // gpio_init_mask(More_GPIO_Inputs); // init GPIO 0 to 5, 26, 27
+    gpio_init(IR_RX_PIN);
+    // gpio_set_function_masked64(More_GPIO_Inputs, GPIO_IN); // set GPIO 0 to 5, 26, 27 to inputs
+    gpio_set_function(IR_RX_PIN, GPIO_IN); // set GPIO 0 to 5, 26, 27 to inputs
+    gpio_set_pulls(IR_RX_PIN, true, false);
+
+    // #endif
+    
 
     // enable GPIO 0 to 5, 26, 27 pull-ups
     gpio_set_pulls(0, true, false);
@@ -2921,9 +3015,16 @@ int main() {
     gpio_set_pulls(3, true, false);
     gpio_set_pulls(4, true, false);
     gpio_set_pulls(5, true, false);
-    gpio_set_pulls(26, true, false);
-    gpio_set_pulls(27, true, false);
-    gpio_set_pulls(28, true, false);
+
+    #if PICO_PIO_USE_GPIO_BASE==0
+    // gpio_set_pulls(6, true, false);
+    // gpio_set_pulls(7, true, false);
+    #endif
+
+    // gpio_set_pulls(8, true, false);
+    gpio_set_pulls(HSYNC_IN, true, false);
+    gpio_set_pulls(VSYNC_IN, true, false);
+    // gpio_set_pulls(28, true, false);
 #endif
 
     uart_puts(UART_ID, "\n\n");
@@ -3078,8 +3179,17 @@ int main() {
 
     // todo - uncomment this next line if we need to
     // bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
+    
+    #if PICO_PIO_USE_GPIO_BASE==0
+        PIO pio = pio1;
+    #else
+        // PIO pio = pio0;
+        // #warning logic analyser is using pio0
 
-    PIO pio = pio1;
+        PIO pio = pio2;
+        // #warning logic analyser is using pio0
+    #endif
+
     uint sm = 3;
     uint dma_chan = dma_claim_unused_channel(true);
     // uint dma_chan = 5;

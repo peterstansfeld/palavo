@@ -131,7 +131,7 @@ char textcolor, textbgcolor, wrap;
 uint16_t str_cursor_x;
 
 
-#define LED_PIN PICO_DEFAULT_LED_PIN
+// #define LED_PIN PICO_DEFAULT_LED_PIN
 
 static int sync_test_chan_0 = 0;
 
@@ -164,7 +164,7 @@ void __not_in_flash_func(dma_handler)() {
     dma_channel_start(sync_test_chan_0);
     // dma_channel_set_read_addr(sync_test_chan_0, &sync_buffer, true);
 
-    gpio_xor_mask(1 << LED_PIN);
+    // gpio_xor_mask(1 << LED_PIN);
 
 
 }
@@ -178,8 +178,21 @@ void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour, ui
 
 void initVGA() {
     // Choose which PIO instance to use (there are two instances (three for rp2350), each with 4 state machines)
-    PIO pio_2 = pio1;
 
+
+    #if PICO_PIO_USE_GPIO_BASE==0
+    // CSYNC must be in the range 0-31
+    #define CSYNC 22
+    #define RGB_OUT_START_PIN 6
+    PIO pio_2 = pio1;
+    #else
+    // CSYNC can also be in the range 32-47
+    #define CSYNC 31
+    #define RGB_OUT_START_PIN 32
+
+    PIO pio_2 = pio1;
+    pio_set_gpio_base(pio_2, 16);
+    #endif
 
     // Our assembled program needs to be loaded into this PIO's instruction
     // memory. This SDK function will find a location (offset) in the
@@ -296,20 +309,18 @@ void initVGA() {
       bi_decl(bi_1pin_with_name(28, "IR RX"));
 #ifdef USE_CSYNC
 
-    // #define CSYNC (HSYNC2 -1)
-    #define CSYNC 22
 
     // Initialise a second copy of hvsync which we'll call csync and use to test csync
     // uint csync_offset = pio_add_program(pio_2, &hsync5_program);
     hsync5_program_init(pio_2, csync_sm, hsync5_offset, CSYNC, 1);
 
 #endif
+// todo - tidy these GPIO pin definitions below
 
 #if SYS_CLK_KHZ == 125000u
       rgb5_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN);
 #elif SYS_CLK_KHZ == 150000u
-    //   rgb5_150_mhz_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN);
-      rgb5_150_mhz_rp235x_program_init(pio_2, rgb5_sm, rgb5_offset, 6, 6);
+    rgb5_150_mhz_rp235x_program_init(pio_2, rgb5_sm, rgb5_offset, RGB_OUT_START_PIN, 6);
 #elif SYS_CLK_KHZ == 250000u
       rgb5_250_mhz_program_init(pio_2, rgb5_250_mhz_sm, rgb5_offset, LO_GRN);
 #endif
@@ -787,7 +798,7 @@ for (int y = 0; y < NO_OF_LINES; y++) {
     // By disabling it here will mean that eventually the VGA will stop
     // woking and require a reset.
 
-#if USE_DVI == 0
+#if PICO_RP2040 == 1
 
     // Tell the DMA to raise IRQ line 0 when the channel finishes a block
     dma_channel_set_irq0_enabled(sync_test_chan_0, true);

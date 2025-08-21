@@ -158,7 +158,7 @@ static inline void nec_ir_rx_program_init(PIO pio, uint sm, uint offset, uint rx
 
     // Set the GPIO function of the pin (connect the PIO to the pad)
     //
-    pio_gpio_init(pio, rx_pin);
+    // pio_gpio_init(pio, rx_pin); // turns out this is only necessary if the GPIO is an output
 
     // Set the pin direction to `input` at the PIO
     //
@@ -184,9 +184,9 @@ static inline void nec_ir_rx_program_init(PIO pio, uint sm, uint offset, uint rx
     // Set PIO clock frequency to 25 MHz / 4 = 6,250 kHz
     // At either 125 MHz for the rp2040 or 150 MHz for the rp235x the clock divisor
     // is a whole number, ie either 20 or 24
-    // float div = clock_get_hz(clk_sys) / ((1000000 * 8) / 562.5);
+    float div = clock_get_hz(clk_sys) / ((1000000 * 8) / 562.5);
 
-    float div = clock_get_hz(clk_sys) / ((985070 * 8) / 562.5);
+    // float div = clock_get_hz(clk_sys) / ((985070 * 8) / 562.5);
 
 //            ; # frequency=int((985_070 * 8) / 562.5), # this works for the sparkfun remote... oh dear, what do we do???
 //            ; # adaptive 
