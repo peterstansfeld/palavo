@@ -42,7 +42,7 @@
 
 #if PICO_RP2350
 
-#define USE_DVI 1
+#define USE_DVI 0
 
 #endif
 
@@ -179,9 +179,28 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 
 #define CAPTURE_PIN_COUNT 8 // HSYNC, VSYNC and BBGGRR (blue, green, red)
 
+#if PICO_PIO_USE_GPIO_BASE==0
+
+#define CAPTURE_TRIGGER_PIN_BASE 26 // HSYNC
+
+#else
+
 #define CAPTURE_TRIGGER_PIN_BASE 0 // HSYNC
+
+#endif
+
 // #define CAPTURE_SAMPLE_FREQ_DIVISOR (SYS_CLK_KHZ / 480)
+
+#if PICO_RP2350
+
+ #define CAPTURE_SAMPLE_FREQ_DIVISOR 6
+
+#else
+
+// assume this is a PICO2040
 #define CAPTURE_SAMPLE_FREQ_DIVISOR 5
+
+#endif
 
 #define CAPTUTRE_TRIGGER_TYPE TT_VGA_VSYNC
 
@@ -1538,6 +1557,7 @@ enum UI_COMMANDS {
     UIC_V,
     UIC_D,
     UIC_R,
+    UIC_S,
 #endif
 
     UIC_SPACEBAR,
@@ -1919,6 +1939,10 @@ uint check_keyboard() {
 
                 case 'r':
                     ui_command = UIC_R;
+                    break;
+
+                case 's':
+                    ui_command = UIC_S;
                     break;
 #endif
 
@@ -2977,7 +3001,7 @@ int main() {
     gpio_put(LED_PIN, 1); // set LED_PIN
 #endif
 
-#if USE_VGA_CAPTURE == 1
+// #if USE_VGA_CAPTURE == 1
 
 
 // todo - all this GPIO initialisation needs a lot of tidying 
@@ -3025,7 +3049,7 @@ int main() {
     gpio_set_pulls(HSYNC_IN, true, false);
     gpio_set_pulls(VSYNC_IN, true, false);
     // gpio_set_pulls(28, true, false);
-#endif
+// #endif
 
     uart_puts(UART_ID, "\n\n");
     // uart_puts(UART_ID, left_rect_text);
@@ -3140,6 +3164,36 @@ int main() {
 #endif
 
     // Initialize the VGA screen
+
+    #if PICO_PIO_USE_GPIO_BASE==0
+    // CSYNC must be in the range 0-31
+    #define CSYNC 22
+    #else
+    // CSYNC can also be in the range 32-47
+    #define CSYNC 31
+
+    #endif
+
+
+    #if PICO_PIO_USE_GPIO_BASE==1
+
+    // When connected to another Pico 2 (for VGA to DVI conversion) CSYNC seems
+    // to suffer electrically. Increasing the drive strength improves it.
+    // Also putting a buffer IC between the Pico Lipo's output and the VGA CSYNC
+    // resistor fixed it. Signal relection from the monitor, perhaps? todo 
+    // gpio_set_drive_strength(CSYNC /*CSYNC*/, GPIO_DRIVE_STRENGTH_8MA); // works when Pico2 CSYNC has not pull resistance - unless a debug probe is attached & powered(???)
+
+    // enum gpio_drive_strength gds = gpio_get_drive_strength(CSYNC /*CSYNC*/);
+    // uart_putcf(UART_ID, "CSYNC drive strength: %d\n", gds);
+
+    gpio_set_function(CSYNC, GPIO_OUT); // set CSYNC to output
+    // gpio_set_drive_strength(CSYNC /*CSYNC*/, GPIO_DRIVE_STRENGTH_12MA);
+
+    enum gpio_drive_strength gds = gpio_get_drive_strength(CSYNC /*CSYNC*/);
+    uart_putcf(UART_ID, "CSYNC drive strength: %d\n", gds);
+
+    #endif
+
     uart_puts(UART_ID, "Initialising VGA...\n");
     initVGA() ;
     init_line_colours();
@@ -3331,9 +3385,10 @@ int main() {
     draw_minimap_indicator();
 
 #if USE_VGA_CAPTURE == 1
-    // set_vga_capture(VC_HSYNC_AND_VSYNC);
+    sleep_ms(500);
+    set_vga_capture(VC_VSYNC_AND_VSYNC_ON_CSYNC);
     // set_vga_capture(VC_VSYNC_ON_CSYNC);
-    set_vga_capture(VC_NONE);
+    // set_vga_capture(VC_NONE);
 #endif
 
     init_ir_rx();
@@ -3696,6 +3751,10 @@ int main() {
                         print_dvi_regs();
                         break;
 
+                    case UIC_S:
+                        writeString("deinit DVI");
+                        dvi_deinit();
+                        break;
 #endif
 
                 }

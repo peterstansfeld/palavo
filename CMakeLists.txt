@@ -35,7 +35,7 @@ target_sources(palavo PRIVATE vga_graphics_demo.c vga2_graphics.c)
 #if (PICO_BOARD STREQUAL "pico2")
 if (PICO_RP2350)
     target_sources(palavo PRIVATE dvi64_graphics.c)
-    add_compile_definitions(USE_DVI=1)
+    # add_compile_definitions(USE_DVI=0)
 endif()
 
 # must match with executable name

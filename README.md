@@ -237,3 +237,51 @@ Arrgh, I've just done it again using ir - actually two remotes for double the au
 
 
 There's also another bug, which occurs if you scroll way past the end of the trace of the logic analyser.
+
+Noisy CSYNC signal
+
+When sharing the VGA logic level pins (from the RP2350B) with a Pico 2 (for VGA to DVI conversion for example)
+the Pico 2 seems to see a lot of noise on the CSYNC line, so I'm going to add a buffer/driver.
+
+Try a 74HC245N as I have loads of them
+
+            3.3V    DIR  1 |                 | 20  VCC    3.3V 
+           CSYNC IN  A1  2 |                 | 19  (OE)
+            GND      A2  3 |                 | 18  B1     CSYNC OUT to resistors to VGA connector
+            GND      A3  4 |                 | 17  B2
+            GND      A4  5 |    74HC245N     | 16  B3
+            GND      A5  6 |                 | 15  B4
+            GND      A6  7 |                 | 14  B5
+            GND      A7  8 |                 | 13  B6
+            GND      A8  9 |                 | 12  B7
+            GND    GND  10 |                 | 11  B8
+
+   INPUTS      OPERATION
+   (OE) DIR
+     L   L     B data to A bus
+     L   H     A data to B bus   
+     H   X     Isolation
+
+Note it is particularly bad when the Pico 2 is powered from its own USB port, as opposed to VS from the VS of Pico LiPo W XL. Also,
+if a debug probe is attached (powered or not - I'm not sure) the problem is even worse. 
+
+Yes, that stops the problem, although the VGA output is missing a vertical line of pixels - due to the propogation delay of the buffer.
+To fix that all the RGB lines could be buffered too. Yes, that worked.
+
+
+            3.3V    DIR  1 |                 | 20  VCC    3.3V 
+           CSYNC IN  A1  2 |                 | 19  (OE)
+            3.3V     A2  3 |                 | 18  B1     CSYNC OUT to resistors to VGA connector
+       DARK BLUE IN  A3  4 |                 | 17  B2
+      LIGHT BLUE IN  A4  5 |    74HC245N     | 16  B3     DARK BLUE OUT
+      DARK GREEN IN  A5  6 |                 | 15  B4     LIGHT BLUE OUT
+     LIGHT GREEN IN  A6  7 |                 | 14  B5     DARK GREEN OUT
+        DARK RED IN  A7  8 |                 | 13  B6     LIGHT GREEN OUT
+       LIGHT RED IN  A8  9 |                 | 12  B7     DARK RED OUT
+            GND    GND  10 |                 | 11  B8     LIGHT RED OUT
+
+
+So, we are getting false CSYNC pulses, presumably. Possibly missing CSYNC pulses. Hmm... Increasing the drive strength of CSYNC to 12mA fixes it.
+
+I repeated the test with a Pimoroni Pico Plus 2 (not XL) instead of the Pico 2, and it still fails (misses, or possibly gets false, CSYNC syncs). I used
+the same UF2 as the Pico 2, and it (Pimoroni's Pico Plus 2) seems to work fine, despite having some differences (mainly in the power supply area).
