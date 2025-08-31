@@ -18,58 +18,6 @@
  *
  */
 
-// #if PICO_BOARD == pico2 // Can't do this, so what are the alternatives?
-
-// USE_DVI chould be defined as 1, or not, in CMakeLists.txt depending on whether
-// PICO_BOARD is "pico2", or something else.
-
-// For developing with colour syntax highlighting it might be helpful to define it
-// here too, but don't forget to undo that when done.
-
-// There's probably a better way to do this, but I'm not aware of one. 
-
-// #define USE_DVI 1
-
-// #define USE_DVI 0
-
-
-// The following is to allow the defines defined in CMakeLists.txt to be defined
-// here while editing, so that they don't get dimmed by the editor
-
-#define USE_LED_AS_IR_DEBUG 1
-
-#ifndef USE_DVI
-
-#if PICO_RP2350
-
-#define USE_DVI 0
-
-#endif
-
-#endif
-
-#if USE_DVI == 1
-
-#define USE_VGA_CAPTURE 1
-
-#endif
-
-// VGA graphics library
-#include "vga2_graphics.h"
-
-#if USE_DVI == 1
-
-#include "dvi64_graphics.h"
-
-
-#if USE_VGA_CAPTURE == 1
-#include "vga_capture.pio.h"
-#endif
-
-#endif
-
-// #endif
-
 #include "hardware/clocks.h"
 #include "nec_ir_rx.pio.h"
 
@@ -83,6 +31,9 @@
 // #include "hardware/timer.h"
 // #include "hardware/structs/bus_ctrl.h"
 #include <string.h>
+
+// VGA graphics library
+#include "vga2_graphics.h"
 
 #define UART_ID uart1
 #define BAUD_RATE 115200
@@ -99,20 +50,144 @@
 // #define UART_TX_PIN 0
 // #define UART_RX_PIN 1
 
-#if PICO_PIO_USE_GPIO_BASE==0
-    #define UART_TX_PIN 20
-    #define UART_RX_PIN 21
-#else
-    #define UART_TX_PIN 38
-    #define UART_RX_PIN 39
+// Improve GPIO 
+
+// Relying on PICO_PIO_USE_GPIO_BASE is an issue as sometimes a Pico 2 format
+// alternative might be used instead, and it is not desired to have the VGA
+// out port on GP31-37.
+
+// So, we need to have a define to say that we are using a particular board
+// and if that board has the extra GPIO exposed AND we want to move 
+
+
+
+// Each board in the SDK has a unique identifier, for board detection,  e.g.
+
+// RASPBERRYPI_PICO2
+// PIMORONI_PICO_PLUS2_RP2350
+
+// It's not available yet but there should be a
+
+// PIMORONI_PICO_LIPO2_XL_W_RP2350
+
+// or something like that. We're using PIMORONI_PICO_PLUS2_RP2350 until one is
+// available. However, 
+
+
+
+// #if PICO_BOARD == pico2 // Can't do this, so what are the alternatives?
+
+// USE_DVI chould be defined as 1, or not, in CMakeLists.txt depending on whether
+// PICO_BOARD is "pico2", or something else.
+
+// For developing with colour syntax highlighting it might be helpful to define it
+// here too, but don't forget to undo that when done.
+
+// There's probably a better way to do this, but I'm not aware of one. 
+
+// #define USE_DVI 1
+
+#ifndef RASPBERRYPI_PICO2
+// when finished editing / testing comment out everything in this #ifndef..#endif section
+// #define RASPBERRYPI_PICO2
+#endif
+
+#ifndef PIMORONI_PICO_PLUS2_RP2350
+// when finished editing / testing comment out everything in this #ifndef..#endif section
+// #define PIMORONI_PICO_PLUS2_RP2350
 #endif
 
 
+#ifdef RASPBERRYPI_PICO2
+#define USE_DVI 1
+#define USE_VGA_CAPTURE 1
 #define LED_PIN PICO_DEFAULT_LED_PIN
+
+#define USE_LED_AS_IR_DEBUG 0
+
+#define UART_TX_PIN 20
+#define UART_RX_PIN 21
+#define CSYNC 22
+
+#define HSYNC_IN 26
+#define VSYNC_IN 27
+#define RGB_IN_FIRST_PIN 0
+
+
+#define IR_RX_PIN 28
+
+#define GPIO_INPUT_MASK ((1 << VSYNC_IN) | (1 << HSYNC_IN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
+
+#else
+
+#ifdef PIMORONI_PICO_PLUS2_RP2350
+
+#define USE_DVI 0
+#define USE_VGA_CAPTURE 0
+
+#define LED_PIN PICO_DEFAULT_LED_PIN
+
+#define USE_LED_AS_IR_DEBUG 0
+
+#define IR_RX_PIN 28
+
+#define CSYNC 31
+
+#define UART_TX_PIN 38
+#define UART_RX_PIN 39
+
+#define HSYNC_IN 0
+#define VSYNC_IN 1
+
+#define RGB_IN_FIRST_PIN 2
+
+
+#define GPIO_INPUT_MASK ((1 << IR_RX_PIN)  | (1 << 27)  | (1 << 26) | 0x07fffff /* 22-0 */)
+
+
+#else
+
+#error Please specify a supported board
+
+#endif
+
+#endif
+
+
+#ifdef RASPBERRYPI_PICO2
+
+#pragma message "Building Palavo for RASPBERRYPI_PICO2"
+
+#else
+
+#ifdef PIMORONI_PICO_PLUS2_RP2350
+
+#pragma message "Building Palavo for PIMORONI_PICO_PLUS2_RP2350"
+
+#else
+
+#error Can not build Palavo for unknown RPxxxx MCU
+
+#endif
+
+#endif
+
+
+#if USE_DVI
+
+#include "dvi64_graphics.h"
+
+#if USE_VGA_CAPTURE
+
+#include "vga_capture.pio.h"
+
+#endif
+
+#endif
 
 uint8_t last_uart_char = 0;
 
-#define MAX_NO_OF_CHANNELS 16
+#define MAX_NO_OF_CHANNELS 32
 
 // Some globals for storing timer information
 volatile unsigned int time_accum = 0;
@@ -177,32 +252,32 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 
 #define CAPTURE_PIN_BASE 0 // HSYNC
 
+#ifndef PIMORONI_PICO_PLUS2_RP2350
+
 #define CAPTURE_PIN_COUNT 8 // HSYNC, VSYNC and BBGGRR (blue, green, red)
-
-#if PICO_PIO_USE_GPIO_BASE==0
-
 #define CAPTURE_TRIGGER_PIN_BASE 26 // HSYNC
 
-#else
-
-#define CAPTURE_TRIGGER_PIN_BASE 0 // HSYNC
-
-#endif
-
-// #define CAPTURE_SAMPLE_FREQ_DIVISOR (SYS_CLK_KHZ / 480)
+#define CAPTUTRE_TRIGGER_TYPE TT_VGA_VSYNC
 
 #if PICO_RP2350
-
- #define CAPTURE_SAMPLE_FREQ_DIVISOR 6
-
+// assume this is a PICO2350 (running at 150 MHz)
+#define CAPTURE_SAMPLE_FREQ_DIVISOR 6
 #else
-
-// assume this is a PICO2040
+// assume this is a PICO2040 (running at 125 MHz)
 #define CAPTURE_SAMPLE_FREQ_DIVISOR 5
 
 #endif
 
-#define CAPTUTRE_TRIGGER_TYPE TT_VGA_VSYNC
+#else
+
+#define CAPTURE_PIN_COUNT 27 // GPIO0 - GPIO26
+#define CAPTURE_TRIGGER_PIN_BASE 0 // one of the keybord row drivers
+#define CAPTURE_SAMPLE_FREQ_DIVISOR 12 // should capture two row-driving sequences
+#define CAPTUTRE_TRIGGER_TYPE TT_FALLING_EDGE // 
+
+#endif
+
+// #define CAPTURE_SAMPLE_FREQ_DIVISOR (SYS_CLK_KHZ / 480)
 
 #endif
 
@@ -722,7 +797,7 @@ void write_intf(const char *s, int c) {
 #define TRIGGER_TYPE_WIDTH (FONT_WIDTH * 13) + TOOLBAR_ITEM_PADDING
 
 #define PLOT_PADDING 4
-#define PLOT_TOP (TOOLBAR_TOP + TOOLBAR_HEIGHT + 12)
+#define PLOT_TOP (TOOLBAR_TOP + TOOLBAR_HEIGHT + 6)
 // #define PLOT_HEIGHT 36
 
 #define MAX_PLOT_HEIGHT 48
@@ -742,7 +817,7 @@ int plot_height;
 // #define MINIMAP_TOP 420
 #define MINIMAP_HEIGHT 6
 #define MINIMAP_PADDING 1
-#define MINIMAP_BOTTOM STATUSBAR_TOP - 5
+#define MINIMAP_BOTTOM STATUSBAR_TOP - 1
 
 
 #define STATUSBAR_HEIGHT 10
@@ -768,56 +843,146 @@ int plot_height;
 #define STATUSBAR_INFO_RIGHT STATUSBAR_INFO_LEFT + STATUSBAR_INFO_WIDTH
 #define STATUSBAR_INFO_COLOR STATUSBAR_COLOR
 
-// Plot colours:  HSYNC, VSYNC, LO_GREEN, HI_GREEN, BLUE & RED
-char colours[] = {YELLOW, ORANGE, MED_GREEN, GREEN, BLUE, RED, MAGENTA, CYAN, YELLOW, ORANGE, MED_GREEN, GREEN, BLUE, RED, MAGENTA, CYAN};
-
+char colours[] = {DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, BLUE, MAGENTA, LIGHT_GREY_64, WHITE, DARK_GREY_64,
+                  DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, BLUE, /*MAGENTA,*/ LIGHT_GREY_64, /*WHITE,*/ DARK_GREY_64,
+                  DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, DARK_RED_64, DARK_RED_64, DARK_RED_64,BLUE, MAGENTA, LIGHT_GREY_64, WHITE, DARK_GREY_64,
+                  DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, BLUE, MAGENTA, LIGHT_GREY_64, WHITE, DARK_GREY_64};
 
 #define MINIMAP_SCROLLBAR_HEIGHT 2
 #define MINIMAP_SCROLLBAR_PADDING 1
 
-void calc_plot_height(uint pin_count) {
+
+int get_plot_padding() {
+    if (g_no_of_captured_pins <= 16) {
+        // return PLOT_PADDING;
+        return 4;
+    } else if (g_no_of_captured_pins <= 24) {
+        return 3;
+    } else {
+        return 1;
+    }
+}
+
+
+int get_minimap_height() {
+    if (g_no_of_captured_pins <= 16) {
+        // return MINIMAP_HEIGHT;
+        return 6;
+    } else if (g_no_of_captured_pins <= 24) {
+        return 3;
+    } else {
+        return 2;
+    }
+}
+
+int get_minimap_padding() {
+    if (g_no_of_captured_pins <= 16) {
+        // return MINIMAP_PADDING;
+        return 1;
+    } else if (g_no_of_captured_pins <= 24) {
+        return 1;
+    } else {
+        return 1;
+    }
+}
+
+
+int get_minimap_top(){
+    // int minimap_height = MINIMAP_HEIGHT;
+    // int minimap_padding = get_minimap_padding();
+    // if (g_no_of_captured_pins > 16) {
+    //     minimap_height = 3;
+    // } else if (g_no_of_captured_pins > 24) {
+    //     minimap_height = 2;
+    // }
+    // return TOOLBAR_TOP + ((get_minimap_height() + get_minimap_padding()) * g_no_of_captured_pins);
+    return MINIMAP_BOTTOM - ((get_minimap_height() + get_minimap_padding()) * g_no_of_captured_pins);
+}
+
+
+int get_minimap_scrollbar_top() {
+    return get_minimap_top() - (MINIMAP_SCROLLBAR_HEIGHT + MINIMAP_SCROLLBAR_PADDING);
+}
+
+
+/*
+uint get_minimap_y() {
+    int trace_height = MINIMAP_HEIGHT;
+    int y_padding = MINIMAP_PADDING;
+    if (g_no_of_captured_pins > 16) {
+    // drawing the minimap
+        trace_height = MINIMAP_HEIGHT >> 1;
+        // y_padding = MINIMAP_PADDING;
+    }
+    // y = MINIMAP_TOP;
+    // y = MINIMAP_BOTTOM - ((MINIMAP_HEIGHT + MINIMAP_PADDING) * pin_count);
+    // y = MINIMAP_BOTTOM - ((trace_height + y_padding) * pin_count);
+
+    return (MINIMAP_BOTTOM - ((trace_height + y_padding) * g_no_of_captured_pins) - (MINIMAP_SCROLLBAR_HEIGHT + MINIMAP_SCROLLBAR_PADDING));
+}
+*/
+
+int get_plot_height(uint pin_count) {
     int avail_height = MINIMAP_BOTTOM - PLOT_TOP;
-    int fixed_height = ((PLOT_PADDING + MINIMAP_HEIGHT + MINIMAP_PADDING) * pin_count) + MINIMAP_SCROLLBAR_HEIGHT + (2 * MINIMAP_PADDING);
+    // int fixed_height = ((PLOT_PADDING + MINIMAP_HEIGHT + MINIMAP_PADDING) * pin_count) + MINIMAP_SCROLLBAR_HEIGHT + (2 * MINIMAP_PADDING);
+
+    // int fixed_height = ((PLOT_PADDING + MINIMAP_HEIGHT + MINIMAP_PADDING) * pin_count) + MINIMAP_SCROLLBAR_HEIGHT + (2 * MINIMAP_PADDING);
+
+    // int minimap_height = MINIMAP_HEIGHT;
+    // int minimap_padding = MINIMAP_PADDING;
+    // if (g_no_of_captured_pins > 16) {
+    // // drawing the minimap
+    //     minimap_height = MINIMAP_HEIGHT >> 1;
+    //     // minimap_padding = MINIMAP_PADDING;
+    // }
+
+    // int fixed_height = ((PLOT_PADDING + minimap_height + minimap_padding) * pin_count) + MINIMAP_SCROLLBAR_HEIGHT + (2 * MINIMAP_PADDING);
+    // int fixed_height = (PLOT_PADDING * pin_count) + get_minimap_top(0) + MINIMAP_SCROLLBAR_HEIGHT + (2 * MINIMAP_PADDING);
+
+    int fixed_height = ((get_plot_padding() + get_minimap_height() + get_minimap_padding()) * pin_count) + MINIMAP_SCROLLBAR_HEIGHT + (2 * MINIMAP_PADDING);
+
     plot_height = MIN((avail_height - fixed_height) / pin_count, MAX_PLOT_HEIGHT);
+    return plot_height;
 }
 
 
 void set_plot_line_colors(uint pin_count) {
-
-    int trace_height = plot_height;
-    int y_padding = PLOT_PADDING;
+    int trace_height = get_plot_height(g_no_of_captured_pins);
+    int y_padding = get_plot_padding();
     int y = PLOT_TOP;
 
-    for (int i= 0; i < 2; i++) {
+    for (int pin = 0; pin < pin_count; ++pin) {
 
-        for (int pin = 0; pin < pin_count; ++pin) {
+        char line_col = colours[pin];
 
-            char line_col = colours[pin];
+        // char back_col = BLACK;
+        // if (pin == g_channel) {
+        //     back_col = DARK_GREY_64;
+        // }
 
-            // char back_col = BLACK;
-            // if (pin == g_channel) {
-            //     back_col = DARK_GREY_64;
-            // }
-
-            for (uint16_t l = 0; l < trace_height; l++) {
-                set_line_colors(y + l,  BLACK, line_col, 0, 0);
-            }
-
-            y += trace_height + y_padding;
+        for (uint16_t l = 0; l < trace_height; l++) {
+            set_line_colors(y + l,  BLACK, line_col, 0, 0);
         }
 
-        trace_height = MINIMAP_HEIGHT;
-        y_padding = MINIMAP_PADDING;
-        // y = MINIMAP_TOP;
-        y = MINIMAP_BOTTOM - ((MINIMAP_HEIGHT + MINIMAP_PADDING) * pin_count);
-
+        y += trace_height + y_padding;
     }
 
-    y = MINIMAP_BOTTOM - ((MINIMAP_HEIGHT + MINIMAP_PADDING) * pin_count) - (MINIMAP_SCROLLBAR_HEIGHT + MINIMAP_SCROLLBAR_PADDING);
+
+    y = get_minimap_scrollbar_top();
     for (int i = 0; i < MINIMAP_SCROLLBAR_HEIGHT; i++) {
         set_line_colors(y + i, BLACK, WHITE, 0, 0);
     }
 
+    y = get_minimap_top();
+    int minimap_height = get_minimap_height();
+    int minimap_padding = get_minimap_padding();
+    for (int pin = 0; pin < pin_count; ++pin) {
+        char line_col = colours[pin];
+        for (int i = 0; i < minimap_height; i++) {
+            set_line_colors(y + i, BLACK, line_col, 0, 0);
+        }
+        y+= minimap_height + minimap_padding;
+    }
 }
 
 
@@ -861,17 +1026,16 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
     uint record_size_bits = bits_packed_per_word(pin_count);
 
     int trace_height = plot_height;
-    int y_padding = PLOT_PADDING;
+    int y_padding = get_plot_padding();
     int y = PLOT_TOP;
 
     int max_screen_x = MIN(scrollx + mag_factor(SCREEN_WIDTH), n_samples);
 
 
     if (!show_numbers) {
-        trace_height = MINIMAP_HEIGHT;
-        y_padding = MINIMAP_PADDING;
-        // y = MINIMAP_TOP;
-        y = MINIMAP_BOTTOM - ((MINIMAP_HEIGHT + MINIMAP_PADDING) * pin_count);
+        trace_height = get_minimap_height();
+        y_padding = get_minimap_padding();
+        y = get_minimap_top();
 
         if (g_capture_n_samples >= SCREEN_WIDTH) {
             // we need to zoom out
@@ -1553,7 +1717,7 @@ enum UI_COMMANDS {
     UIC_H,
     UIC_A,
 
-#if USE_DVI == 1    
+#if USE_DVI
     UIC_V,
     UIC_D,
     UIC_R,
@@ -1928,7 +2092,7 @@ uint check_keyboard() {
                     ui_command = UIC_A;
                     break;
 
-#if USE_DVI == 1    
+#if USE_DVI
                 case 'v':
                     ui_command = UIC_V;
                     break;
@@ -1965,7 +2129,7 @@ void draw_minimap_indicator() {
     int mini_x = (g_scrollx * SCREEN_WIDTH) / g_capture_n_samples;
     int mini_w = (mag_factor(SCREEN_WIDTH * SCREEN_WIDTH) / g_capture_n_samples) + 1; // add one to round up and/or ensure a visible indicator
 
-    uint y = MINIMAP_BOTTOM - ((MINIMAP_HEIGHT + MINIMAP_PADDING) * g_no_of_captured_pins) - (MINIMAP_SCROLLBAR_HEIGHT + MINIMAP_SCROLLBAR_PADDING);
+    uint y = get_minimap_scrollbar_top();
 
     fillRect(prev_mini_x, y, prev_mini_w, MINIMAP_SCROLLBAR_HEIGHT, BLACK);
     fillRect(mini_x, y, mini_w, MINIMAP_SCROLLBAR_HEIGHT, WHITE);
@@ -2132,7 +2296,7 @@ char* help_strings =
     "m to measure VGA timings\n"
     "h to show this help window\n"
     "a to show the about window\n"
-#if USE_DVI == 1
+#if USE_DVI
     "v to cycle DVI modes: mirror VGA out -> test -> VGA in\n"
 #endif
     "SPACE to play / pause graphics demo\n";
@@ -2145,7 +2309,7 @@ bool showing_window = false;
 
 #define HELP_WINDOW_PADDING 2
 #define HELP_WINDOW_WIDTH (56 + 2) * FONT_WIDTH
-#if USE_DVI == 1
+#if USE_DVI
 #define HELP_WINDOW_HEIGHT (21 + 2) * (FONT_HEIGHT + HELP_WINDOW_PADDING)
 #else
 #define HELP_WINDOW_HEIGHT (20 + 2) * (FONT_HEIGHT + HELP_WINDOW_PADDING)
@@ -2509,7 +2673,7 @@ void init_line_colours() {
     }
 }
 
-#if USE_DVI == 1
+#if USE_DVI
 
 void mirror_VGA_data_to_DVI() {
 
@@ -2598,7 +2762,7 @@ void close_window() {
 
 char * start_help_text = "Press h for help.\n";
 
-#if USE_VGA_CAPTURE == 1
+#if USE_VGA_CAPTURE
 
 enum vc_modes {VC_NONE, VC_VSYNC_AND_VSYNC_ON_CSYNC, VC_VSYNC_ON_CSYNC} ;
 uint8_t vga_capture_mode = VC_NONE;
@@ -2676,15 +2840,6 @@ void init_vga_capture_dma_and_start_capturing() {
     dma_start_channel_mask((1u << rgb_test_chan_0)); 
 }
 
-#if PICO_PIO_USE_GPIO_BASE==0
-    #define HSYNC_IN 26
-    #define VSYNC_IN 27
-    #define RGB_IN_FIRST_PIN 0
-#else
-    #define HSYNC_IN 0
-    #define VSYNC_IN 1
-    #define RGB_IN_FIRST_PIN 2
-#endif
 
 // capture the RGB of pins 0 to 5 using HSYNC and VSYNC of pins 26 & 27, or CSYNC on pin 26.
 void init_pio_vga_capture_with_vsync_and_vsync_on_csync() {
@@ -2714,7 +2869,7 @@ void init_pio_vga_capture_with_vsync_and_vsync_on_csync() {
 // or the RGB of pins 33 to 38 using CSYNC of pin 32
 void init_pio_vga_detect_vsync_on_csync() {
 
-    #if PICO_PIO_USE_GPIO_BASE==0
+    #ifndef PIMORONI_PICO_PLUS2_RP2350
     #define CSYNC_IN_PIN 22
     #define RGB_OUT_FIRST_PIN 6
     #else
@@ -2800,16 +2955,7 @@ void set_vga_capture(uint8_t new_capture_mode) {
 
 #endif
 
-
-#define IR_RX_PIN 28
-
-#if IR_RX_PIN >= 32
-    #if PICO_PIO_USE_GPIO_BASE==0
-        #error IR_RX_PIN must be in range 0-31
-    #endif
-#endif
-
-#if PICO_PIO_USE_GPIO_BASE==0
+#ifndef PIMORONI_PICO_PLUS2_RP2350
     PIO ir_rx_pio = pio2;
     // #warning IR_RX is using pio2
 #else
@@ -2898,7 +3044,7 @@ uint check_ir() {
                     ui_command = UIC_RIGHT;
                     break;
 
-#if USE_DVI==1
+#if USE_DVI
                 case 14:
                     ui_command = UIC_R; // reset DVI
                     break;
@@ -2908,7 +3054,7 @@ uint check_ir() {
                     // 'enter/save'
                     break;
 
-#if USE_DVI==1
+#if USE_DVI
 
                 case 16:
                     // '1'
@@ -2946,7 +3092,7 @@ void ir_flush() {
 }
 
 
-#if USE_DVI==1
+#if USE_DVI
 void print_dvi_regs() {
     uart_putcf(UART_ID, "expand_tmds: %#x\n", dvi_get_expand_tmds());
     uart_putcf(UART_ID, "expand_shift: %#x\n", dvi_get_expand_shift());
@@ -2966,16 +3112,18 @@ int main() {
 
     // this does not work
     // CLK_HSTX = clk_sys. Transmit bit clock for the HSTX peripheral.
-    clock_configure_undivided(clk_hstx,
-                    0,
-                    CLOCKS_CLK_HSTX_CTRL_AUXSRC_VALUE_CLK_SYS,
-                    125000000); // reports as changed to this value, but makes no difference to hstx dvi refresh rate - it's still 72 Hz and trying for 60 Hz
+
+
+    // clock_configure_undivided(clk_hstx,
+    //                 0,
+    //                 CLOCKS_CLK_HSTX_CTRL_AUXSRC_VALUE_CLK_SYS,
+    //                 125000000); // reports as changed to this value, but makes no difference to hstx dvi refresh rate - it's still 72 Hz and trying for 60 Hz
 
     // Initialize stdio
     
     stdio_init_all();
 
-    #if PICO_PIO_USE_GPIO_BASE==0
+    #ifndef PIMORONI_PICO_PLUS2_RP2350
 
     // todo - we can probably and should use the code below (in the #else), which is from the SDK docs
 
@@ -3001,55 +3149,15 @@ int main() {
     gpio_put(LED_PIN, 1); // set LED_PIN
 #endif
 
-// #if USE_VGA_CAPTURE == 1
+    gpio_init_mask(GPIO_INPUT_MASK); // init all GPIO in the above mask
 
+    for (int i = 0; i < 32; i++) {
+        if (GPIO_INPUT_MASK & (1 << i)) {
+            gpio_pull_up(i);
+        }
+    }
 
-// todo - all this GPIO initialisation needs a lot of tidying 
-
-#if PICO_PIO_USE_GPIO_BASE==0
-    #define HSYNC_IN 26
-    #define VSYNC_IN 27
-    #define GPIO_Inputs ((1 << VSYNC_IN) | (1 << HSYNC_IN) | 0b0111111) 
-#else
-    #define HSYNC_IN 0
-    #define VSYNC_IN 1
-    #define GPIO_Inputs ((1 << VSYNC_IN) | (1 << HSYNC_IN) | 0b011111111) 
- #endif
-
-    gpio_init_mask(GPIO_Inputs); // init GPIO 0 to 5, 26, 27
-    gpio_set_function_masked(GPIO_Inputs, GPIO_IN); // set GPIO 0 to 5, 26, 27 to inputs
-
-    // #if IR_RX_PIN >= 32
-
-    // #define More_GPIO_Inputs (1 << IR_RX_PIN)
-    // #define More_GPIO_Inputs 0x10000
-    // gpio_init_mask(More_GPIO_Inputs); // init GPIO 0 to 5, 26, 27
-    gpio_init(IR_RX_PIN);
-    // gpio_set_function_masked64(More_GPIO_Inputs, GPIO_IN); // set GPIO 0 to 5, 26, 27 to inputs
-    gpio_set_function(IR_RX_PIN, GPIO_IN); // set GPIO 0 to 5, 26, 27 to inputs
-    gpio_set_pulls(IR_RX_PIN, true, false);
-
-    // #endif
-    
-
-    // enable GPIO 0 to 5, 26, 27 pull-ups
-    gpio_set_pulls(0, true, false);
-    gpio_set_pulls(1, true, false);
-    gpio_set_pulls(2, true, false);
-    gpio_set_pulls(3, true, false);
-    gpio_set_pulls(4, true, false);
-    gpio_set_pulls(5, true, false);
-
-    #if PICO_PIO_USE_GPIO_BASE==0
-    // gpio_set_pulls(6, true, false);
-    // gpio_set_pulls(7, true, false);
-    #endif
-
-    // gpio_set_pulls(8, true, false);
-    gpio_set_pulls(HSYNC_IN, true, false);
-    gpio_set_pulls(VSYNC_IN, true, false);
-    // gpio_set_pulls(28, true, false);
-// #endif
+    uart_putcf(UART_ID, "GPIO Inputs: %d\n", GPIO_INPUT_MASK);
 
     uart_puts(UART_ID, "\n\n");
     // uart_puts(UART_ID, left_rect_text);
@@ -3089,7 +3197,7 @@ int main() {
 #endif
 
 
-#if USE_DVI == 1
+#if USE_DVI
     // Initialize the VGA screen
     uart_puts(UART_ID, "Initialising DVI...\n");
 
@@ -3165,16 +3273,6 @@ int main() {
 
     // Initialize the VGA screen
 
-    #if PICO_PIO_USE_GPIO_BASE==0
-    // CSYNC must be in the range 0-31
-    #define CSYNC 22
-    #else
-    // CSYNC can also be in the range 32-47
-    #define CSYNC 31
-
-    #endif
-
-
     #if PICO_PIO_USE_GPIO_BASE==1
 
     // When connected to another Pico 2 (for VGA to DVI conversion) CSYNC seems
@@ -3234,14 +3332,10 @@ int main() {
     // todo - uncomment this next line if we need to
     // bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
     
-    #if PICO_PIO_USE_GPIO_BASE==0
+    #ifndef PIMORONI_PICO_PLUS2_RP2350
         PIO pio = pio1;
     #else
-        // PIO pio = pio0;
-        // #warning logic analyser is using pio0
-
         PIO pio = pio2;
-        // #warning logic analyser is using pio0
     #endif
 
     uint sm = 3;
@@ -3372,7 +3466,7 @@ int main() {
 
     logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, g_trigger_pin_base, g_trigger_type);
 
-    calc_plot_height(g_no_of_captured_pins);
+    get_plot_height(g_no_of_captured_pins);
     set_plot_line_colors(g_no_of_captured_pins);
 
 
@@ -3384,7 +3478,7 @@ int main() {
 
     draw_minimap_indicator();
 
-#if USE_VGA_CAPTURE == 1
+#if USE_VGA_CAPTURE
     sleep_ms(500);
     set_vga_capture(VC_VSYNC_AND_VSYNC_ON_CSYNC);
     // set_vga_capture(VC_VSYNC_ON_CSYNC);
@@ -3394,6 +3488,22 @@ int main() {
     init_ir_rx();
 
     // mainloop
+
+    uint ins = 0;
+
+    for (int i = 0; i < 32; i++) {
+
+        // if (gpio_is_dir_out(i) == 0) {
+        // if (gpio_is_pulled_up(i) == 0) {
+        if (gpio_is_dir_out(i) == 0) {
+
+            ins |= (1 << i);
+        }
+
+    }
+
+    uart_putcf(UART_ID, "Inputs: %x\n", ins);
+
 
     while(true) {
 
@@ -3570,7 +3680,7 @@ int main() {
 
                         set_scroll_x(0);
 
-                        calc_plot_height(g_no_of_captured_pins);
+                        get_plot_height(g_no_of_captured_pins);
 
                         set_plot_line_colors(g_no_of_captured_pins);
 
@@ -3704,9 +3814,9 @@ int main() {
                         show_about_window();
                         break;
 
-#if USE_DVI == 1
+#if USE_DVI
 
-#if USE_VGA_CAPTURE == 1
+#if USE_VGA_CAPTURE
 
                     case UIC_V:
                         switch (vga_capture_mode) {

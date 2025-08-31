@@ -172,7 +172,7 @@ PIO      SM       Size  Needs PIO1*  GPIO(s)  Usage
 0        3
 Total             1
 
-1        0         
+1        0        1                           Could move logic_capture here to capture channels 16-48
 1        1        13                          rgb5_150_mhz_rp235x_program (rrggbb for vga out) 
 1        2        15                          hsync5_program (csync for vga out)      
 ;1        3        1                           logic_capture (moved to PIO0)
@@ -182,27 +182,10 @@ Total             28
 2        1
 2        2
 ;2        3
-2        3        1                           logic_capture (moved from PIO1)
-
-
-
-
+2        3        1                           logic_capture (moved from PIO1) for channels 0-32
 Total             31
 
 * PIO1 has PIO features that were introduced in RP235x devices; RP2040 uses PIO0.
-
-
-
-
-
-
-
-
-* PIO1 has PIO features that were introduced in RP235x devices; RP2040 uses PIO0.
-
-
-
-
 
 
 ## Weird Issues

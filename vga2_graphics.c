@@ -180,7 +180,7 @@ void initVGA() {
     // Choose which PIO instance to use (there are two instances (three for rp2350), each with 4 state machines)
 
 
-    #if PICO_PIO_USE_GPIO_BASE==0
+    #ifndef PIMORONI_PICO_PLUS2_RP2350
     // CSYNC must be in the range 0-31
     #define CSYNC 22
     #define RGB_OUT_START_PIN 6
