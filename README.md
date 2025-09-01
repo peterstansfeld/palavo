@@ -28,6 +28,9 @@ or
 
 `cmake .. -DPICO_BOARD=pimoroni_pico_plus2_rp2350`
 
+or 
+
+`cmake .. -DPICO_BOARD=pimoroni_pico_lipo2xl_w_rp2350.h`
 
 `make -j4`
 

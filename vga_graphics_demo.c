@@ -64,14 +64,14 @@
 // Each board in the SDK has a unique identifier, for board detection,  e.g.
 
 // RASPBERRYPI_PICO2
-// PIMORONI_PICO_PLUS2_RP2350
+// PIMORONI_PICO_LIPO2XL_W_RP2350
 
 // It's not available yet but there should be a
 
-// PIMORONI_PICO_LIPO2_XL_W_RP2350
+// PIMORONI_PICO_LIPO2XL_W_RP2350
 
-// or something like that. We're using PIMORONI_PICO_PLUS2_RP2350 until one is
-// available. However, 
+// or something like that. We're using PIMORONI_PICO_LIPO2XL_W_RP2350 until one is
+// available. However, we could always define our own, for now. 
 
 
 
@@ -92,9 +92,9 @@
 // #define RASPBERRYPI_PICO2
 #endif
 
-#ifndef PIMORONI_PICO_PLUS2_RP2350
+#ifndef PIMORONI_PICO_LIPO2XL_W_RP2350
 // when finished editing / testing comment out everything in this #ifndef..#endif section
-// #define PIMORONI_PICO_PLUS2_RP2350
+// #define PIMORONI_PICO_LIPO2XL_W_RP2350
 #endif
 
 
@@ -120,12 +120,12 @@
 
 #else
 
-#ifdef PIMORONI_PICO_PLUS2_RP2350
+#ifdef PIMORONI_PICO_LIPO2XL_W_RP2350
 
 #define USE_DVI 0
 #define USE_VGA_CAPTURE 0
 
-#define LED_PIN PICO_DEFAULT_LED_PIN
+// #define LED_PIN PICO_DEFAULT_LED_PIN
 
 #define USE_LED_AS_IR_DEBUG 0
 
@@ -160,9 +160,9 @@
 
 #else
 
-#ifdef PIMORONI_PICO_PLUS2_RP2350
+#ifdef PIMORONI_PICO_LIPO2XL_W_RP2350
 
-#pragma message "Building Palavo for PIMORONI_PICO_PLUS2_RP2350"
+#pragma message "Building Palavo for PIMORONI_PICO_LIPO2XL_W_RP2350"
 
 #else
 
@@ -210,7 +210,11 @@ bool repeating_timer_callback(struct repeating_timer *t) {
     time_accum += 1 ;
 
 #if USE_LED_AS_IR_DEBUG == 0
+
+#ifdef LED_PIN
     gpio_xor_mask(1u << LED_PIN); // toggle LED_PIN
+#endif
+
 #endif
 
     return true;
@@ -252,7 +256,7 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 
 #define CAPTURE_PIN_BASE 0 // HSYNC
 
-#ifndef PIMORONI_PICO_PLUS2_RP2350
+#ifndef PIMORONI_PICO_LIPO2XL_W_RP2350
 
 #define CAPTURE_PIN_COUNT 8 // HSYNC, VSYNC and BBGGRR (blue, green, red)
 #define CAPTURE_TRIGGER_PIN_BASE 26 // HSYNC
@@ -2869,7 +2873,7 @@ void init_pio_vga_capture_with_vsync_and_vsync_on_csync() {
 // or the RGB of pins 33 to 38 using CSYNC of pin 32
 void init_pio_vga_detect_vsync_on_csync() {
 
-    #ifndef PIMORONI_PICO_PLUS2_RP2350
+    #ifndef PIMORONI_PICO_LIPO2XL_W_RP2350
     #define CSYNC_IN_PIN 22
     #define RGB_OUT_FIRST_PIN 6
     #else
@@ -2955,7 +2959,7 @@ void set_vga_capture(uint8_t new_capture_mode) {
 
 #endif
 
-#ifndef PIMORONI_PICO_PLUS2_RP2350
+#ifndef PIMORONI_PICO_LIPO2XL_W_RP2350
     PIO ir_rx_pio = pio2;
     // #warning IR_RX is using pio2
 #else
@@ -3022,10 +3026,13 @@ uint check_ir() {
             }
         }
 
+
+        uint8_t ir_button = (ir_command >> 16) & 0xff;
+
         if ((ir_command & 0xffff) == 0xbf00) {
             // Adafruit Mini Remote Control (https://www.adafruit.com/product/389)
 
-            uint8_t ir_button = (ir_command >> 16) & 0xff;
+
 
             uart_putcf(UART_ID, "  btn: %d\n", ir_button);
 
@@ -3080,7 +3087,31 @@ uint check_ir() {
 
         } else {
             // from a different ir remote
-            last_ir_command = 0;
+
+            if ((ir_command & 0xffff) == 0xff00) {
+                // Argon IR Remote (https://argon40.com/products/argon-remote?_pos=1&_psq=remote&_ss=e&_v=1.0)
+
+                switch (ir_button) {
+
+                    case 0xce:
+                        // 'play/pause'
+                        ui_command = UIC_C; // capture
+                        break;
+
+                    case 0x99:
+                        ui_command = UIC_LEFT;
+                        break;
+
+                    case 0xc1:
+                        ui_command = UIC_RIGHT;
+                        break;
+                }
+                last_ir_command = ir_command;
+
+            } else {
+
+                last_ir_command = 0;
+            }
         }
     }
     return ui_command;
@@ -3123,7 +3154,7 @@ int main() {
     
     stdio_init_all();
 
-    #ifndef PIMORONI_PICO_PLUS2_RP2350
+    #ifndef PIMORONI_PICO_LIPO2XL_W_RP2350
 
     // todo - we can probably and should use the code below (in the #else), which is from the SDK docs
 
@@ -3144,9 +3175,14 @@ int main() {
     #endif
 
 #if USE_LED_AS_IR_DEBUG == 0
+
+#ifdef LED_PIN
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN, GPIO_OUT); // set LED_PIN GPIO to an output
     gpio_put(LED_PIN, 1); // set LED_PIN
+
+#endif
+
 #endif
 
     gpio_init_mask(GPIO_INPUT_MASK); // init all GPIO in the above mask
@@ -3332,7 +3368,7 @@ int main() {
     // todo - uncomment this next line if we need to
     // bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
     
-    #ifndef PIMORONI_PICO_PLUS2_RP2350
+    #ifndef PIMORONI_PICO_LIPO2XL_W_RP2350
         PIO pio = pio1;
     #else
         PIO pio = pio2;

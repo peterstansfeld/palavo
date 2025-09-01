@@ -14,39 +14,44 @@
 // pico_cmake_set PICO_PLATFORM=rp2350
 // pico_cmake_set PICO_CYW43_SUPPORTED = 1
 
-#ifndef _BOARDS_PICO2_W_H
-#define _BOARDS_PICO2_W_H
+#ifndef _BOARDS_PIMORONI_PICO_LIPO2XL_W_RP2350_H
+#define _BOARDS_PIMORONI_PICO_LIPO2XL_W_RP2350_H
+
+pico_board_cmake_set(PICO_PLATFORM, rp2350)
 
 // For board detection
-#define PIMORONI_PICO_LIPO2_RP2350
-
-// --- BOARD SPECIFIC ---
-#define SPICE_SPI 0
-#define SPICE_TX_MISO_PIN 32
-#define SPICE_RX_CS_PIN 33
-#define SPICE_NETLIGHT_SCK_PIN 34
-#define SPICE_RESET_MOSI_PIN 35
-#define SPICE_PWRKEY_BL_PIN 36
-
-#define PIMORONI_PICO_LIPO2_USER_SW_PIN 30
-#define PIMORONI_PICO_LIPO2_PSRAM_CS_PIN 47
+#define PIMORONI_PICO_LIPO2XL_W_RP2350
 
 // --- RP2350 VARIANT ---
-// not PICO_RP2350A
+#define PICO_RP2350A 0
+
+// --- BOARD SPECIFIC ---
+#define SPCE_SPI 0
+#define SPCE_TX_MISO_PIN 32
+#define SPCE_RX_CS_PIN 33
+#define SPCE_NETLIGHT_SCK_PIN 34
+#define SPCE_RESET_MOSI_PIN 35
+#define SPCE_PWRKEY_BL_PIN 36
+
+#define PIMORONI_PICO_PLUS2_USER_SW_PIN 30
+#define PIMORONI_PICO_PLUS2_PSRAM_CS_PIN 47
 
 // --- UART ---
 #ifndef PICO_DEFAULT_UART
 #define PICO_DEFAULT_UART 0
 #endif
 #ifndef PICO_DEFAULT_UART_TX_PIN
-#define PICO_DEFAULT_UART_TX_PIN SPICE_TX_MISO_PIN
+#define PICO_DEFAULT_UART_TX_PIN SPCE_TX_MISO_PIN
 #endif
 #ifndef PICO_DEFAULT_UART_RX_PIN
-#define PICO_DEFAULT_UART_RX_PIN SPICE_RX_CS_PIN
+#define PICO_DEFAULT_UART_RX_PIN SPCE_RX_CS_PIN
 #endif
 
 // --- LED ---
-// no PICO_DEFAULT_LED_PIN - LED is on Wireless chip
+#ifndef PICO_DEFAULT_LED_PIN
+// LED is on Wireless chip
+// #define PICO_DEFAULT_LED_PIN 25
+#endif
 // no PICO_DEFAULT_WS2812_PIN
 
 // --- I2C ---
@@ -65,16 +70,16 @@
 #define PICO_DEFAULT_SPI 0
 #endif
 #ifndef PICO_DEFAULT_SPI_SCK_PIN
-#define PICO_DEFAULT_SPI_SCK_PIN SPICE_NETLIGHT_SCK_PIN
+#define PICO_DEFAULT_SPI_SCK_PIN SPCE_NETLIGHT_SCK_PIN
 #endif
 #ifndef PICO_DEFAULT_SPI_TX_PIN
-#define PICO_DEFAULT_SPI_TX_PIN SPICE_RESET_MOSI_PIN
+#define PICO_DEFAULT_SPI_TX_PIN SPCE_RESET_MOSI_PIN
 #endif
 #ifndef PICO_DEFAULT_SPI_RX_PIN
-#define PICO_DEFAULT_SPI_RX_PIN SPICE_TX_MISO_PIN
+#define PICO_DEFAULT_SPI_RX_PIN SPCE_TX_MISO_PIN
 #endif
 #ifndef PICO_DEFAULT_SPI_CSN_PIN
-#define PICO_DEFAULT_SPI_CSN_PIN SPICE_RX_CS_PIN
+#define PICO_DEFAULT_SPI_CSN_PIN SPCE_RX_CS_PIN
 #endif
 
 // --- FLASH ---
@@ -85,12 +90,32 @@
 #define PICO_FLASH_SPI_CLKDIV 2
 #endif
 
-// pico_cmake_set_default PICO_FLASH_SIZE_BYTES = (4 * 1024 * 1024)
+pico_board_cmake_set_default(PICO_FLASH_SIZE_BYTES, (16 * 1024 * 1024))
 #ifndef PICO_FLASH_SIZE_BYTES
-#define PICO_FLASH_SIZE_BYTES  (16 * 1024 * 1024)
+#define PICO_FLASH_SIZE_BYTES (16 * 1024 * 1024)
 #endif
+
+// The GPIO Pin used to read VBUS to determine if the device is battery powered.
+#ifndef PICO_VBUS_PIN
+#define PICO_VBUS_PIN 24
+#endif
+
+// The GPIO Pin used to monitor VSYS. Typically you would use this with ADC.
+// There is an example in adc/read_vsys in pico-examples.
+#ifndef PICO_VSYS_PIN
+#define PICO_VSYS_PIN 43
+#endif
+
+pico_board_cmake_set_default(PICO_RP2350_A2_SUPPORTED, 1)
+#ifndef PICO_RP2350_A2_SUPPORTED
+#define PICO_RP2350_A2_SUPPORTED 1
+#endif
+
 // Drive high to force power supply into PWM mode (lower ripple on 3V3 at light loads)
 // note the SMSP mode pin is on WL_GPIO1
+
+// For now ignore all the wireless definitions as I suspect the SDK will enable all the wireless
+// stuff, possibly with undesireable results... No, it seems fine, but be weary.
 
 #ifndef CYW43_WL_GPIO_COUNT
 #define CYW43_WL_GPIO_COUNT 3
@@ -159,5 +184,6 @@
 #ifndef CYW43_DEFAULT_PIN_WL_CS
 #define CYW43_DEFAULT_PIN_WL_CS 25
 #endif
+
 
 #endif
