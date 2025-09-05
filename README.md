@@ -1,45 +1,70 @@
 # PALAVO
 
-## How to create a build directory
+Palavo is a, and stands for: PIO-Assisted Logic Analyser with VGA Output.
 
-The target for this example is an RP2350 on a Pico 2
+*Assisted* doesn't really do PIO justice, as without PIO (Programmable Input 
+Output on Raspberry Pi's RP2xxx microcontrollers) Palavo would not be 
+possible.
 
-`mkdir build-pico2`
+Palavo is a keyboard*, or serial terminal, and infra-red remote
+controlled logic analyser, which has a 6-bit colour, 640 x 480 VGA output
+to display the captured input channels.
 
-`cd build-pico2`
+Palavo was inspired by Raspberry Pi's [Logic Analyser example in the SDK.](https://github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser)
+
+
+*with a Raspberry Pi Pico (2) as a keyboard to serial terminal adapter.
+
+## How to build Palavo
+
+If one doesn't already exist, create a `build` directory in the Palavo directory.
+
+`mkdir build`
+
+Enter the `build` directory.
+
+`cd build`
+
+Create a suitably named directory (the target for this example is a Raspberry Pi Pico 2).
+
+`mkdir pico2`
+
+`cd pico2`
+
 
 Specify where the pico-sdk directory can be found.
 
 `export PICO_SDK_PATH=~/pico2.2/pico/pico-sdk`
 
-Specify where the top level CMakeLists.txt file can be found. In this case it's the parent directory (`..`). Also, specify the board (`pico2`). For a list of possible boards search the `pico-sdk/src/boards/include/boards` directory.
+Specify where the top level CMakeLists.txt file can be found - in this case
+it's the grandparent directory `../../`, and specify the board `pico2`.
 
-`cmake .. -DPICO_BOARD=pico2`
+`cmake ../../ -DPICO_BOARD=pico2`
 
-or
-
-`cmake .. -DPICO_BOARD=pimoroni_pga2350`
-
-or
-
-`cmake .. -DPICO_BOARD=solderparty_rp2350_stamp_xl`
-
-or
-
-`cmake .. -DPICO_BOARD=pimoroni_pico_plus2_rp2350`
-
-or 
-
-`cmake .. -DPICO_BOARD=pimoroni_pico_lipo2xl_w_rp2350.h`
+`cmake ../../ -DPICO_BOARD=pimoroni_pico_lipo2xl_w_rp2350`
 
 `make -j4`
 
-This should generate, amongst other things, a `.elf` file.
+This should generate, amongst other files, a `palavo.uf2` file and a `palavo.elf` file.
 
+To program the rp2350, put it into boot mode and copy `palavo.uf2` onto the drive that appears.
 
-To program an rp2350 with a `filename.elf` file using openocd and a RPi Debug Probe:
+To program an rp2350 with a `palavo.elf` file using Openocd and a RPi Debug Probe:
 
 `~/.pico-sdk/openocd/0.12.0+dev/openocd -s ~/.pico-sdk/openocd/0.12.0+dev/scripts -f ~/.vscode/extensions/marus25.cortex-debug-1.12.1/support/openocd-helpers.tcl -f interface/cmsis-dap.cfg -f target/rp2350.cfg -c "adapter speed 5000" -c "program filename.elf verify reset exit"`
+
+Instead of the above, copy the script file `make-and-flash.sh` from the palavo directory:
+
+`cp ../../make-and-flash.sh .`
+
+Modify the `adapter_serial_no` variable to that of your Debug Probe. If you don't 
+want to specify a serial number, blank the `target_adapter_cmnd` variable.
+
+Then, attempt to make and flash the RP235x with:
+
+`./make-and-flash.sh`
+
+## Previously on this subject
 
 Note that the above does not work when using dvi on hstx. See `make-and-flash.sh` for how to
 fudge it to get it to work. Update: it's now proving troublesome even with this fix. It 

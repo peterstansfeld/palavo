@@ -2604,7 +2604,7 @@ void logo_med(int x, int y, bool use_fore_col) {
 char* name_string = "PALAVO";
 
 char* about_strings =
-    "PIO Accelerated Logic Analyser with VGA Output\n"
+    "PIO-Assisted Logic Analyser with VGA Output\n"
     "Version 0.0.1\n"
     "\n"
     "Developed by Peter Stansfeld.\n"
@@ -2970,8 +2970,6 @@ void set_vga_capture(uint8_t new_capture_mode) {
 uint ir_rx_sm = 0;
 uint ir_rx_offset;
 
-uint32_t last_ir_command = 0;
-uint32_t last_ir_button_time;
 
 // receive ir on pin 28
 void init_ir_rx() {
@@ -2989,7 +2987,15 @@ void init_ir_rx() {
 }
 
 
+uint32_t time_ms() {
+    return time_us_64() / 1000;
+}
+
 uint check_ir() {
+    static uint32_t last_ir_command = 0;
+    static uint32_t last_ir_button_time;
+    static uint32_t last_ir_button_start_time;
+
     uint ui_command = UIC_NONE;
     if (!pio_sm_is_rx_fifo_empty(ir_rx_pio, ir_rx_sm)) {
 
@@ -3001,119 +3007,144 @@ uint check_ir() {
         char str[80];
         clear_statusbar_hint();
 
+        uint32_t time_now = time_ms();
         if (ir_command) {
-            // button press code, ie not a repeat code
-            sprintf(str, "%#x ", ir_command);
-            writeString(str);
-
-            last_ir_button_time = time_us_32();
-
+            // ir_command != 0, ie not a repeat code
+            last_ir_button_time = time_now;
+            last_ir_button_start_time = time_now;
+            last_ir_command = ir_command;
         } else {
             // ir_command == 0, ie repeat code
-            if (last_ir_command) {
-                uint32_t time_now = time_us_32();
-                if (time_now - last_ir_button_time < 500000) {
-                    // less than half a second since last repeat code
-                    ir_command = last_ir_command;
-                    last_ir_button_time = time_now;
-                    sprintf(str, "repeat %#x ", ir_command);
-                    writeString(str);
-
-                } else {
-                    // more than half a second since last repeat code
-                    last_ir_command = 0;
+           if (last_ir_button_start_time) {
+                // Haven't timed out between repeat codes
+                if (time_now - last_ir_button_start_time > 500) {
+                    // Had enough time to allow a repeat code
+                    if (time_now - last_ir_button_time < 500) {
+                        // Still haven't timed out between repeat codes
+                        ir_command = last_ir_command;                
+                        last_ir_button_time = time_now;
+                        sprintf(str, "repeat %#x ", ir_command);
+                        writeString(str);
+                        // uart_putuif(UART_ID, "ir2: %#x\n", ir_command);
+                    } else {
+                        // Timed out between repeat codes
+                        last_ir_button_start_time = 0;
+                    }
                 }
+                // Save this in case we're still allowed repeat codes
+                last_ir_button_time = time_now;
             }
         }
 
+        if (ir_command) {
 
-        uint8_t ir_button = (ir_command >> 16) & 0xff;
+            uint8_t ir_button = (ir_command >> 16) & 0xff;
 
-        if ((ir_command & 0xffff) == 0xbf00) {
-            // Adafruit Mini Remote Control (https://www.adafruit.com/product/389)
+            if ((ir_command & 0xffff) == 0xbf00) {
+                // Adafruit Mini Remote Control (https://www.adafruit.com/product/389)
 
 
 
-            uart_putcf(UART_ID, "  btn: %d\n", ir_button);
-
-            switch (ir_button) {
-
-                case 1:
-                    // 'play/pause'
-                    ui_command = UIC_C; // capture
-                    break;
-
-                case 8:
-                    ui_command = UIC_LEFT;
-                    break;
-
-                case 10:
-                    ui_command = UIC_RIGHT;
-                    break;
-
-#if USE_DVI
-                case 14:
-                    ui_command = UIC_R; // reset DVI
-                    break;
-#endif
-
-                case 9:
-                    // 'enter/save'
-                    break;
-
-#if USE_DVI
-
-                case 16:
-                    // '1'
-                    set_vga_capture(VC_NONE);
-                    test_DVI_framebuf();
-                    break;
-
-                case 17:
-                    set_vga_capture(VC_VSYNC_AND_VSYNC_ON_CSYNC);
-                    // '2'
-                    break;
-
-                case 18:
-                    // '3'
-                    set_vga_capture(VC_VSYNC_ON_CSYNC);
-                    break;
-
-#endif
-
-            }
-
-            last_ir_command = ir_command;
-
-        } else {
-            // from a different ir remote
-
-            if ((ir_command & 0xffff) == 0xff00) {
-                // Argon IR Remote (https://argon40.com/products/argon-remote?_pos=1&_psq=remote&_ss=e&_v=1.0)
+                uart_putcf(UART_ID, "  btn: %d\n", ir_button);
 
                 switch (ir_button) {
 
-                    case 0xce:
+                    case 1:
                         // 'play/pause'
                         ui_command = UIC_C; // capture
+                        last_ir_command = 0;
                         break;
 
-                    case 0x99:
+                    case 8:
                         ui_command = UIC_LEFT;
                         break;
 
-                    case 0xc1:
+                    case 10:
                         ui_command = UIC_RIGHT;
                         break;
+
+    #if USE_DVI
+                    case 14:
+                        ui_command = UIC_R; // reset DVI
+                        break;
+    #endif
+
+                    case 9:
+                        // 'enter/save'
+                        break;
+
+    #if USE_DVI
+
+                    case 16:
+                        // '1'
+                        set_vga_capture(VC_NONE);
+                        test_DVI_framebuf();
+                        break;
+
+                    case 17:
+                        set_vga_capture(VC_VSYNC_AND_VSYNC_ON_CSYNC);
+                        // '2'
+                        break;
+
+                    case 18:
+                        // '3'
+                        set_vga_capture(VC_VSYNC_ON_CSYNC);
+                        break;
+
+    #endif
+
                 }
+
                 last_ir_command = ir_command;
 
             } else {
+                // from a different ir remote
 
-                last_ir_command = 0;
+                if ((ir_command & 0xffff) == 0xff00) {
+                    // Argon IR Remote (https://argon40.com/products/argon-remote?_pos=1&_psq=remote&_ss=e&_v=1.0)
+
+                    switch (ir_button) {
+                        case 0xce:
+                            // 'play/pause'
+                            ui_command = UIC_C; // capture
+                            last_ir_command = 0;
+                            break;
+
+                        case 0xca:
+                            ui_command = UIC_UP;
+                            break;
+
+                        case 0xd2:
+                            ui_command = UIC_DOWN;
+                            break;
+
+                        case 0x99:
+                            ui_command = UIC_LEFT;
+                            break;
+
+                        case 0xc1:
+                            ui_command = UIC_RIGHT;
+                            break;
+
+                        case 0x9d:
+                            ui_command = UIC_TAB;
+                            break;
+
+                        case 0x80:
+                            ui_command = UIC_PLUS;
+                            break;
+
+                        case 0x81:
+                            ui_command = UIC_MINUS;
+                            break;
+
+                    }
+                    last_ir_command = ir_command;
+                }
             }
         }
     }
+    
     return ui_command;
 }
 
@@ -3725,7 +3756,7 @@ int main() {
                         mini_map_redraw_required = true;
 
                         ir_flush();
-                        last_ir_command = 0;
+                        // last_ir_command = 0;
 
                         break;
 
