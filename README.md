@@ -197,12 +197,12 @@ PIO      SM       Size  Needs PIO1*  GPIO(s)  Usage
 0        0        6         y                 vga_capture_program
 0        1        11                          vga_detect_vsync_program
 0        2        14                          vga_detect_vsync_on_csync_program
-0        3
-Total             1
+0        3        1                           trigger for logic_capture (if logic_capture in PIO2 is using GPIO_BASE 16)
+Total             32
 
 1        0        1                           Could move logic_capture here to capture channels 16-48
 1        1        13                          rgb5_150_mhz_rp235x_program (rrggbb for vga out) 
-1        2        15                          hsync5_program (csync for vga out)      
+1        2        15                          hsync5_program (csync for vga out)
 ;1        3        1                           logic_capture (moved to PIO0)
 Total             28
 

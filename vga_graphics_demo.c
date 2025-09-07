@@ -189,6 +189,18 @@ uint8_t last_uart_char = 0;
 
 #define MAX_NO_OF_CHANNELS 32
 
+#define MAX_NO_OF_PINS 32
+
+#ifdef PIMORONI_PICO_LIPO2XL_W_RP2350
+
+#define MAX_BASE_PIN_NO 47
+
+#else
+
+#define MAX_BASE_PIN_NO 32
+
+#endif
+
 // Some globals for storing timer information
 volatile unsigned int time_accum = 0;
 unsigned int time_accum_old = 0 ;
@@ -352,6 +364,14 @@ static inline uint bits_packed_per_word(uint pin_count) {
     return SHIFT_REG_WIDTH - (SHIFT_REG_WIDTH % pin_count);
 }
 
+
+void uart_putuif(uart_inst_t *uart, const char *s, uint c) {
+    char str[80];
+    sprintf(str, s, c);
+    uart_puts(uart, str);
+}
+
+
 void logic_analyser_init(PIO pio, uint sm, uint pin_base, uint pin_count, float div) {
     // Load a program to capture n pins. This is just a single `in pins, n`
     // instruction with a wrap.
@@ -374,6 +394,17 @@ void logic_analyser_init(PIO pio, uint sm, uint pin_base, uint pin_count, float 
     capture_prog.instructions = &capture_prog_instr;
     capture_prog.length = 1;
     capture_prog.origin = -1;
+
+#if PICO_PIO_USE_GPIO_BASE==1
+    int res;
+    if ((pin_base >= 16) && (pin_base + pin_count > 32)) { 
+        res = pio_set_gpio_base(pio, 16);
+        uart_putuif(UART_ID, "pio_set_gpio_base(pio, 16); res: %d\n", res);
+    } else {
+        res = pio_set_gpio_base(pio, 0);
+        uart_putuif(UART_ID, "pio_set_gpio_base(pio, 0); res: %d\n", res);
+    }
+#endif
 
     offset = pio_add_program(pio, &capture_prog);
 
@@ -406,6 +437,64 @@ bool pio_sm_exec_timeout_us(PIO pio, uint sm, uint instr, uint32_t timeout_us) {
 }
 
 
+#ifdef PIMORONI_PICO_LIPO2XL_W_RP2350
+
+// When this is #define'ed instead of a global variable the triggering respose is much slower
+// Is it because it's stored in flash rather than ram? todo -find out
+
+// #define la_trigger_pio pio0
+PIO la_trigger_pio = pio0;
+uint la_trigger_sm = 3;
+
+void logic_analyser_trigger_init(bool init) {
+    // Load a program to simply allow us to use this state machine for trigger detection.
+    // This to allow a trigger pin that is not in the same GPIO_BASE as the capture pins.
+    // It's just a `nop` instruction with a wrap.
+
+    static bool initialised;
+    static uint16_t trigger_prog_instr;
+    static struct pio_program trigger_prog;
+    static uint offset;
+
+    if (init) {
+        // we want to initialise it
+        if (!initialised) {
+            // we can
+            trigger_prog_instr = pio_encode_nop();
+
+            trigger_prog.instructions = &trigger_prog_instr;
+            trigger_prog.length = 1;
+            trigger_prog.origin = -1;
+
+            offset = pio_add_program(la_trigger_pio, &trigger_prog);
+
+            // Configure state machine to loop over this `in` instruction forever,
+            // with autopush enabled.
+            pio_sm_config c = pio_get_default_sm_config();
+            // sm_config_set_in_pins(&c, pin_base);
+            sm_config_set_wrap(&c, offset, offset);
+            // sm_config_set_clkdiv(&c, 1);
+            // Note that we may push at a < 32 bit threshold if pin_count does not
+            // divide 32. We are using shift-to-right, so the sample data ends up
+            // left-justified in the FIFO in this case, with some zeroes at the LSBs.
+            // sm_config_set_in_shift(&c, true, true, bits_packed_per_word(pin_count));
+            // sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+            pio_sm_init(la_trigger_pio, la_trigger_sm, offset, &c);
+            initialised = true;
+        }
+    } else {
+        // we want to deinitialise it
+        if (initialised) {
+            // we can
+            pio_remove_program(la_trigger_pio, &trigger_prog, offset);
+            initialised = false;
+        }
+    }
+}
+
+#endif
+
+
 // Immediately execute an instruction on a state machine and wait for it to
 // complete unless an expiry time is reached sooner.
 bool pio_sm_exec_expiry_time_us(PIO pio, uint sm, uint instr, uint32_t expiry_time_us) {
@@ -435,9 +524,77 @@ void clear_previous_edges() {
         memset(edges, 0, sizeof(edges[0]) * MAX_NO_OF_CHANNELS);
 }
 
+#ifndef PIMORONI_PICO_LIPO2XL_W_RP2350
+    PIO ir_rx_pio = pio2;
+    // #warning IR_RX is using pio2
+#else
+    PIO ir_rx_pio = pio2;
+    // #warning IR_RX is using pio1
+#endif
+
+uint ir_rx_sm = 0;
+uint ir_rx_offset;
+
+bool ir_rx_sm_initialised;
+// receive ir on pin 28
+
+
+void init_ir_rx(bool init) {
+
+    if (init) {
+
+        if (!ir_rx_sm_initialised) {
+
+            ir_rx_offset = pio_add_program(ir_rx_pio, &nec_ir_rx_program);
+
+        #if USE_LED_AS_IR_DEBUG
+        // todo tidy this up into one line and work out what we're doing with the LED
+            // nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, ir_rx_offset, IR_RX_PIN, LED_PIN);
+            nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, ir_rx_offset, IR_RX_PIN, -1);
+        #else
+            nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, ir_rx_offset, IR_RX_PIN, -1);
+        #endif
+
+            pio_enable_sm_mask_in_sync(ir_rx_pio, (1u << ir_rx_sm));
+
+            ir_rx_sm_initialised = true;
+
+    #if PICO_PIO_USE_GPIO_BASE==1
+            pio_set_gpio_base(ir_rx_pio, 0);
+    #endif
+
+        }
+    } else {
+        if (ir_rx_sm_initialised) {
+
+            // stop the state machine
+
+            pio_sm_set_enabled(ir_rx_pio, ir_rx_sm, false);
+
+            // and free it
+            pio_remove_program(ir_rx_pio, &nec_ir_rx_program, ir_rx_offset);
+            
+            ir_rx_sm_initialised = false;
+
+        }
+
+    }
+}
+
+#define TRIGGER_TIMEOUT_US 2000000 // 2 seconds
+
 
 bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, size_t capture_size_words,
                         uint trigger_pin, uint8_t trigger_type) {
+
+    PIO trigger_pio = pio;
+    uint trigger_sm = sm;
+
+    PIO capture_pio = pio;
+    uint capture_sm = sm;
+
+    // free pio resources for the ir rx
+    init_ir_rx(false);
 
     uart_puts(UART_ID, "\nArming trigger...\n");
 
@@ -446,6 +603,50 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     // partial ISR contents left over from a previous run. sm_restart does this.
     pio_sm_clear_fifos(pio, sm);
     pio_sm_restart(pio, sm);
+
+#if PICO_PIO_USE_GPIO_BASE==1
+    uint gpio_base = pio_get_gpio_base(pio);
+
+    int res;
+
+    bool changed_base = false;
+    if (gpio_base == 16) {
+        // base is mapped to gpio 16-47
+        if (trigger_pin < 16) {
+            // need to use the other pio-state machine to trigger
+            // pio_get_gpio_base(pio, 0);
+
+            logic_analyser_trigger_init(false);
+            res = pio_set_gpio_base(la_trigger_pio, 0);
+            logic_analyser_trigger_init(true);
+
+            trigger_pio = la_trigger_pio;
+            trigger_sm = la_trigger_sm;
+
+            uart_puts(UART_ID, "pio_set_gpio_base(pio, 0) for trigger\n\n");
+            uart_putuif(UART_ID, "res: %d\n", res);
+            changed_base = true;
+        } else {
+            trigger_pin -= 16;
+        }
+
+    } else {
+        if (trigger_pin > 16) {
+            // pio_get_gpio_base(pio, 16);
+            logic_analyser_trigger_init(false);
+            res = pio_set_gpio_base(la_trigger_pio, 16);
+            logic_analyser_trigger_init(true);
+            trigger_pio = la_trigger_pio;
+            trigger_sm = la_trigger_sm;
+
+            uart_puts(UART_ID, "pio_set_gpio_base(pio, 16) for trigger\n\n");
+            uart_putuif(UART_ID, "res: %d\n", res);
+            changed_base = true;
+            trigger_pin -= 16;
+        }
+    }
+
+#endif
 
     dma_channel_config c = dma_channel_get_default_config(dma_chan);
     channel_config_set_read_increment(&c, false);
@@ -458,8 +659,6 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
         capture_size_words, // Number of transfers
         true                // Start immediately
     );
-
-    #define TRIGGER_TIMEOUT_US 2000000 // 2 seconds
 
     // Wait for a rising edge on VSYNC, which involves:
     // 1. Waiting until VSYNC is at the opposite level of the trigger level.
@@ -476,22 +675,22 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
             break;
 
         case TT_LOW_LEVEL:
-            triggered = pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(0, trigger_pin), TRIGGER_TIMEOUT_US);
+            triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(0, trigger_pin), TRIGGER_TIMEOUT_US);
             break;
 
         case TT_HIGH_LEVEL:
-            triggered = pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(1, trigger_pin), TRIGGER_TIMEOUT_US);
+            triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin), TRIGGER_TIMEOUT_US);
             break;
 
         case TT_RISING_EDGE:
-            if (pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(0, trigger_pin), TRIGGER_TIMEOUT_US)) {
-                triggered = pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(1, trigger_pin), TRIGGER_TIMEOUT_US);
+            if (pio_sm_exec_timeout_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(0, trigger_pin), TRIGGER_TIMEOUT_US)) {
+                triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin), TRIGGER_TIMEOUT_US);
             }
             break;
 
         case TT_FALLING_EDGE:
-            if (pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(1, trigger_pin), TRIGGER_TIMEOUT_US)) {
-                triggered = pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(0, trigger_pin), TRIGGER_TIMEOUT_US);
+            if (pio_sm_exec_timeout_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin), TRIGGER_TIMEOUT_US)) {
+                triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(0, trigger_pin), TRIGGER_TIMEOUT_US);
             }
             break;
 
@@ -500,7 +699,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
             bool trigger_pin_state = gpio_get(trigger_pin);
 
             // wait for it to change to the opposite state
-            triggered = pio_sm_exec_timeout_us(pio, sm, pio_encode_wait_gpio(!trigger_pin_state, trigger_pin), TRIGGER_TIMEOUT_US);
+            triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(!trigger_pin_state, trigger_pin), TRIGGER_TIMEOUT_US);
             break;
 
 
@@ -523,15 +722,15 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
 
             uint32_t expiry_time = time_us_32() + TRIGGER_TIMEOUT_US;
 
-            if (pio_sm_exec_expiry_time_us(pio, sm, pio_encode_wait_gpio(1, trigger_pin + 1), expiry_time)) {
+            if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin + 1), expiry_time)) {
                 // VSYNC is high
-                if (pio_sm_exec_expiry_time_us(pio, sm, pio_encode_wait_gpio(0, trigger_pin + 1), expiry_time)) {
+                if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(0, trigger_pin + 1), expiry_time)) {
                     // VSYNC is low
                     triggered = true; // assume pass
                     // Wait for x HSYNC pulses before starting the capture
                     for (int i = 0; i < x; i++) {
-                        if (pio_sm_exec_expiry_time_us(pio, sm, pio_encode_wait_gpio(1, trigger_pin), expiry_time)) {
-                            if (!pio_sm_exec_expiry_time_us(pio, sm, pio_encode_wait_gpio(0, trigger_pin), expiry_time)) {
+                        if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin), expiry_time)) {
+                            if (!pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(0, trigger_pin), expiry_time)) {
                                 triggered = false;
                                 break;
                             }
@@ -589,16 +788,16 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
             // if we get a low pulse on CSYNC that is greater than 96 clks / 25 MHz = 3.84 us then
             // chances are we have a "VSYNC" signal on CSYNC. It must also be less than 704 cls / 25 MHz = 28.16
 
-            if (pio_sm_exec_expiry_time_us(pio, sm, pio_encode_wait_gpio(1, trigger_pin), expiry_time)) {
+            if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin), expiry_time)) {
                 // CSYNC is high
                 // wait for CSYNC to go low
                 while (1) {
-                    if (pio_sm_exec_expiry_time_us(pio, sm, pio_encode_wait_gpio(0, trigger_pin), expiry_time)) {
+                    if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(0, trigger_pin), expiry_time)) {
                         // CSYNC is low
                         uint32_t csync_pulse_low_start_time = time_us_32();
 
                         // wait for CSYNC to go high again
-                        if (pio_sm_exec_expiry_time_us(pio, sm, pio_encode_wait_gpio(1, trigger_pin), expiry_time)) {
+                        if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin), expiry_time)) {
                             // CSYNC is high again
 
                             uint32_t csync_pulse_low_duration = time_us_32() - csync_pulse_low_start_time;
@@ -626,8 +825,8 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
                     // triggered = true; // assume pass
                     // Wait for x CSYNC (HSYNC) pulses before starting the capture
                     for (int i = 0; i < x; i++) {
-                        if (pio_sm_exec_expiry_time_us(pio, sm, pio_encode_wait_gpio(1, trigger_pin), expiry_time)) {
-                            if (!pio_sm_exec_expiry_time_us(pio, sm, pio_encode_wait_gpio(0, trigger_pin), expiry_time)) {
+                        if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin), expiry_time)) {
+                            if (!pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(0, trigger_pin), expiry_time)) {
                                 triggered = false;
                                 break;
                             }
@@ -649,14 +848,16 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
         pio_sm_restart(pio, sm);
     }
 
-    // Let the PIO take over from here
-    pio_sm_set_enabled(pio, sm, true);
+    // Let the capture state machine take over from here
+    pio_sm_set_enabled(capture_pio, capture_sm, true);
     dma_channel_wait_for_finish_blocking(dma_chan);
-    pio_sm_set_enabled(pio, sm, false); // Disable the state machine, which might save a bit of power? (todo - find out)
+    pio_sm_set_enabled(capture_pio, capture_sm, false); // Disable the state machine, which might save a bit of power? (todo - find out)
 
     g_no_of_captured_pins = g_no_of_pins_to_capture;
 
     clear_previous_edges();
+
+    init_ir_rx(true);
 
     return triggered;
 }
@@ -709,11 +910,6 @@ void uart_putcf(uart_inst_t *uart, const char *s, int c) {
 }
 
 
-void uart_putuif(uart_inst_t *uart, const char *s, uint c) {
-    char str[80];
-    sprintf(str, s, c);
-    uart_puts(uart, str);
-}
 
 
 // writes a formatted integer to the VGA framebuffer
@@ -2959,32 +3155,6 @@ void set_vga_capture(uint8_t new_capture_mode) {
 
 #endif
 
-#ifndef PIMORONI_PICO_LIPO2XL_W_RP2350
-    PIO ir_rx_pio = pio2;
-    // #warning IR_RX is using pio2
-#else
-    PIO ir_rx_pio = pio2;
-    // #warning IR_RX is using pio1
-#endif
-
-uint ir_rx_sm = 0;
-uint ir_rx_offset;
-
-
-// receive ir on pin 28
-void init_ir_rx() {
-    ir_rx_offset = pio_add_program(ir_rx_pio, &nec_ir_rx_program);
-
-#if USE_LED_AS_IR_DEBUG
-// todo tidy this up into one line and work out what we're doing with the LED
-    // nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, ir_rx_offset, IR_RX_PIN, LED_PIN);
-    nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, ir_rx_offset, IR_RX_PIN, -1);
-#else
-    nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, ir_rx_offset, IR_RX_PIN, -1);
-#endif
-
-    pio_enable_sm_mask_in_sync(ir_rx_pio, (1u << ir_rx_sm));
-}
 
 
 uint32_t time_ms() {
@@ -3412,6 +3582,12 @@ int main() {
     // logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, 125000000 / (115200 * 4) /*271.267*/);
     logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency);
 
+    #ifdef PIMORONI_PICO_LIPO2XL_W_RP2350
+
+    logic_analyser_trigger_init(true); // for a trigger pin that's on a different PIO_BASE
+
+    #endif
+
     // logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, 5); // this works
 
     // animation pause
@@ -3531,6 +3707,9 @@ int main() {
     // Wait for the pios to get warmed up. Probably not necessary.
     sleep_ms(10);
 
+    // no need to initialise the ir PIO state machine here as it's done in `logic_analyser_arm()`
+    // init_ir_rx(); 
+
     logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, g_trigger_pin_base, g_trigger_type);
 
     get_plot_height(g_no_of_captured_pins);
@@ -3551,8 +3730,6 @@ int main() {
     // set_vga_capture(VC_VSYNC_ON_CSYNC);
     // set_vga_capture(VC_NONE);
 #endif
-
-    init_ir_rx();
 
     // mainloop
 
@@ -3697,6 +3874,8 @@ int main() {
                         writeString("capture");
                         // fillRect(0, PLOT_TOP, SCREEN_WIDTH, MINIMAP_BOTTOM - PLOT_TOP, BLACK);
 
+                        init_ir_rx(false);
+
                         logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency);
 
                         if (!logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, g_trigger_pin_base, g_trigger_type)) {
@@ -3812,11 +3991,11 @@ int main() {
                                 break;
 
                             case SS_PINS_BASE:
-                                set_pins_base(MIN(g_pins_base + 1, 29));
+                                set_pins_base(MIN(g_pins_base + 1, MAX_BASE_PIN_NO));
                                 break;
 
                             case SS_TRIGGER_PIN_BASE:
-                                set_trigger_pin_base(MIN(g_trigger_pin_base + 1, 29));
+                                set_trigger_pin_base(MIN(g_trigger_pin_base + 1, MAX_BASE_PIN_NO));
                                 break;
 
                             case SS_TRIGGER_TYPE:
