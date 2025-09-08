@@ -129,7 +129,7 @@
 
 #define USE_LED_AS_IR_DEBUG 0
 
-#define IR_RX_PIN 28
+#define IR_RX_PIN 46
 
 #define CSYNC 31
 
@@ -142,7 +142,7 @@
 #define RGB_IN_FIRST_PIN 2
 
 
-#define GPIO_INPUT_MASK ((1 << IR_RX_PIN)  | (1 << 27)  | (1 << 26) | 0x07fffff /* 22-0 */)
+#define GPIO_INPUT_MASK ((1 << 28)  | (1 << 27)  | (1 << 26) | 0x07fffff /* 22-0 */)
 
 
 #else
@@ -372,54 +372,70 @@ void uart_putuif(uart_inst_t *uart, const char *s, uint c) {
 }
 
 
-void logic_analyser_init(PIO pio, uint sm, uint pin_base, uint pin_count, float div) {
+void logic_analyser_init(PIO pio, uint sm, uint pin_base, uint pin_count, float div, bool init) {
     // Load a program to capture n pins. This is just a single `in pins, n`
     // instruction with a wrap.
+
+    static bool initialised;
     static uint16_t capture_prog_instr;
     static struct pio_program capture_prog;
     static uint offset;
 
-    if (capture_prog_instr) {
+    if (init) {
+        // if (capture_prog_instr) {
+        if (initialised) {
         // We need to re-initialise, presumably to change the pin base, the pin count,
-        // or the frequency divisor, so I believe we need to remove the old program first.
-        pio_remove_program(pio, &capture_prog, offset);
-    // } else {
-        // This should be the first time we've called this, as capture_prog_instr is
-        // a static variable, and static variables are zeroed on reset, which means
-        // we don't need to do anything here, so let's comment it out.
-    }
+            // or the frequency divisor, so I believe we need to remove the old program first.
+            pio_remove_program(pio, &capture_prog, offset);
+        // } else {
+            // This should be the first time we've called this, as capture_prog_instr is
+            // a static variable, and static variables are zeroed on reset, which means
+            // we don't need to do anything here, so let's comment it out.
+            uart_puts(UART_ID, "LA reiniting\n");
+        }
 
-    capture_prog_instr = pio_encode_in(pio_pins, pin_count);
+        capture_prog_instr = pio_encode_in(pio_pins, pin_count);
 
-    capture_prog.instructions = &capture_prog_instr;
-    capture_prog.length = 1;
-    capture_prog.origin = -1;
+        capture_prog.instructions = &capture_prog_instr;
+        capture_prog.length = 1;
+        capture_prog.origin = -1;
 
-#if PICO_PIO_USE_GPIO_BASE==1
-    int res;
-    if ((pin_base >= 16) && (pin_base + pin_count > 32)) { 
-        res = pio_set_gpio_base(pio, 16);
-        uart_putuif(UART_ID, "pio_set_gpio_base(pio, 16); res: %d\n", res);
+    #if PICO_PIO_USE_GPIO_BASE==1
+        int res;
+        if ((pin_base >= 16) && (pin_base + pin_count > 32)) { 
+            res = pio_set_gpio_base(pio, 16);
+            uart_putuif(UART_ID, "pio_set_gpio_base(pio, 16); res: %d\n", res);
+        } else {
+            res = pio_set_gpio_base(pio, 0);
+            uart_putuif(UART_ID, "pio_set_gpio_base(pio, 0); res: %d\n", res);
+        }
+    #endif
+
+        offset = pio_add_program(pio, &capture_prog);
+
+        // Configure state machine to loop over this `in` instruction forever,
+        // with autopush enabled.
+        pio_sm_config c = pio_get_default_sm_config();
+        sm_config_set_in_pins(&c, pin_base);
+        sm_config_set_wrap(&c, offset, offset);
+        sm_config_set_clkdiv(&c, div);
+        // Note that we may push at a < 32 bit threshold if pin_count does not
+        // divide 32. We are using shift-to-right, so the sample data ends up
+        // left-justified in the FIFO in this case, with some zeroes at the LSBs.
+        sm_config_set_in_shift(&c, true, true, bits_packed_per_word(pin_count));
+        sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+        pio_sm_init(pio, sm, offset, &c);
+        initialised = true;
+        uart_puts(UART_ID, "LA inited\n");
     } else {
-        res = pio_set_gpio_base(pio, 0);
-        uart_putuif(UART_ID, "pio_set_gpio_base(pio, 0); res: %d\n", res);
+        if (initialised) {
+            pio_remove_program(pio, &capture_prog, offset);
+            initialised = false;
+            uart_puts(UART_ID, "LA deinited\n");
+        } else {
+            uart_puts(UART_ID, "LA already deinited\n");
+        }
     }
-#endif
-
-    offset = pio_add_program(pio, &capture_prog);
-
-    // Configure state machine to loop over this `in` instruction forever,
-    // with autopush enabled.
-    pio_sm_config c = pio_get_default_sm_config();
-    sm_config_set_in_pins(&c, pin_base);
-    sm_config_set_wrap(&c, offset, offset);
-    sm_config_set_clkdiv(&c, div);
-    // Note that we may push at a < 32 bit threshold if pin_count does not
-    // divide 32. We are using shift-to-right, so the sample data ends up
-    // left-justified in the FIFO in this case, with some zeroes at the LSBs.
-    sm_config_set_in_shift(&c, true, true, bits_packed_per_word(pin_count));
-    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
-    pio_sm_init(pio, sm, offset, &c);
 }
 
 
@@ -533,51 +549,62 @@ void clear_previous_edges() {
 #endif
 
 uint ir_rx_sm = 0;
-uint ir_rx_offset;
-
-bool ir_rx_sm_initialised;
-// receive ir on pin 28
 
 
 void init_ir_rx(bool init) {
+    static bool initialised;
+    static uint offset;
 
     if (init) {
 
-        if (!ir_rx_sm_initialised) {
+        if (!initialised) {
 
-            ir_rx_offset = pio_add_program(ir_rx_pio, &nec_ir_rx_program);
+#if IR_RX_PIN >= 32
+            int res = pio_set_gpio_base(ir_rx_pio, 16);
+            uart_putuif(UART_ID, "pio_set_gpio_base for IR RX: %d\n", res);
+
+#else
+#if PICO_PIO_USE_GPIO_BASE==1
+            pio_set_gpio_base(ir_rx_pio, 0);
+#endif
+#endif
+            offset = pio_add_program(ir_rx_pio, &nec_ir_rx_program);
 
         #if USE_LED_AS_IR_DEBUG
         // todo tidy this up into one line and work out what we're doing with the LED
-            // nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, ir_rx_offset, IR_RX_PIN, LED_PIN);
-            nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, ir_rx_offset, IR_RX_PIN, -1);
+            // nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, offset, IR_RX_PIN, LED_PIN);
+            nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, offset, IR_RX_PIN, -1);
         #else
-            nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, ir_rx_offset, IR_RX_PIN, -1);
+            nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, offset, IR_RX_PIN, -1);
         #endif
 
             pio_enable_sm_mask_in_sync(ir_rx_pio, (1u << ir_rx_sm));
 
-            ir_rx_sm_initialised = true;
+            initialised = true;
+            uart_puts(UART_ID, "IR inited\n");
 
-    #if PICO_PIO_USE_GPIO_BASE==1
-            pio_set_gpio_base(ir_rx_pio, 0);
-    #endif
+    // #if PICO_PIO_USE_GPIO_BASE==1
+    //         pio_set_gpio_base(ir_rx_pio, 0);
+    // #endif
 
+        } else {
+            uart_puts(UART_ID, "IR already inited\n");
         }
     } else {
-        if (ir_rx_sm_initialised) {
+        if (initialised) {
 
             // stop the state machine
-
             pio_sm_set_enabled(ir_rx_pio, ir_rx_sm, false);
 
             // and free it
-            pio_remove_program(ir_rx_pio, &nec_ir_rx_program, ir_rx_offset);
+            pio_remove_program(ir_rx_pio, &nec_ir_rx_program, offset);
             
-            ir_rx_sm_initialised = false;
+            initialised = false;
+            uart_puts(UART_ID, "IR deinited\n");
 
+        } else {
+            uart_puts(UART_ID, "IR already deinited\n");
         }
-
     }
 }
 
@@ -593,10 +620,10 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     PIO capture_pio = pio;
     uint capture_sm = sm;
 
-    // free pio resources for the ir rx
-    init_ir_rx(false);
-
     uart_puts(UART_ID, "\nArming trigger...\n");
+
+    init_ir_rx(false);
+    logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
 
     pio_sm_set_enabled(pio, sm, false);
     // Need to clear _input shift counter_, as well as FIFO, because there may be
@@ -841,7 +868,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
             break;
     }
 
-    if (!triggered) {
+    if (!triggered) {   
         // Failed to trigger, so restart the state machine otherwise it'll be stuck
         // in a latched EXEC instruction, and we'll never fill up the capture buffer.
         uart_puts(UART_ID, "failed to trigger, restarting the state machine...\n");
@@ -856,6 +883,8 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     g_no_of_captured_pins = g_no_of_pins_to_capture;
 
     clear_previous_edges();
+
+    logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
 
     init_ir_rx(true);
 
@@ -3394,6 +3423,10 @@ int main() {
         }
     }
 
+    gpio_init(IR_RX_PIN);
+    gpio_set_dir(IR_RX_PIN, GPIO_IN); // set IR_RX_PIN GPIO to an input
+    gpio_pull_up(IR_RX_PIN);
+
     uart_putcf(UART_ID, "GPIO Inputs: %d\n", GPIO_INPUT_MASK);
 
     uart_puts(UART_ID, "\n\n");
@@ -3580,7 +3613,7 @@ int main() {
     // uint dma_chan = 5;
 
     // logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, 125000000 / (115200 * 4) /*271.267*/);
-    logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency);
+    logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
 
     #ifdef PIMORONI_PICO_LIPO2XL_W_RP2350
 
@@ -3724,6 +3757,7 @@ int main() {
 
     draw_minimap_indicator();
 
+    init_ir_rx(true);
 #if USE_VGA_CAPTURE
     sleep_ms(500);
     set_vga_capture(VC_VSYNC_AND_VSYNC_ON_CSYNC);
@@ -3873,10 +3907,6 @@ int main() {
                     case UIC_C:
                         writeString("capture");
                         // fillRect(0, PLOT_TOP, SCREEN_WIDTH, MINIMAP_BOTTOM - PLOT_TOP, BLACK);
-
-                        init_ir_rx(false);
-
-                        logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency);
 
                         if (!logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, g_trigger_pin_base, g_trigger_type)) {
                             writeString(" - failed to trigger");
