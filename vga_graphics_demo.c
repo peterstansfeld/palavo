@@ -197,7 +197,7 @@ uint8_t last_uart_char = 0;
 
 #else
 
-#define MAX_BASE_PIN_NO 32
+#define MAX_BASE_PIN_NO 31
 
 #endif
 
@@ -371,73 +371,117 @@ void uart_putuif(uart_inst_t *uart, const char *s, uint c) {
     uart_puts(uart, str);
 }
 
+void logic_analyser_configure(PIO pio, uint sm, uint pin_base, uint pin_count, float div, uint offset) {
+    // Configure state machine to loop over this `in` instruction forever,
+    // with autopush enabled.
+    pio_sm_config c = pio_get_default_sm_config();
+    sm_config_set_in_pins(&c, pin_base);
+    sm_config_set_wrap(&c, offset, offset);
+    sm_config_set_clkdiv(&c, div);
+    // Note that we may push at a < 32 bit threshold if pin_count does not
+    // divide 32. We are using shift-to-right, so the sample data ends up
+    // left-justified in the FIFO in this case, with some zeroes at the LSBs.
+    sm_config_set_in_shift(&c, true, true, bits_packed_per_word(pin_count));
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+    pio_sm_init(pio, sm, offset, &c);
+}
 
 void logic_analyser_init(PIO pio, uint sm, uint pin_base, uint pin_count, float div, bool init) {
     // Load a program to capture n pins. This is just a single `in pins, n`
     // instruction with a wrap.
 
     static bool initialised;
-    static uint16_t capture_prog_instr;
-    static struct pio_program capture_prog;
+    static uint16_t prog_inst;
+    static struct pio_program prog;
     static uint offset;
 
     if (init) {
-        // if (capture_prog_instr) {
+        // if (prog_inst) {
         if (initialised) {
         // We need to re-initialise, presumably to change the pin base, the pin count,
             // or the frequency divisor, so I believe we need to remove the old program first.
-            pio_remove_program(pio, &capture_prog, offset);
+            pio_remove_program(pio, &prog, offset);
         // } else {
-            // This should be the first time we've called this, as capture_prog_instr is
+            // This should be the first time we've called this, as prog_inst is
             // a static variable, and static variables are zeroed on reset, which means
             // we don't need to do anything here, so let's comment it out.
-            uart_puts(UART_ID, "LA reiniting\n");
+            uart_puts(UART_ID, "LA2 reiniting\n");
         }
 
-        capture_prog_instr = pio_encode_in(pio_pins, pin_count);
+        prog_inst = pio_encode_in(pio_pins, pin_count);
 
-        capture_prog.instructions = &capture_prog_instr;
-        capture_prog.length = 1;
-        capture_prog.origin = -1;
+        prog.instructions = &prog_inst;
+        prog.length = 1;
+        prog.origin = -1;
 
-    #if PICO_PIO_USE_GPIO_BASE==1
-        int res;
-        if ((pin_base >= 16) && (pin_base + pin_count > 32)) { 
-            res = pio_set_gpio_base(pio, 16);
-            uart_putuif(UART_ID, "pio_set_gpio_base(pio, 16); res: %d\n", res);
-        } else {
-            res = pio_set_gpio_base(pio, 0);
-            uart_putuif(UART_ID, "pio_set_gpio_base(pio, 0); res: %d\n", res);
-        }
-    #endif
+#if PICO_PIO_USE_GPIO_BASE==1
+        // this is designed for when ((pin_base >= 16) && (pin_base + pin_count > 32))
+        // so set it - just in case
+        pio_set_gpio_base(pio, 16);
+#endif
 
-        offset = pio_add_program(pio, &capture_prog);
-
-        // Configure state machine to loop over this `in` instruction forever,
-        // with autopush enabled.
-        pio_sm_config c = pio_get_default_sm_config();
-        sm_config_set_in_pins(&c, pin_base);
-        sm_config_set_wrap(&c, offset, offset);
-        sm_config_set_clkdiv(&c, div);
-        // Note that we may push at a < 32 bit threshold if pin_count does not
-        // divide 32. We are using shift-to-right, so the sample data ends up
-        // left-justified in the FIFO in this case, with some zeroes at the LSBs.
-        sm_config_set_in_shift(&c, true, true, bits_packed_per_word(pin_count));
-        sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
-        pio_sm_init(pio, sm, offset, &c);
+        offset = pio_add_program(pio, &prog);
+        logic_analyser_configure(pio, sm, pin_base, pin_count, div, offset);
         initialised = true;
-        uart_puts(UART_ID, "LA inited\n");
+        uart_puts(UART_ID, "LA2 inited\n");
     } else {
         if (initialised) {
-            pio_remove_program(pio, &capture_prog, offset);
+            pio_remove_program(pio, &prog, offset);
             initialised = false;
-            uart_puts(UART_ID, "LA deinited\n");
+            uart_puts(UART_ID, "LA2 deinited\n");
         } else {
-            uart_puts(UART_ID, "LA already deinited\n");
+            uart_puts(UART_ID, "LA2 already deinited\n");
         }
     }
 }
 
+#ifdef PIMORONI_PICO_LIPO2XL_W_RP2350
+
+void logic_analyser0_init(PIO pio, uint sm, uint pin_base, uint pin_count, float div, bool init) {
+    // Load a program to capture n pins. This is just a single `in pins, n`
+    // instruction with a wrap.
+
+    // This is a copy of `logic_analyser_init()` with the setting of the gpio_base removed
+
+    static bool initialised;
+    static uint16_t prog_inst;
+    static struct pio_program prog;
+    static uint offset;
+
+    if (init) {
+        // if (prog_inst) {
+        if (initialised) {
+        // We need to re-initialise, presumably to change the pin base, the pin count,
+            // or the frequency divisor, so I believe we need to remove the old program first.
+            pio_remove_program(pio, &prog, offset);
+        // } else {
+            // This should be the first time we've called this, as prog_inst is
+            // a static variable, and static variables are zeroed on reset, which means
+            // we don't need to do anything here, so let's comment it out.
+            uart_puts(UART_ID, "LA0 reiniting\n");
+        }
+
+        prog_inst = pio_encode_in(pio_pins, pin_count);
+
+        prog.instructions = &prog_inst;
+        prog.length = 1;
+        prog.origin = -1;
+
+        offset = pio_add_program(pio, &prog);
+        logic_analyser_configure(pio, sm, pin_base, pin_count, div, offset);
+        initialised = true;
+        uart_puts(UART_ID, "LA0 inited\n");
+    } else {
+        if (initialised) {
+            pio_remove_program(pio, &prog, offset);
+            initialised = false;
+            uart_puts(UART_ID, "LA0 deinited\n");
+        } else {
+            uart_puts(UART_ID, "LA0 already deinited\n");
+        }
+    }
+}
+#endif
 
 // Immediately execute an instruction on a state machine and wait for up to
 // a number of microseconds for it to complete.
@@ -458,55 +502,9 @@ bool pio_sm_exec_timeout_us(PIO pio, uint sm, uint instr, uint32_t timeout_us) {
 // When this is #define'ed instead of a global variable the triggering respose is much slower
 // Is it because it's stored in flash rather than ram? todo -find out
 
-// #define la_trigger_pio pio0
-PIO la_trigger_pio = pio0;
-uint la_trigger_sm = 3;
-
-void logic_analyser_trigger_init(bool init) {
-    // Load a program to simply allow us to use this state machine for trigger detection.
-    // This to allow a trigger pin that is not in the same GPIO_BASE as the capture pins.
-    // It's just a `nop` instruction with a wrap.
-
-    static bool initialised;
-    static uint16_t trigger_prog_instr;
-    static struct pio_program trigger_prog;
-    static uint offset;
-
-    if (init) {
-        // we want to initialise it
-        if (!initialised) {
-            // we can
-            trigger_prog_instr = pio_encode_nop();
-
-            trigger_prog.instructions = &trigger_prog_instr;
-            trigger_prog.length = 1;
-            trigger_prog.origin = -1;
-
-            offset = pio_add_program(la_trigger_pio, &trigger_prog);
-
-            // Configure state machine to loop over this `in` instruction forever,
-            // with autopush enabled.
-            pio_sm_config c = pio_get_default_sm_config();
-            // sm_config_set_in_pins(&c, pin_base);
-            sm_config_set_wrap(&c, offset, offset);
-            // sm_config_set_clkdiv(&c, 1);
-            // Note that we may push at a < 32 bit threshold if pin_count does not
-            // divide 32. We are using shift-to-right, so the sample data ends up
-            // left-justified in the FIFO in this case, with some zeroes at the LSBs.
-            // sm_config_set_in_shift(&c, true, true, bits_packed_per_word(pin_count));
-            // sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
-            pio_sm_init(la_trigger_pio, la_trigger_sm, offset, &c);
-            initialised = true;
-        }
-    } else {
-        // we want to deinitialise it
-        if (initialised) {
-            // we can
-            pio_remove_program(la_trigger_pio, &trigger_prog, offset);
-            initialised = false;
-        }
-    }
-}
+// #define la_capture_pio pio0
+PIO la_capture_pio = pio0;
+uint la_capture_sm = 3;
 
 #endif
 
@@ -622,67 +620,71 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
 
     uart_puts(UART_ID, "\nArming trigger...\n");
 
-    init_ir_rx(false);
-    logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
+    // Remove the ir rx - actually, we dont really need to because it's always using GPIO_BASE 16.
+    // Keep it for now.
 
-    pio_sm_set_enabled(pio, sm, false);
-    // Need to clear _input shift counter_, as well as FIFO, because there may be
-    // partial ISR contents left over from a previous run. sm_restart does this.
-    pio_sm_clear_fifos(pio, sm);
-    pio_sm_restart(pio, sm);
+    init_ir_rx(false);
 
 #if PICO_PIO_USE_GPIO_BASE==1
-    uint gpio_base = pio_get_gpio_base(pio);
 
-    int res;
+    if ((g_pins_base >= 16) && (g_pins_base + g_no_of_pins_to_capture > 32)) { 
+        // res = pio_set_gpio_base(pio, 16);
+        uart_puts(UART_ID, "using PIO2 to capture\n");
+        // leave the pio pointing here
 
-    bool changed_base = false;
-    if (gpio_base == 16) {
-        // base is mapped to gpio 16-47
-        if (trigger_pin < 16) {
-            // need to use the other pio-state machine to trigger
-            // pio_get_gpio_base(pio, 0);
+        // PIO capture_pio = pio;
+        // uint capture_sm = sm;
 
-            logic_analyser_trigger_init(false);
-            res = pio_set_gpio_base(la_trigger_pio, 0);
-            logic_analyser_trigger_init(true);
-
-            trigger_pio = la_trigger_pio;
-            trigger_sm = la_trigger_sm;
-
-            uart_puts(UART_ID, "pio_set_gpio_base(pio, 0) for trigger\n\n");
-            uart_putuif(UART_ID, "res: %d\n", res);
-            changed_base = true;
-        } else {
-            trigger_pin -= 16;
-        }
+        logic_analyser_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
 
     } else {
-        if (trigger_pin > 16) {
-            // pio_get_gpio_base(pio, 16);
-            logic_analyser_trigger_init(false);
-            res = pio_set_gpio_base(la_trigger_pio, 16);
-            logic_analyser_trigger_init(true);
-            trigger_pio = la_trigger_pio;
-            trigger_sm = la_trigger_sm;
+        uart_puts(UART_ID, "using PIO0 to capture\n");
+        capture_pio = la_capture_pio; //it's badly named - todo - change it 
+        capture_sm = la_capture_sm; //it's badly named - todo - change it 
 
-            uart_puts(UART_ID, "pio_set_gpio_base(pio, 16) for trigger\n\n");
-            uart_putuif(UART_ID, "res: %d\n", res);
-            changed_base = true;
-            trigger_pin -= 16;
-        }
+        logic_analyser0_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
     }
+
+    if (trigger_pin >= 32) {
+        // leave the pio pointing here
+        uart_puts(UART_ID, "using PIO2 to trigger\n");
+
+        // PIO capture_pio = pio;
+        // uint capture_sm = sm;
+
+        // adjust the trigger_pin for use in the inline PIO instructions for triggering
+        trigger_pin -= 16;
+    } else {
+        uart_puts(UART_ID, "using PIO0 to trigger\n");
+        trigger_pio = la_capture_pio; //it's badly named - todo - change it 
+        trigger_sm = la_capture_sm; //it's badly named - todo - change it 
+    }
+    
+    // logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
+    // ooh, this aint gonna work, yet
+
+    // logic_analyser_init(capture_pio, capture_pio, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
+
+    pio_sm_set_enabled(capture_pio, capture_sm, false);
+    // Need to clear _input shift counter_, as well as FIFO, because there may be
+    // partial ISR contents left over from a previous run. sm_restart does this.
+    pio_sm_clear_fifos(capture_pio, capture_sm);
+    pio_sm_restart(capture_pio, capture_sm);
+
+#else
+
+    logic_analyser_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
 
 #endif
 
     dma_channel_config c = dma_channel_get_default_config(dma_chan);
     channel_config_set_read_increment(&c, false);
     channel_config_set_write_increment(&c, true);
-    channel_config_set_dreq(&c, pio_get_dreq(pio, sm, false));
+    channel_config_set_dreq(&c, pio_get_dreq(capture_pio, sm, false));
 
     dma_channel_configure(dma_chan, &c,
         capture_buf,        // Destination pointer
-        &pio->rxf[sm],      // Source pointer
+        &capture_pio->rxf[capture_sm],      // Source pointer
         capture_size_words, // Number of transfers
         true                // Start immediately
     );
@@ -872,7 +874,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
         // Failed to trigger, so restart the state machine otherwise it'll be stuck
         // in a latched EXEC instruction, and we'll never fill up the capture buffer.
         uart_puts(UART_ID, "failed to trigger, restarting the state machine...\n");
-        pio_sm_restart(pio, sm);
+        pio_sm_restart(capture_pio, capture_sm);
     }
 
     // Let the capture state machine take over from here
@@ -884,7 +886,16 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
 
     clear_previous_edges();
 
-    logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
+#ifdef PIMORONI_PICO_LIPO2XL_W_RP2350
+    if (capture_pio == pio) {
+        logic_analyser_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
+    } else {
+        logic_analyser0_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
+    }
+
+#else 
+    logic_analyser_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
+#endif
 
     init_ir_rx(true);
 
@@ -3608,32 +3619,14 @@ int main() {
         PIO pio = pio2;
     #endif
 
+    
     uint sm = 3;
+
+    // Claim a DMA channel for the pio state machine(s) used for capturing.
     uint dma_chan = dma_claim_unused_channel(true);
-    // uint dma_chan = 5;
-
-    // logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, 125000000 / (115200 * 4) /*271.267*/);
-    logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
-
-    #ifdef PIMORONI_PICO_LIPO2XL_W_RP2350
-
-    logic_analyser_trigger_init(true); // for a trigger pin that's on a different PIO_BASE
-
-    #endif
-
-    // logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, 5); // this works
 
     // animation pause
     bool demo_paused = true;
-
-
-    // Draw some filled rectangles
-    fillRect(64, 0, 176, 50, LEFT_BOX_COLOR); // blue box
-    fillRect(250, 0, 176, 50, MIDDLE_BOX_COLOR); // red box:
-    fillRect(435, 0, 176, 50, RIGHT_BOX_COLOR); // green box
-
-//    drawVLine(Vline_x, 300, (Vline_x>>2), color_index);
-
 
     #define CORNER_LEN 2
 

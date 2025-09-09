@@ -116,11 +116,11 @@ To make a script file (called `filename.sh`) executable, enter:
         VGA In Dark Blue  GP2  4                  57 3V3 EN
        VGA In Light Blue  GP3  5                  56 3V3 OUT
        VGA In Dark Green  GP4  6                  55 ADC VREF
-      VGA In Light Green  GP5  7                  54 GP28 IR RX
+      VGA In Light Green  GP5  7                  54 GP28
                           GND  8                  53 ADC GND
         VGA In Dark Blue  GP6  9                  52 GP27
        VGA In Light Blue  GP7 10 PICO LIPO 2 W XL 51 GP26
-                          GP8 11                  30 RUN  CAPTAIN RESETTI (maybe not with PWR switch?)
+                          GP8 11                  30 RUN  CAPTAIN RESETTI (maybe needed not with PWR switch?)
                           GP9 12                  49 GP22
                           GND 13                  48 GND
                          GP10 14                  47 GP21
@@ -133,7 +133,7 @@ To make a script file (called `filename.sh`) executable, enter:
                       GND 3V3 21                  40 BT
           VGA Out CSYNC  GP31 22                  39 GP47
                           GND 23                  38 GND
-      VGA Out Dark Blue  GP32 24                  37 GP46
+      VGA Out Dark Blue  GP32 24                  37 GP46  IR RX
      VGA Out Light Blue  GP33 25        XL        36 GP45
      VGA Out Dark Green  GP34 26                  34 GP44
     VGA Out Light Green  GP35 27                  33 GP43
@@ -193,25 +193,29 @@ Total             31
 
 ## PIO State Machine Usage for Pico LiPo 2 W XL
 
-PIO      SM       Size  Needs PIO1*  GPIO(s)  Usage
-0        0        6         y                 vga_capture_program
-0        1        11                          vga_detect_vsync_program
-0        2        14                          vga_detect_vsync_on_csync_program
-0        3        1                           trigger for logic_capture (if logic_capture in PIO2 is using GPIO_BASE 16)
+PIO 0 (GPIO_BASE=0)
+SM       Size  Needs PIO1*  GPIO(s)  Usage
+0        6         y                 vga_capture_program
+1        11                          vga_detect_vsync_program
+2        14                          vga_detect_vsync_on_csync_program
+3        1                           trigger and/or logic_capture for pin(s) using GPIO_BASE=0
 Total             32
 
-1        0        1                           Could move logic_capture here to capture channels 16-48
-1        1        13                          rgb5_150_mhz_rp235x_program (rrggbb for vga out) 
-1        2        15                          hsync5_program (csync for vga out)
-;1        3        1                           logic_capture (moved to PIO0)
+
+PIO 1 (GPIO_BASE=16)
+0        1                           Could move logic_capture here to capture channels 16-48
+1        13                          rgb5_150_mhz_rp235x_program (rrggbb for vga out) 
+2        15                          hsync5_program (csync for vga out)
+;3        1                           logic_capture (moved to PIO0)
 Total             28
 
-2        0        31                          nec_ir_rx_program
-2        1
-2        2
-;2        3
-2        3        1                           logic_capture (moved from PIO1) for channels 0-32
-Total             31
+PIO 2 (GPIO_BASE=16)
+0        31                          nec_ir_rx_program
+1
+2
+;3
+3        1                           trigger and/or logic_capture for pin(s) using GPIO_BASE=16. This needn't have been moved. Move back? Would save unloading and reloading ir_rx each time we capture
+Total             32
 
 * PIO1 has PIO features that were introduced in RP235x devices; RP2040 uses PIO0.
 
