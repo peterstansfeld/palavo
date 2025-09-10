@@ -371,6 +371,7 @@ void uart_putuif(uart_inst_t *uart, const char *s, uint c) {
     uart_puts(uart, str);
 }
 
+
 void logic_analyser_configure(PIO pio, uint sm, uint pin_base, uint pin_count, float div, uint offset) {
     // Configure state machine to loop over this `in` instruction forever,
     // with autopush enabled.
@@ -385,6 +386,7 @@ void logic_analyser_configure(PIO pio, uint sm, uint pin_base, uint pin_count, f
     sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
     pio_sm_init(pio, sm, offset, &c);
 }
+
 
 void logic_analyser_init(PIO pio, uint sm, uint pin_base, uint pin_count, float div, bool init) {
     // Load a program to capture n pins. This is just a single `in pins, n`
@@ -621,7 +623,8 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     uart_puts(UART_ID, "\nArming trigger...\n");
 
     // Remove the ir rx - actually, we dont really need to because it's always using GPIO_BASE 16.
-    // Keep it for now.
+    // Keep it for now. After trying without stopping it, the response time of the trigger (a 
+    // falling edge one) seemed to increase. Don't quite understand why. todo.
 
     init_ir_rx(false);
 
@@ -887,6 +890,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     clear_previous_edges();
 
 #ifdef PIMORONI_PICO_LIPO2XL_W_RP2350
+
     if (capture_pio == pio) {
         logic_analyser_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
     } else {
@@ -897,6 +901,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     logic_analyser_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
 #endif
 
+    // Restart the ir rx as we stopped it at the top of this function.
     init_ir_rx(true);
 
     return triggered;
@@ -3613,13 +3618,10 @@ int main() {
     // todo - uncomment this next line if we need to
     // bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
     
-    #ifndef PIMORONI_PICO_LIPO2XL_W_RP2350
-        PIO pio = pio1;
-    #else
-        PIO pio = pio2;
-    #endif
 
-    
+    // Define PIO and State Machines for the trigger and capture logic.
+    // Could make these more global to avoid lots of parameter passing - todo. 
+    PIO pio = pio1;
     uint sm = 3;
 
     // Claim a DMA channel for the pio state machine(s) used for capturing.

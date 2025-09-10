@@ -1,49 +1,64 @@
 # PALAVO
 
-Palavo is a, and stands for: PIO-Assisted Logic Analyser with VGA Output.
+### PIO-Assisted Logic Analyser with VGA Output.
 
-*Assisted* doesn't really do PIO justice, as without PIO (Programmable Input 
-Output on Raspberry Pi's RP2xxx microcontrollers) Palavo would not be 
-possible.
+Palavo captures the logic levels of its Raspberry Pi RP2xxx microcontoller's GPIO pins
+and displays them on a VGA monitor. It allows the user, via a simple graphical
+interface to specify which GPIO pins to capture, which GPIO pin to use as a
+trigger, and what type of trigger to use. The user interface is controlled
+using a serial terminal (on a PC), a keyboard to serial terminal adapter using
+a Raspberry Pi Pico 2, and/or an [Argon] infra-red remote control.
 
-Palavo is a keyboard*, or serial terminal, and infra-red remote
-controlled logic analyser, which has a 6-bit colour, 640 x 480 VGA output
-to display the captured input channels.
+PIO is Raspberry Pi's Programmable Input Output feature found on their RP2xxx
+microcontrollers.
 
-Palavo was inspired by Raspberry Pi's [Logic Analyser example in the SDK.](https://github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser)
+The *Assisted* in PIO-Assisted doesn't really do PIO justice, as without it Palavo
+would not be possible.
+
+The VGA output uses a resolution of 640 x 480 with 6-bit colour, and uses CSYNC
+instead of HSYNC and VSYNC to save a GPIO pin. Not all monitors support CSYNC, but
+many do. 6-bit colour (2 red, 2 green, 2 blue) is used because when converting
+the VGA output to DVI, using the HSTX peripheral on a Raspberry Pi Pico 2, the 
+colours remain the same.
+
+This project was inspired by, and uses code from, Raspberry Pi's [Logic Analyser example in the SDK.](https://github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser) as well as Hunter Adams' [PIO-Based VGA Graphics Driver for RP2040](https://github.com/vha3/Hunter-Adams-RP2040-Demos/blob/master/VGA_Graphics/README.md).
 
 
-*with a Raspberry Pi Pico (2) as a keyboard to serial terminal adapter.
 
 ## How to build Palavo
+(At least, this is how I built it on a Raspberry Pi 5.)
 
-If one doesn't already exist, create a `build` directory in the Palavo directory.
+Follow the instructions in Appendix C: Manual toolchain setup of [Getting started with Raspberry Pi Pico-series](https://datasheets.raspberrypi.com/pico/getting-started-with-pico.pdf).
 
-`mkdir build`
+Clone this repository (Palavo) into a suitable location on your PC.
 
-Enter the `build` directory.
+If one doesn't already exist, create a `build` directory in the Palavo directory:
 
-`cd build`
+`$ mkdir build`
 
-Create a suitably named directory (the target for this example is a Raspberry Pi Pico 2).
+Enter the `build` directory:
 
-`mkdir pico2`
+`$ cd build`
 
-`cd pico2`
+Create a suitably named directory (the target for this example is a Raspberry Pi Pico 2)
+and enter that directory:
 
+`$ mkdir pico2`
 
-Specify where the pico-sdk directory can be found.
+`$ cd pico2`
 
-`export PICO_SDK_PATH=~/pico2.2/pico/pico-sdk`
+Specify where the pico-sdk directory can be found:
+
+`$ export PICO_SDK_PATH=~/pico/pico-sdk`
 
 Specify where the top level CMakeLists.txt file can be found - in this case
-it's the grandparent directory `../../`, and specify the board `pico2`.
+it's the grandparent directory `../../`, and specify the board `pico2`:
 
-`cmake ../../ -DPICO_BOARD=pico2`
+`$ cmake ../../ -DPICO_BOARD=pico2`
 
-`cmake ../../ -DPICO_BOARD=pimoroni_pico_lipo2xl_w_rp2350`
+Then build it:
 
-`make -j4`
+`$ make -j4`
 
 This should generate, amongst other files, a `palavo.uf2` file and a `palavo.elf` file.
 
@@ -51,18 +66,170 @@ To program the rp2350, put it into boot mode and copy `palavo.uf2` onto the driv
 
 To program an rp2350 with a `palavo.elf` file using Openocd and a RPi Debug Probe:
 
-`~/.pico-sdk/openocd/0.12.0+dev/openocd -s ~/.pico-sdk/openocd/0.12.0+dev/scripts -f ~/.vscode/extensions/marus25.cortex-debug-1.12.1/support/openocd-helpers.tcl -f interface/cmsis-dap.cfg -f target/rp2350.cfg -c "adapter speed 5000" -c "program filename.elf verify reset exit"`
+`$ ~/.pico-sdk/openocd/0.12.0+dev/openocd -s ~/.pico-sdk/openocd/0.12.0+dev/scripts -f ~/.vscode/extensions/marus25.cortex-debug-1.12.1/support/openocd-helpers.tcl -f interface/cmsis-dap.cfg -f target/rp2350.cfg -c "adapter speed 5000" -c "program filename.elf verify reset exit"`
+   
+(Note that the above line uses a version of Openocd that was installed when I first installed 
+the Pico Visual Studio Code extension. It may now be located in a different location, so modify
+the command line accordingly, as well as the following bash script.)
 
 Instead of the above, copy the script file `make-and-flash.sh` from the palavo directory:
 
-`cp ../../make-and-flash.sh .`
+`$ cp ../../make-and-flash.sh .`
 
 Modify the `adapter_serial_no` variable to that of your Debug Probe. If you don't 
 want to specify a serial number, blank the `target_adapter_cmnd` variable.
 
-Then, attempt to make and flash the RP235x with:
+Then, attempt to make and flash the RP235x:
 
-`./make-and-flash.sh`
+`$ ./make-and-flash.sh`
+
+
+For 
+
+`$ cmake ../../ -DPICO_BOARD=pimoroni_pico_lipo2xl_w_rp2350`
+
+
+
+
+
+
+
+
+## Pinout for Raspberry Pi Pico 2
+
+```
+   VGA In Dark Blue  GP0  1                  40 VBUS
+  VGA In Light Blue  GP1  2                  39 VSYS
+                     GND  3                  38 GND
+  VGA In Dark Green  GP2  4                  37 3V3 EN
+ VGA In Light Green  GP3  5                  36 3V3 OUT
+    VGA In Dark Red  GP4  6                  35 ADC VREF
+   VGA In Light Red  GP5  7                  34 GP28  Infra-red RX
+                     GND  8                  33 ADC GND
+  VGA Out Dark Blue  GP6  9                  32 GP27  VGA In VSYNC
+ VGA Out Light Blue  GP7 10     PICO 2       31 GP26  VGA In HSYNC or CSYNC
+ VGA Out Dark Green  GP8 11                  30 RUN  CAPTAIN RESETTI
+VGA Out Light Green  GP9 12                  29 GP22  VGA Out CSYNC
+                     GND 13                  28 GND
+  VGA Out Dark Red  GP10 14                  27 GP21  Serial RX
+ VGA Out Light Red  GP11 15                  26 GP20  Serial TX
+           DVI D0+  GP12 16                  25 GP19  DVI D2+
+           DVI D0-  GP13 17                  24 GP18  DVI D2-
+                    GND  18                  23 GND
+           DVI CK+  GP14 19                  22 GP17  DVI D1+
+           DVI CK-  GP15 20                  21 GP16  DVI D1-
+```
+
+## Pinout for Pimoroni Pico LiPo 2 W XL
+
+```
+                       GP0  1                  60 VBUS
+                       GP1  2                  59 VSYS
+                       GND  3                  58 GND
+                       GP2  4                  57 3V3 EN
+                       GP3  5                  56 3V3 OUT
+                       GP4  6                  55 ADC VREF
+                       GP5  7                  54 GP28
+                       GND  8                  53 ADC GND
+                       GP6  9                  52 GP27
+                       GP7 10 PICO LIPO 2 W XL 51 GP26
+                       GP8 11                  30 RUN  CAPTAIN RESETTI (maybe needed not with PWR switch?)
+                       GP9 12                  49 GP22
+                       GND 13                  48 GND
+                      GP10 14                  47 GP21
+                      GP11 15                  46 GP20
+                      GP12 16                  45 GP19
+                      GP13 17                  44 GP18
+                      GND  18                  43 GND
+                      GP14 19                  42 GP17
+                      GP15 20 ________________ 41 GP16
+                   GND 3V3 21                  40 BT
+       VGA Out CSYNC  GP31 22                  39 GP47
+                       GND 23                  38 GND
+   VGA Out Dark Blue  GP32 24                  37 GP46  Infra-red RX
+  VGA Out Light Blue  GP33 25        XL        36 GP45
+  VGA Out Dark Green  GP34 26                  34 GP44
+ VGA Out Light Green  GP35 27                  33 GP43
+                       GND 28                  32 GND
+    VGA Out Dark Red  GP36 29                  31 GP39  Serial RX
+   VGA Out Light Red  GP37 30                  31 GP38  Serial TX
+```
+
+## VGA 15-way Socket Wiring 
+
+| VGA Out GPIO        |   Resistor   | VGA 15-way Socket |
+| :---                |     :---:    | :---              |
+|       VGA Out CSYNC | ---  47R --- | 13 HSYNC          |
+|                 GND | ---  0R  --- | 5 GND             |
+|   VGA Out Dark Blue | ---  1K  --- | 3 Blue            |
+|  VGA Out Light Blue | --- 470R --- | 3 Blue            |
+|  VGA Out Dark Green | ---  1K  --- | 2 Green           |
+| VGA Out Light Green | --- 470R --- | 2 Green           |
+|    VGA Out Dark Red | ---  1K  --- | 1 Red             |
+|   VGA Out Light Red | --- 470R --- | 1 Red             |
+
+
+## UART Comms
+I use a Raspberry Pi Debug Probe (link) for programming the Pico (2) and for UART comms.
+
+I prefer to use minicom as a serial monitor. Some - the one included with VS Code for example - prevent
+some keystrokes from being transmitted.
+
+`$ minicom -b 115200 -w -D /dev/ttyACM0` 
+
+Then enable carriage returns with Ctrl-A U.
+
+
+## PIO State Machine Usage for Pico2
+
+```
+PIO      SM       Size  Needs PIO1*  Usage
+0        0        6         y       vga_capture_program
+0        1        11                vga_detect_vsync_program
+0        2        14                vga_detect_vsync_on_csync_program
+0        3
+Total             31
+
+1        0
+1        1        13                rgb5_150_mhz_rp235x_program (rrggbb for vga out) 
+1        2        15                hsync5_program (csync for vga out)      
+1        3        1                 logic_capture
+Total             29
+
+2        0        31                nec_ir_rx_program
+2        1
+2        2
+2        3
+Total             31
+```
+
+## PIO State Machine Usage for Pico LiPo 2 W XL
+
+PIO 0 (GPIO_BASE=0)
+SM       Size  Needs PIO1*  GPIO(s)  Usage
+0        6         y                 vga_capture_program (not used if USE_DVI=0)
+1        11                          vga_detect_vsync_program (not used if USE_DVI=0)
+2        14                          vga_detect_vsync_on_csync_program (not used if USE_DVI=0)
+3        1                           trigger and/or logic_capture for pin(s) using GPIO_BASE=0
+Total    32
+
+PIO 1 (GPIO_BASE=16)
+0
+1        13                          rgb5_150_mhz_rp235x_program (rrggbb for vga out) 
+2        15                          hsync5_program (csync for vga out)
+3        1                           trigger and/or logic_capture for pin(s) using GPIO_BASE=16
+Total    29
+
+PIO 2 (GPIO_BASE=16)
+0        31                          nec_ir_rx_program
+1
+2
+3
+Total    31
+
+* PIO1 has PIO features that were introduced in RP235x devices; RP2040 uses PIO0.
+
+
 
 ## Previously on this subject
 
@@ -84,142 +251,6 @@ To make a script file (called `filename.sh`) executable, enter:
 
 `chmod +x filename.sh`
 
-## Pinout
-
-       VGA In Dark Blue  GP0  1                  40 VBUS
-      VGA In Light Blue  GP1  2                  39 VSYS
-                         GND  3                  38 GND
-      VGA In Dark Green  GP2  4                  37 3V3 EN
-     VGA In Light Green  GP3  5                  36 3V3 OUT
-        VGA In Dark Red  GP4  6                  35 ADC VREF
-       VGA In Light Red  GP5  7                  34 GP28 IR RX
-                         GND  8                  33 ADC GND
-      VGA Out Dark Blue  GP6  9                  32 GP27  VGA In VSYNC
-     VGA Out Light Blue  GP7 10     PICO 2       31 GP26  VGA In HSYNC or CSYNC
-     VGA Out Dark Green  GP8 11                  30 RUN  CAPTAIN RESETTI
-    VGA Out Light Green  GP9 12                  29 GP22  VGA Out CSYNC
-                         GND 13                  28 GND
-      VGA Out Dark Red  GP10 14                  27 GP21  Serial RX
-     VGA Out Light Red  GP11 15                  26 GP20  Serial TX
-               DVI D0+  GP12 16                  25 GP19  DVI D2+
-               DVI D0-  GP13 17                  24 GP18  DVI D2-
-                        GND  18                  23 GND
-               DVI CK+  GP14 19                  22 GP17  DVI D1+
-               DVI CK-  GP15 20                  21 GP16  DVI D1-
-
-
-## Pinout for Pimoroni Pico LiPo 2 W XL
-
-   VGA In HSYNC or CSYNC  GP0  1                  60 VBUS
-            VGA In VSYNC  GP1  2                  59 VSYS
-                          GND  3                  58 GND
-        VGA In Dark Blue  GP2  4                  57 3V3 EN
-       VGA In Light Blue  GP3  5                  56 3V3 OUT
-       VGA In Dark Green  GP4  6                  55 ADC VREF
-      VGA In Light Green  GP5  7                  54 GP28
-                          GND  8                  53 ADC GND
-        VGA In Dark Blue  GP6  9                  52 GP27
-       VGA In Light Blue  GP7 10 PICO LIPO 2 W XL 51 GP26
-                          GP8 11                  30 RUN  CAPTAIN RESETTI (maybe needed not with PWR switch?)
-                          GP9 12                  49 GP22
-                          GND 13                  48 GND
-                         GP10 14                  47 GP21
-                         GP11 15                  46 GP20  
-                DVI D0+  GP12 16                  45 GP19  DVI D2+
-                DVI D0-  GP13 17                  44 GP18  DVI D2-
-                         GND  18                  43 GND
-                DVI CK+  GP14 19                  42 GP17  DVI D1+
-                DVI CK-  GP15 20 ________________ 41 GP16  DVI D1-
-                      GND 3V3 21                  40 BT
-          VGA Out CSYNC  GP31 22                  39 GP47
-                          GND 23                  38 GND
-      VGA Out Dark Blue  GP32 24                  37 GP46  IR RX
-     VGA Out Light Blue  GP33 25        XL        36 GP45
-     VGA Out Dark Green  GP34 26                  34 GP44
-    VGA Out Light Green  GP35 27                  33 GP43
-                          GND 28                  32 GND
-       VGA Out Dark Red  GP36 29                  31 GP39  Serial RX
-      VGA Out Light Red  GP37 30                  31 GP38  Serial TX
-
-
-VGA Out GPIO                           VGA 15-way Socket
-
-
-VGA Out Dark Blue    ---  1K  ---      3 Blue
-VGA Out Light Blue   --- 470R ---      3 Blue
-
-VGA Out Dark Green   ---  1K  ---      2 Green
-VGA Out Light Green  --- 470R ---      2 Green
-
-VGA Out Dark Red     ---  1K  ---      1 Red 
-VGA Out Light Red    --- 470R ---      1 Red
-
-
-VGA Out CSYNC        ---  47R ---      13 HSYNC
-
-
-## UART Comms
-I use a Raspberry Pi Debug Probe (link) for programming the Pico (2) and for UART comms.
-
-I prefer to use minicom as a serial monitor. Some - the one included with VS code for example - prevent
-some keystrokes from being transmitted.
-
-`$ minicom -b 115200 -w -D /dev/ttyACM0` 
-
-Then enable carriage returns with Ctrl-A U.
-
-
-## PIO State Machine Usage for Pico2
-
-PIO      SM       Size  Needs PIO1*  Usage
-0        0        6         y       vga_capture_program
-0        1        11                vga_detect_vsync_program
-0        2        14                vga_detect_vsync_on_csync_program
-0        3
-Total             31
-
-1        0
-1        1        13                rgb5_150_mhz_rp235x_program (rrggbb for vga out) 
-1        2        15                hsync5_program (csync for vga out)      
-1        3        1                 logic_capture
-Total             29
-
-2        0        31                nec_ir_rx_program
-2        1
-2        2
-2        3
-Total             31
-
-
-## PIO State Machine Usage for Pico LiPo 2 W XL
-
-PIO 0 (GPIO_BASE=0)
-SM       Size  Needs PIO1*  GPIO(s)  Usage
-0        6         y                 vga_capture_program
-1        11                          vga_detect_vsync_program
-2        14                          vga_detect_vsync_on_csync_program
-3        1                           trigger and/or logic_capture for pin(s) using GPIO_BASE=0
-Total             32
-
-
-PIO 1 (GPIO_BASE=16)
-0        1                           Could move logic_capture here to capture channels 16-48
-1        13                          rgb5_150_mhz_rp235x_program (rrggbb for vga out) 
-2        15                          hsync5_program (csync for vga out)
-;3        1                           logic_capture (moved to PIO0)
-Total             28
-
-PIO 2 (GPIO_BASE=16)
-0        31                          nec_ir_rx_program
-1
-2
-;3
-3        1                           trigger and/or logic_capture for pin(s) using GPIO_BASE=16. This needn't have been moved. Move back? Would save unloading and reloading ir_rx each time we capture
-Total             32
-
-* PIO1 has PIO features that were introduced in RP235x devices; RP2040 uses PIO0.
-
-
 ## Weird Issues
 
 Strange thing I experienced just now
@@ -238,7 +269,7 @@ it needs to be dvi_deinit()'ed and dvi_init()'ed., which has so far worked 77 ti
 by playing the graphics demo (Hunter Adams'). It doesn't fail, however, when capturing the VGA from another
 Pico that's running the same demo (only, in 16 colours rather than 2 per line on the Pico2). ie when we're 
 writing stuff to the VGA memory, which is constantly going out to the VGA pins at 60Hz and then being captured by
-a state machine and writes to the DVI memory, which is constantly going out to the DIV pins.
+a state machine and writes to the DVI memory, which is constantly going out to the DVI/HSTX pins.
 
 Also, there are times when I just can't get it to lock up at all.
 
@@ -281,7 +312,8 @@ Note it is particularly bad when the Pico 2 is powered from its own USB port, as
 if a debug probe is attached (powered or not - I'm not sure) the problem is even worse. 
 
 Yes, that stops the problem, although the VGA output is missing a vertical line of pixels - due to the propogation delay of the buffer.
-To fix that all the RGB lines could be buffered too. Yes, that worked.
+To fix that all the RGB lines could be buffered too. Yes, that worked - in that it stopped the VGA to DVI Pico2 going haywire, although
+it has affected the VGA signal. Hmm.
 
 
             3.3V    DIR  1 |                 | 20  VCC    3.3V 
