@@ -41,89 +41,93 @@
 #define DEBUG_PIN 28
 
 
-// We are using pins 4 and 5, but see the GPIO function select table in the
-// datasheet for information on which other pins can be used.
+// See README.md for Palavo Types
+#ifndef PALAVO_TYPE
+// PALAVO_TYPE has not already been defined by CMAKE, so define one here.
+// This is mainly for getting colour syntax working whilst developing.
 
-// #define UART_TX_PIN 0
-// #define UART_RX_PIN 1
+// For a board with an RP235xB microcontroller use this one.
+// #define PALAVO_TYPE 3
 
-// #define UART_TX_PIN 0
-// #define UART_RX_PIN 1
+// For a VGA to DVI converter on a RPi Pico 2 use this one.
+// #define PALAVO_TYPE 4
 
-// Improve GPIO 
-
-// Relying on PICO_PIO_USE_GPIO_BASE is an issue as sometimes a Pico 2 format
-// alternative might be used instead, and it is not desired to have the VGA
-// out port on GP31-37.
-
-// So, we need to have a define to say that we are using a particular board
-// and if that board has the extra GPIO exposed AND we want to move 
-
-
-
-// Each board in the SDK has a unique identifier, for board detection,  e.g.
-
-// RASPBERRYPI_PICO2
-// PIMORONI_PICO_LIPO2XL_W_RP2350
-
-// It's not available yet but there should be a
-
-// PIMORONI_PICO_LIPO2XL_W_RP2350
-
-// or something like that. We're using PIMORONI_PICO_LIPO2XL_W_RP2350 until one is
-// available. However, we could always define our own, for now. 
-
-
-
-// #if PICO_BOARD == pico2 // Can't do this, so what are the alternatives?
-
-// USE_DVI chould be defined as 1, or not, in CMakeLists.txt depending on whether
-// PICO_BOARD is "pico2", or something else.
-
-// For developing with colour syntax highlighting it might be helpful to define it
-// here too, but don't forget to undo that when done.
-
-// There's probably a better way to do this, but I'm not aware of one. 
-
-// #define USE_DVI 1
-
-#ifndef RASPBERRYPI_PICO2
-// when finished editing / testing comment out everything in this #ifndef..#endif section
-// #define RASPBERRYPI_PICO2
 #endif
 
-#ifndef PIMORONI_PICO_LIPO2XL_W_RP2350
-// when finished editing / testing comment out everything in this #ifndef..#endif section
-// #define PIMORONI_PICO_LIPO2XL_W_RP2350
-#endif
 
+#define PT_BIT_USE_DVI 0
+#define PT_BIT_USE_GPIO_32_47 1
+#define PT_BIT_USE_VGA_IN_TO_DVI 2
+
+
+#ifndef PALAVO_TYPE
+// PALAVO_TYPE has not already been defined externally (by CMAKE for example), 
+// so define some default ones here.
 
 #ifdef RASPBERRYPI_PICO2
-#define USE_DVI 1
-#define USE_VGA_CAPTURE 1
-#define LED_PIN PICO_DEFAULT_LED_PIN
-
-#define USE_LED_AS_IR_DEBUG 0
-
-#define UART_TX_PIN 20
-#define UART_RX_PIN 21
-#define CSYNC 22
-
-#define HSYNC_IN 26
-#define VSYNC_IN 27
-#define RGB_IN_FIRST_PIN 0
-
-
-#define IR_RX_PIN 28
-
-#define GPIO_INPUT_MASK ((1 << VSYNC_IN) | (1 << HSYNC_IN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
-
+#pragma message "Building Palavo for RASPBERRYPI_PICO2"
+// #define PALAVO_TYPE 0
+#define PALAVO_TYPE ((1 << PT_BIT_USE_DVI) | (1 << PT_BIT_USE_VGA_IN_TO_DVI))
 #else
 
 #ifdef PIMORONI_PICO_LIPO2XL_W_RP2350
+#pragma message "Building Palavo for PIMORONI_PICO_LIPO2XL_W_RP2350"
+#define PALAVO_TYPE (1 << PT_BIT_USE_GPIO_32_47)
+#else
+// This is a default palavo type for colour syntax whilst developing only.
+// #define PALAVO_TYPE 0
+// #define PALAVO_TYPE (1 << PT_BIT_USE_GPIO_32_47)
+#define PALAVO_TYPE ((1 << PT_BIT_USE_DVI) | (1 << PT_BIT_USE_VGA_IN_TO_DVI))
 
-#define USE_DVI 0
-#define USE_VGA_CAPTURE 0
+#error "Please specify a supported board, or define a PALAVO_TYPE (See README.md)."
+
+#endif
+
+#endif
+
+#endif
+
+
+#if (PALAVO_TYPE & (1 << PT_BIT_USE_DVI))
+// Using DVI - define what mode to show on startup.
+#pragma message "Using DVI"
+
+#define USE_DVI 1
+#define USE_VGA_CAPTURE 1
+
+#if (PALAVO_TYPE & (1 << PT_BIT_USE_VGA_IN_TO_DVI))
+
+#pragma message "Display VGA In on DVI on startup"
+#define USE_VGA_IN_TO_DVI 1
+
+#else
+#pragma message "Mirror VGA Out to DVI on startup"
+#endif
+
+#else
+#pragma message "Not using DVI"
+#endif
+
+
+#if (PALAVO_TYPE & (1 << PT_BIT_USE_GPIO_32_47))
+
+#define USE_GPIO_32_47 1
+
+#if (!PICO_PIO_USE_GPIO_BASE)
+#error "Can't use more than 32 pins on this microcontroller."
+#else
+#pragma message "Using GPIO 0-47"
+
+#endif
+
+#else
+
+#pragma message "Using GPIO 0-31"
+
+#endif
+
+
+#if USE_GPIO_32_47
 
 // #define LED_PIN PICO_DEFAULT_LED_PIN
 
@@ -144,31 +148,26 @@
 
 #define GPIO_INPUT_MASK ((1 << 28)  | (1 << 27)  | (1 << 26) | 0x07fffff /* 22-0 */)
 
-
 #else
 
-#error Please specify a supported board
 
-#endif
+// #define USE_DVI 1
+// #define USE_VGA_CAPTURE 1
+#define LED_PIN PICO_DEFAULT_LED_PIN
 
-#endif
+#define USE_LED_AS_IR_DEBUG 0
 
+#define UART_TX_PIN 20
+#define UART_RX_PIN 21
+#define CSYNC 22
 
-#ifdef RASPBERRYPI_PICO2
+#define HSYNC_IN 26
+#define VSYNC_IN 27
+#define RGB_IN_FIRST_PIN 0
 
-#pragma message "Building Palavo for RASPBERRYPI_PICO2"
+#define IR_RX_PIN 28
 
-#else
-
-#ifdef PIMORONI_PICO_LIPO2XL_W_RP2350
-
-#pragma message "Building Palavo for PIMORONI_PICO_LIPO2XL_W_RP2350"
-
-#else
-
-#error Can not build Palavo for unknown RPxxxx MCU
-
-#endif
+#define GPIO_INPUT_MASK ((1 << VSYNC_IN) | (1 << HSYNC_IN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
 
 #endif
 
@@ -221,7 +220,7 @@ uint8_t settings_state = SS_CHANNEL;
 bool repeating_timer_callback(struct repeating_timer *t) {
     time_accum += 1 ;
 
-#if USE_LED_AS_IR_DEBUG == 0
+#if USE_LED_AS_IR_DEBUG
 
 #ifdef LED_PIN
     gpio_xor_mask(1u << LED_PIN); // toggle LED_PIN
@@ -407,7 +406,7 @@ void logic_analyser_init(PIO pio, uint sm, uint pin_base, uint pin_count, float 
             // This should be the first time we've called this, as prog_inst is
             // a static variable, and static variables are zeroed on reset, which means
             // we don't need to do anything here, so let's comment it out.
-            uart_puts(UART_ID, "LA2 reiniting\n");
+            uart_puts(UART_ID, "LA1 reiniting\n");
         }
 
         prog_inst = pio_encode_in(pio_pins, pin_count);
@@ -416,7 +415,7 @@ void logic_analyser_init(PIO pio, uint sm, uint pin_base, uint pin_count, float 
         prog.length = 1;
         prog.origin = -1;
 
-#if PICO_PIO_USE_GPIO_BASE==1
+#if PICO_PIO_USE_GPIO_BASE
         // this is designed for when ((pin_base >= 16) && (pin_base + pin_count > 32))
         // so set it - just in case
         pio_set_gpio_base(pio, 16);
@@ -425,14 +424,14 @@ void logic_analyser_init(PIO pio, uint sm, uint pin_base, uint pin_count, float 
         offset = pio_add_program(pio, &prog);
         logic_analyser_configure(pio, sm, pin_base, pin_count, div, offset);
         initialised = true;
-        uart_puts(UART_ID, "LA2 inited\n");
+        uart_puts(UART_ID, "LA1 inited\n");
     } else {
         if (initialised) {
             pio_remove_program(pio, &prog, offset);
             initialised = false;
-            uart_puts(UART_ID, "LA2 deinited\n");
+            uart_puts(UART_ID, "LA1 deinited\n");
         } else {
-            uart_puts(UART_ID, "LA2 already deinited\n");
+            uart_puts(UART_ID, "LA1 already deinited\n");
         }
     }
 }
@@ -564,7 +563,7 @@ void init_ir_rx(bool init) {
             uart_putuif(UART_ID, "pio_set_gpio_base for IR RX: %d\n", res);
 
 #else
-#if PICO_PIO_USE_GPIO_BASE==1
+#if PICO_PIO_USE_GPIO_BASE
             pio_set_gpio_base(ir_rx_pio, 0);
 #endif
 #endif
@@ -582,10 +581,6 @@ void init_ir_rx(bool init) {
 
             initialised = true;
             uart_puts(UART_ID, "IR inited\n");
-
-    // #if PICO_PIO_USE_GPIO_BASE==1
-    //         pio_set_gpio_base(ir_rx_pio, 0);
-    // #endif
 
         } else {
             uart_puts(UART_ID, "IR already inited\n");
@@ -628,7 +623,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
 
     init_ir_rx(false);
 
-#if PICO_PIO_USE_GPIO_BASE==1
+#if PICO_PIO_USE_GPIO_BASE
 
     if ((g_pins_base >= 16) && (g_pins_base + g_no_of_pins_to_capture > 32)) { 
         // res = pio_set_gpio_base(pio, 16);
@@ -3124,7 +3119,7 @@ void init_pio_vga_detect_vsync_on_csync() {
 
     if (vga_capture_mode == VC_NONE) {
 
-        #if PICO_PIO_USE_GPIO_BASE==1
+        #if PICO_PIO_USE_GPIO_BASE
         pio_set_gpio_base(vga_capture_pio, 16);
         // #warning pio_set_gpio_base(vga_capture_pio, 16)
         #endif
@@ -3170,7 +3165,7 @@ void deinit_vga_capture() {
         dma_channel_unclaim(rgb_test_chan_1);
         dma_channel_unclaim(rgb_test_chan_0);
 
-        #if PICO_PIO_USE_GPIO_BASE==1
+        #if PICO_PIO_USE_GPIO_BASE
         pio_set_gpio_base(vga_capture_pio, 0);
         #endif
 
@@ -3420,7 +3415,7 @@ int main() {
 
     #endif
 
-#if USE_LED_AS_IR_DEBUG == 0
+#if USE_LED_AS_IR_DEBUG
 
 #ifdef LED_PIN
     gpio_init(LED_PIN);
@@ -3559,7 +3554,7 @@ int main() {
 
     // Initialize the VGA screen
 
-    #if PICO_PIO_USE_GPIO_BASE==1
+    #if PICO_PIO_USE_GPIO_BASE
 
     // When connected to another Pico 2 (for VGA to DVI conversion) CSYNC seems
     // to suffer electrically. Increasing the drive strength improves it.
@@ -3755,8 +3750,11 @@ int main() {
     init_ir_rx(true);
 #if USE_VGA_CAPTURE
     sleep_ms(500);
+#if USE_VGA_IN_TO_DVI
     set_vga_capture(VC_VSYNC_AND_VSYNC_ON_CSYNC);
-    // set_vga_capture(VC_VSYNC_ON_CSYNC);
+#else
+    set_vga_capture(VC_VSYNC_ON_CSYNC);
+#endif
     // set_vga_capture(VC_NONE);
 #endif
 

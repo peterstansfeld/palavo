@@ -2,24 +2,11 @@
 
 ### PIO-Assisted Logic Analyser with VGA Output.
 
-Palavo captures the logic levels of its Raspberry Pi RP2xxx microcontoller's GPIO pins
-and displays them on a VGA monitor. It allows the user, via a simple graphical
-interface to specify which GPIO pins to capture, which GPIO pin to use as a
-trigger, and what type of trigger to use. The user interface is controlled
-using a serial terminal (on a PC), a keyboard to serial terminal adapter using
-a Raspberry Pi Pico 2, and/or an [Argon] infra-red remote control.
+Palavo captures the logic levels of its Raspberry Pi RP2xxx microcontoller's GPIO pins and displays them on a VGA monitor. It allows the user, via a simple graphical interface, to specify which GPIO pins to capture, what frequency to use to capture, which GPIO pin to use as a trigger, and what type of trigger to use. The user interface is controlled using a serial terminal (on a PC), a keyboard to serial terminal adapter using a Raspberry Pi Pico 2, and/or an [Argon](todo) infra-red remote control.
 
-PIO is Raspberry Pi's Programmable Input Output feature found on their RP2xxx
-microcontrollers.
+PIO is Raspberry Pi's Programmable Input Output feature found on their RP2xxx microcontrollers. The *Assisted* in PIO-Assisted doesn't really do PIO justice as without it Palavo would not be possible.
 
-The *Assisted* in PIO-Assisted doesn't really do PIO justice, as without it Palavo
-would not be possible.
-
-The VGA output uses a resolution of 640 x 480 with 6-bit colour, and uses CSYNC
-instead of HSYNC and VSYNC to save a GPIO pin. Not all monitors support CSYNC, but
-many do. 6-bit colour (2 red, 2 green, 2 blue) is used because when converting
-the VGA output to DVI, using the HSTX peripheral on a Raspberry Pi Pico 2, the 
-colours remain the same.
+The VGA output uses a resolution of 640 x 480 with 6-bit colour (2 red, 2 green, 2 blue), and uses CSYNC instead of HSYNC and VSYNC to save a GPIO pin. Not all VGA monitors support CSYNC, but many do. 6-bit colour is used because when converting the VGA output to DVI, using the HSTX peripheral on the RP2350A on a Raspberry Pi Pico 2, the colours remain the same.*
 
 This project was inspired by, and uses code from, Raspberry Pi's [Logic Analyser example in the SDK.](https://github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser) as well as Hunter Adams' [PIO-Based VGA Graphics Driver for RP2040](https://github.com/vha3/Hunter-Adams-RP2040-Demos/blob/master/VGA_Graphics/README.md).
 
@@ -40,8 +27,7 @@ Enter the `build` directory:
 
 `$ cd build`
 
-Create a suitably named directory (the target for this example is a Raspberry Pi Pico 2)
-and enter that directory:
+Create a suitably named directory (the target for this example is a Raspberry Pi Pico 2) and enter that directory:
 
 `$ mkdir pico2`
 
@@ -62,22 +48,19 @@ Then build it:
 
 This should generate, amongst other files, a `palavo.uf2` file and a `palavo.elf` file.
 
-To program the rp2350, put it into boot mode and copy `palavo.uf2` onto the drive that appears.
+To program the rp2350 with the `palavo.uf2` file, put the board into boot mode and copy the file onto the drive that appears.
 
-To program an rp2350 with a `palavo.elf` file using Openocd and a RPi Debug Probe:
+To program the rp2350 with a `palavo.elf` file using Openocd and a RPi Debug Probe:
 
 `$ ~/.pico-sdk/openocd/0.12.0+dev/openocd -s ~/.pico-sdk/openocd/0.12.0+dev/scripts -f ~/.vscode/extensions/marus25.cortex-debug-1.12.1/support/openocd-helpers.tcl -f interface/cmsis-dap.cfg -f target/rp2350.cfg -c "adapter speed 5000" -c "program filename.elf verify reset exit"`
    
-(Note that the above line uses a version of Openocd that was installed when I first installed 
-the Pico Visual Studio Code extension. It may now be located in a different location, so modify
-the command line accordingly, as well as the following bash script.)
+(Note that the above line uses a version of Openocd that was installed when I first installed the Pico Visual Studio Code extension. It may now be located in a different location, so modify the command line accordingly, as well as the following bash script.)
 
 Instead of the above, copy the script file `make-and-flash.sh` from the palavo directory:
 
 `$ cp ../../make-and-flash.sh .`
 
-Modify the `adapter_serial_no` variable to that of your Debug Probe. If you don't 
-want to specify a serial number, blank the `target_adapter_cmnd` variable.
+Using a text editor modify the `adapter_serial_no` variable to that of your Debug Probe. If you don't want or need to specify a serial number, blank the `target_adapter_cmnd` variable.
 
 Then, attempt to make and flash the RP235x:
 
@@ -87,11 +70,6 @@ Then, attempt to make and flash the RP235x:
 For 
 
 `$ cmake ../../ -DPICO_BOARD=pimoroni_pico_lipo2xl_w_rp2350`
-
-
-
-
-
 
 
 
@@ -157,16 +135,16 @@ VGA Out Light Green  GP9 12                  29 GP22  VGA Out CSYNC
 
 ## VGA 15-way Socket Wiring 
 
-| VGA Out GPIO        |   Resistor   | VGA 15-way Socket |
-| :---                |     :---:    | :---              |
-|       VGA Out CSYNC | ---  47R --- | 13 HSYNC          |
-|                 GND | ---  0R  --- | 5 GND             |
-|   VGA Out Dark Blue | ---  1K  --- | 3 Blue            |
-|  VGA Out Light Blue | --- 470R --- | 3 Blue            |
-|  VGA Out Dark Green | ---  1K  --- | 2 Green           |
-| VGA Out Light Green | --- 470R --- | 2 Green           |
-|    VGA Out Dark Red | ---  1K  --- | 1 Red             |
-|   VGA Out Light Red | --- 470R --- | 1 Red             |
+| VGA Out GPIO        | Resistor | VGA 15-way Socket |
+| :---                |   :---:  | :---              |
+|       VGA Out CSYNC |    47R   | 13 HSYNC          |
+|                 GND |    0R    | 5 GND             |
+|   VGA Out Dark Blue |    1K    | 3 Blue            |
+|  VGA Out Light Blue |   470R   | 3 Blue            |
+|  VGA Out Dark Green |    1K    | 2 Green           |
+| VGA Out Light Green |   470R   | 2 Green           |
+|    VGA Out Dark Red |    1K    | 1 Red             |
+|   VGA Out Light Red |   470R   | 1 Red             |
 
 
 ## UART Comms
@@ -332,3 +310,48 @@ So, we are getting false CSYNC pulses, presumably. Possibly missing CSYNC pulses
 
 I repeated the test with a Pimoroni Pico Plus 2 (not XL) instead of the Pico 2, and it still fails (misses, or possibly gets false, CSYNC syncs). I used
 the same UF2 as the Pico 2, and it (Pimoroni's Pico Plus 2) seems to work fine, despite having some differences (mainly in the power supply area).
+
+
+* whereas using Hunter Adams' original 4-bit colour (1 red, 2 green, 1 blue) they don't.
+
+
+
+How many combinations of Palavo are there?
+
+1. Using an RP2350A or RP2350B with VGA output, DVI output, and with GPIOs 0-31 available for capture (PALAVO_TYPE=0 (0b000))
+2. Using an RP2350A or RP2350B with VGA output, no DVI output, and with GPIOs 0-31 available for capture (PALAVO_TYPE=1 (0b001))
+3. Using an RP2350B with VGA output, DVI output, and with GPIOs 0-47 available for capture (PALAVO_TYPE=2 (0b010))
+4. Using an RP2350B with only VGA output, i.e. no DVI output, and with GPIOs 0-47 available for capture (PALAVO_TYPE=3 (0b011))
+5. Using an RP2350A or RP2350B with VGA output, DVI output, and defaults to outputting the VGA In signals to DVI, rather than its own captured signals. (PALAVO_TYPE=4 (0b100))
+
+N.B. Available for capture does NOT mean you can put external signals into any GPIO pins that are used as outputs. It means you can still capture those output signals.
+
+## Palavo Types
+
+Palavo can be configured, depending on the microcontroller, in one of 5 modes and the mode is selected by passing the additional define into the CMAKE command line, above:
+
+` -DPALAVO_TYPE=X` where X is a number between 0 and 5, although 4 is the same as 0.
+
+| PALAVO_TYPE | RP235x Variant | VGA Out | DVI Out | DVI Output at Startup | GPIOs |
+|    :---:    | :---           |  :---:  |  :---:  |         :---:         | :---  |
+|      0      | A or B         |   Yes   |   No    |          n/a          | 0-31  |
+|      1      | A or B         |   Yes   |   Yes   |        VGA Out        | 0-31  |
+|      2      | B              |   Yes   |   No    |          n/a          | 0-47  |
+|      3      | B              |   Yes   |   Yes   |        VGA Out        | 0-47  |
+|      4      | A or B         |   Yes   |   No    |          n/a          | 0-31  |
+|      5      | A or B         |   Yes   |   Yes   |        VGA In         | 0-31  |
+
+Currently only Types 0, 1, 2 and 4, and 5 have been tested (4 is the same as 0). 
+
+### Palavo Type Bits
+
+```
+ ___ USE_VGA_IN_TO_DVI (on start up display VGA In - i.e. a VGA to DVI converter.) 
+| __ USE_GPIO_32_47 (Only set this if using an RP235xB.)
+|| _ USE_DVI (Display either VGA In, VGA Out, or a test screen to DVI via HSTX.)
+|||
+000
+
+```
+
+The way I have my system setup is PALAVO_TYPE=2 on a Pimoroni Pico LiPo 2 W XL, and for DVI output I use PLAVO_TYPE=5 on a Raspberry Pi Pico 2. This allows more contiguous GPIO pins free as inputs for capture. It will also allow for lots of RAM to be freed up for longer captures (not yet implemented - todo).
