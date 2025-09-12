@@ -76,8 +76,8 @@
 #else
 // This is a default palavo type for colour syntax whilst developing only.
 // #define PALAVO_TYPE 0
-// #define PALAVO_TYPE (1 << PT_BIT_USE_GPIO_32_47)
-#define PALAVO_TYPE ((1 << PT_BIT_USE_DVI) | (1 << PT_BIT_USE_VGA_IN_TO_DVI))
+#define PALAVO_TYPE (1 << PT_BIT_USE_GPIO_32_47)
+// #define PALAVO_TYPE ((1 << PT_BIT_USE_DVI) | (1 << PT_BIT_USE_VGA_IN_TO_DVI))
 
 #error "Please specify a supported board, or define a PALAVO_TYPE (See README.md)."
 
@@ -415,7 +415,7 @@ void logic_analyser_init(PIO pio, uint sm, uint pin_base, uint pin_count, float 
         prog.length = 1;
         prog.origin = -1;
 
-#if PICO_PIO_USE_GPIO_BASE
+#if USE_GPIO_32_47
         // this is designed for when ((pin_base >= 16) && (pin_base + pin_count > 32))
         // so set it - just in case
         pio_set_gpio_base(pio, 16);
@@ -563,7 +563,7 @@ void init_ir_rx(bool init) {
             uart_putuif(UART_ID, "pio_set_gpio_base for IR RX: %d\n", res);
 
 #else
-#if PICO_PIO_USE_GPIO_BASE
+#if USE_GPIO_32_47
             pio_set_gpio_base(ir_rx_pio, 0);
 #endif
 #endif
@@ -623,7 +623,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
 
     init_ir_rx(false);
 
-#if PICO_PIO_USE_GPIO_BASE
+#if USE_GPIO_32_47
 
     if ((g_pins_base >= 16) && (g_pins_base + g_no_of_pins_to_capture > 32)) { 
         // res = pio_set_gpio_base(pio, 16);
@@ -3119,10 +3119,10 @@ void init_pio_vga_detect_vsync_on_csync() {
 
     if (vga_capture_mode == VC_NONE) {
 
-        #if PICO_PIO_USE_GPIO_BASE
+#if USE_GPIO_32_47
         pio_set_gpio_base(vga_capture_pio, 16);
         // #warning pio_set_gpio_base(vga_capture_pio, 16)
-        #endif
+#endif
 
         vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
         vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, RGB_OUT_FIRST_PIN);
@@ -3165,9 +3165,9 @@ void deinit_vga_capture() {
         dma_channel_unclaim(rgb_test_chan_1);
         dma_channel_unclaim(rgb_test_chan_0);
 
-        #if PICO_PIO_USE_GPIO_BASE
+#if USE_GPIO_32_47
         pio_set_gpio_base(vga_capture_pio, 0);
-        #endif
+#endif
 
         vga_capture_mode = VC_NONE;
     }
@@ -3554,7 +3554,7 @@ int main() {
 
     // Initialize the VGA screen
 
-    #if PICO_PIO_USE_GPIO_BASE
+#if USE_GPIO_32_47
 
     // When connected to another Pico 2 (for VGA to DVI conversion) CSYNC seems
     // to suffer electrically. Increasing the drive strength improves it.
@@ -3571,7 +3571,7 @@ int main() {
     enum gpio_drive_strength gds = gpio_get_drive_strength(CSYNC /*CSYNC*/);
     uart_putcf(UART_ID, "CSYNC drive strength: %d\n", gds);
 
-    #endif
+#endif
 
     uart_puts(UART_ID, "Initialising VGA...\n");
     initVGA() ;
