@@ -144,7 +144,7 @@ extern uint32_t vga_1bit_data_array[TXCOUNT_2];
 void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour, uint8_t colour_2, uint8_t colour_3);
 void set_text_padding(uint16_t padding);
 
-void initVGA(void) ;
+void initVGA(uint csync_pin, uint rgb_base_pin) ;
 void drawPixel(short x, short y, char color) ;
 void drawVLine(short x, short y, short h, char color) ;
 void drawHLine(short x, short y, short w, char color) ;

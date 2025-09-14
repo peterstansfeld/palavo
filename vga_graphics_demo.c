@@ -42,7 +42,15 @@
 
 
 // See README.md for Palavo Types
-#ifndef PALAVO_TYPE
+
+#ifdef PALAVO_TYPE
+
+#pragma message "PALAVO_TYPE detected."
+
+#else
+
+#pragma message "PALAVO_TYPE not detected."
+
 // PALAVO_TYPE has not already been defined by CMAKE, so define one here.
 // This is mainly for getting colour syntax working whilst developing.
 
@@ -74,12 +82,21 @@
 #pragma message "Building Palavo for PIMORONI_PICO_LIPO2XL_W_RP2350"
 #define PALAVO_TYPE (1 << PT_BIT_USE_GPIO_32_47)
 #else
+
+#ifdef SOLDERPARTY_RP2350_STAMP_XL
+#pragma message "Building Palavo for SOLDERPARTY_RP2350_STAMP_XL"
+#define PALAVO_TYPE (1 << PT_BIT_USE_DVI)
+// #define PALAVO_TYPE (1 << PT_BIT_USE_GPIO_32_47)
+#else
+
 // This is a default palavo type for colour syntax whilst developing only.
 // #define PALAVO_TYPE 0
-#define PALAVO_TYPE (1 << PT_BIT_USE_GPIO_32_47)
-// #define PALAVO_TYPE ((1 << PT_BIT_USE_DVI) | (1 << PT_BIT_USE_VGA_IN_TO_DVI))
+#define PALAVO_TYPE (1 << PT_BIT_USE_DVI)
+// #define PALAVO_TYPE ((1 << PT_BIT_USE_DVI) | (1 << PT_BIT_USE_GPIO_32_47))
 
 #error "Please specify a supported board, or define a PALAVO_TYPE (See README.md)."
+
+#endif
 
 #endif
 
@@ -190,7 +207,7 @@ uint8_t last_uart_char = 0;
 
 #define MAX_NO_OF_PINS 32
 
-#ifdef PIMORONI_PICO_LIPO2XL_W_RP2350
+#ifdef USE_GPIO_32_47
 
 #define MAX_BASE_PIN_NO 47
 
@@ -267,7 +284,14 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 
 #define CAPTURE_PIN_BASE 0 // HSYNC
 
-#ifndef PIMORONI_PICO_LIPO2XL_W_RP2350
+#ifdef USE_GPIO_32_47
+
+#define CAPTURE_PIN_COUNT 27 // GPIO0 - GPIO26
+#define CAPTURE_TRIGGER_PIN_BASE 0 // one of the keybord row drivers
+#define CAPTURE_SAMPLE_FREQ_DIVISOR 12 // should capture two row-driving sequences
+#define CAPTUTRE_TRIGGER_TYPE TT_FALLING_EDGE // 
+
+#else
 
 #define CAPTURE_PIN_COUNT 8 // HSYNC, VSYNC and BBGGRR (blue, green, red)
 #define CAPTURE_TRIGGER_PIN_BASE 26 // HSYNC
@@ -282,13 +306,6 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 #define CAPTURE_SAMPLE_FREQ_DIVISOR 5
 
 #endif
-
-#else
-
-#define CAPTURE_PIN_COUNT 27 // GPIO0 - GPIO26
-#define CAPTURE_TRIGGER_PIN_BASE 0 // one of the keybord row drivers
-#define CAPTURE_SAMPLE_FREQ_DIVISOR 12 // should capture two row-driving sequences
-#define CAPTUTRE_TRIGGER_TYPE TT_FALLING_EDGE // 
 
 #endif
 
@@ -436,7 +453,7 @@ void logic_analyser_init(PIO pio, uint sm, uint pin_base, uint pin_count, float 
     }
 }
 
-#ifdef PIMORONI_PICO_LIPO2XL_W_RP2350
+#ifdef USE_GPIO_32_47
 
 void logic_analyser0_init(PIO pio, uint sm, uint pin_base, uint pin_count, float div, bool init) {
     // Load a program to capture n pins. This is just a single `in pins, n`
@@ -498,7 +515,7 @@ bool pio_sm_exec_timeout_us(PIO pio, uint sm, uint instr, uint32_t timeout_us) {
 }
 
 
-#ifdef PIMORONI_PICO_LIPO2XL_W_RP2350
+#ifdef USE_GPIO_32_47
 
 // When this is #define'ed instead of a global variable the triggering respose is much slower
 // Is it because it's stored in flash rather than ram? todo -find out
@@ -539,13 +556,7 @@ void clear_previous_edges() {
         memset(edges, 0, sizeof(edges[0]) * MAX_NO_OF_CHANNELS);
 }
 
-#ifndef PIMORONI_PICO_LIPO2XL_W_RP2350
     PIO ir_rx_pio = pio2;
-    // #warning IR_RX is using pio2
-#else
-    PIO ir_rx_pio = pio2;
-    // #warning IR_RX is using pio1
-#endif
 
 uint ir_rx_sm = 0;
 
@@ -884,7 +895,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
 
     clear_previous_edges();
 
-#ifdef PIMORONI_PICO_LIPO2XL_W_RP2350
+#ifdef USE_GPIO_32_47
 
     if (capture_pio == pio) {
         logic_analyser_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
@@ -3109,13 +3120,13 @@ void init_pio_vga_capture_with_vsync_and_vsync_on_csync() {
 // or the RGB of pins 33 to 38 using CSYNC of pin 32
 void init_pio_vga_detect_vsync_on_csync() {
 
-    #ifndef PIMORONI_PICO_LIPO2XL_W_RP2350
-    #define CSYNC_IN_PIN 22
-    #define RGB_OUT_FIRST_PIN 6
-    #else
+#ifdef USE_GPIO_32_47
     #define CSYNC_IN_PIN 31
     #define RGB_OUT_FIRST_PIN 32
-    #endif
+#else
+    #define CSYNC_IN_PIN 22
+    #define RGB_OUT_FIRST_PIN 6
+#endif
 
     if (vga_capture_mode == VC_NONE) {
 
@@ -3395,7 +3406,13 @@ int main() {
     
     stdio_init_all();
 
-    #ifndef PIMORONI_PICO_LIPO2XL_W_RP2350
+    #ifdef USE_GPIO_32_47
+
+    gpio_set_function(UART_TX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_TX_PIN));
+    gpio_set_function(UART_RX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_RX_PIN));
+    uart_init(UART_ID, BAUD_RATE);
+
+    #else
 
     // todo - we can probably and should use the code below (in the #else), which is from the SDK docs
 
@@ -3406,12 +3423,6 @@ int main() {
     gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
     gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
     // gpio_set_function(LED_PIN, GPIO_FUNC_UART);
-
-    #else
-
-    gpio_set_function(UART_TX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_TX_PIN));
-    gpio_set_function(UART_RX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_RX_PIN));
-    uart_init(UART_ID, BAUD_RATE);
 
     #endif
 
@@ -3574,7 +3585,30 @@ int main() {
 #endif
 
     uart_puts(UART_ID, "Initialising VGA...\n");
-    initVGA() ;
+    
+#if USE_GPIO_32_47
+    #define CSYNC 31
+    #define RGB_BASE_PIN 32
+#else 
+    #define CSYNC 22
+    #define RGB_BASE_PIN 6
+#endif
+
+    initVGA(CSYNC, RGB_BASE_PIN /*
+    #ifndef PIMORONI_PICO_LIPO2XL_W_RP2350
+    // CSYNC must be in the range 0-31
+    #define CSYNC 22
+    #define RGB_OUT_START_PIN 6
+    PIO pio_2 = pio1;
+    #else
+    // CSYNC can also be in the range 32-47
+    #define CSYNC 31
+    #define RGB_OUT_START_PIN 32
+
+    PIO pio_2 = pio1;
+    pio_set_gpio_base(pio_2, 16);
+    #endif
+*/) ;
     init_line_colours();
 
     // We're going to capture into a u32 buffer, for best DMA efficiency. Need

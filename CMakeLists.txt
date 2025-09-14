@@ -38,6 +38,14 @@ if (PICO_RP2350)
     # add_compile_definitions(USE_DVI=0)
 endif()
 
+# without the following we can't pass the `PALAVO_TYPE` definition 
+# `-DPALAVO_TYPE=x` as an argument when running `cmake`.
+
+if (DEFINED PALAVO_TYPE)
+    # add_compile_definitions(PALAVO_TYPE
+    add_compile_definitions(PALAVO_TYPE=${PALAVO_TYPE})
+endif()
+
 # must match with executable name
 target_link_libraries(palavo PRIVATE pico_stdlib hardware_pio hardware_dma hardware_adc hardware_irq hardware_uart hardware_clocks)
 

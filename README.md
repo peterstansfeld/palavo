@@ -14,6 +14,12 @@ This project was inspired by, and uses code from, Raspberry Pi's [Logic Analyser
 
 ## How to build Palavo
 
+There are a number of configurations for Palavo, which can use either the A or B variant of the RP235x, or even both. 
+
+## Configuration 0
+
+#### PALAVO_TYPE=0
+
 ### Hardware
 
 At its simplest, a Raspberry Pi Pico 2 can be used:
@@ -41,7 +47,7 @@ VGA_Out_Light_Green  GP9 12                29 GP22  VGA_Out_CSYNC
                     GP15 20                21 GP16
 ```
 
-The VGA_Out_signals can be fed into a resistor network to provide the voltages for the Red, Green, and Blue colour pins for a VGA monitor:
+The VGA_Out_signals need to be fed into a resistor network to provide the voltages for the Red, Green, and Blue colour pins on a VGA cable that's attached to a VGA monitor:
 
 ```
       Pico 2 Signal  Resistor  VGA 15-way Socket 
@@ -59,26 +65,28 @@ VGA_Out_Light Green  --470R--  2 Green
 The Serial_RX and Serial_TX can be connected to a PC via a 3.3V logic level UART to USB serial adapter. I use [Raspberry Pi's Debug Probe](https://www.raspberrypi.com/documentation/microcontrollers/debug-probe.html) as it can also be used to program and debug the Pico via its Debug interface.  
 
 
-The Infra_Red_RX pin, along with connections to 3.3V, can be connected to an infra-red receiver. I use this [Grove IR Receiver](https://thepihut.com/products/grove-infrared-receiver), and Palavo accepts commands from the [Argon IR Remote](https://argon40.com/products/argon-remote) controller.
+The Infra_Red_RX pin, along with connections to 3.3V, can be connected to an infra-red receiver. I use this [Grove IR Receiver](https://thepihut.com/products/grove-infrared-receiver), and Palavo accepts commands from this [Argon IR Remote](https://argon40.com/products/argon-remote) control.
 
 
 ### Firmware
 
-This is how I build the firmware (on a Raspberry Pi 5).
+There may be a simpler way, using RaspberryPi's Pico Visual Studio Code Extension perhaps, but I haven't experimented with that enough yet. This is how I build the firmware (on a Raspberry Pi 5):
 
 Follow the instructions in Appendix C: Manual toolchain setup of [Getting started with Raspberry Pi Pico-series](https://datasheets.raspberrypi.com/pico/getting-started-with-pico.pdf).
 
 Clone this repository (Palavo) into a suitable location on your PC.
 
-If one doesn't already exist, create a `build` directory in the Palavo directory:
+Enter the `palavo` directory:
+
+`$ cd palavo`
+
+If one doesn't already exist, create a `build` directory and enter it:
 
 `$ mkdir build`
 
-Enter the `build` directory:
-
 `$ cd build`
 
-Create a suitably named directory (the target for this example is a Raspberry Pi Pico 2) and enter that directory:
+Create a suitably-named directory (the target for this example is a Raspberry Pi Pico 2) and enter that directory:
 
 `$ mkdir pico2`
 
@@ -99,13 +107,13 @@ Then build it:
 
 This should generate, amongst other files, a `palavo.uf2` file and a `palavo.elf` file.
 
-To program the rp2350 with the `palavo.uf2` file, put the board into boot mode and copy the file onto the drive that appears.
+To program the rp2350 using the `palavo.uf2` file, put the Pico into boot mode and copy the file onto the drive that appears.
 
-To program the rp2350 with the `palavo.elf` file using Openocd and a RPi Debug Probe:
+To program the rp2350 using the `palavo.elf` file using Openocd and a RPi Debug Probe:
 
 `$ ~/.pico-sdk/openocd/0.12.0+dev/openocd -s ~/.pico-sdk/openocd/0.12.0+dev/scripts -f ~/.vscode/extensions/marus25.cortex-debug-1.12.1/support/openocd-helpers.tcl -f interface/cmsis-dap.cfg -f target/rp2350.cfg -c "adapter speed 5000" -c "program filename.elf verify reset exit"`
    
-(Note that the above line uses a version of Openocd that was installed when I first installed the Pico Visual Studio Code extension. It may now be located in a different location, so modify the command line accordingly, as well as the following bash script.)
+(Note that the above line uses a version of Openocd that was installed when I first installed the Pico Visual Studio Code Extension. It may now be located in a different location, so modify the command line accordingly, as well as the following bash script.)
 
 Instead of the above, copy the script file `make-and-flash.sh` from the palavo directory:
 
@@ -122,7 +130,7 @@ Then, attempt to make and flash the RP235x:
 
 If all went well, when Palavo starts you should see something like the following screen on your VGA monitor:
 
-![A monitor screen displaying coloured traces of a section of the logic levels of various GPIO pins. Above the traces, at the top of the screen is the Palavo logo on the left, and then various adjustable settings. Underneath the main traces is a minimap of the whole of each trace. Beneath the minimap, at the bottom of the screen, is a status bar.](image.jpg)
+![A monitor screen displaying the main coloured traces of a section of the logic levels of various GPIO pins. Above the main traces, at the top of the screen is the Palavo logo on the left, and then various adjustable settings. Underneath the main traces is a minimap of traces of the whole of each captured channel. Beneath the minimap, at the bottom of the screen, is a status bar.](image.jpg)
 
 Open a serial terminal on your PC. I use Minicom with this command line (you may need to change the device - the bit after the `-D`):
 
@@ -130,7 +138,8 @@ Open a serial terminal on your PC. I use Minicom with this command line (you may
 
 Press the 'h' key and something like the following help screen should appear:
 
-![HELP
+```
+HELP
 
 Press...
 
@@ -142,22 +151,21 @@ TAB / SHIFT-TAB to select the next / previous setting
 UP / DOWN to increase / decrease the selected setting  
 c to capture a sample using the settings  
 z to zoom to fit all the samples on one page  
-\+ / - to zoom in / out  
++ / - to zoom in / out  
 = to set zoom to 1:1  
 m to measure VGA timings  
 h to show this help window  
 a to show the about window  
 SPACE to play / pause graphics demo  
 Press any key to close this window  
-](image.jpg)
-
-
-### Using
+```
 
 Hopefully, the above instructions are clear enough to be able to get started using Palavo. If so, congratulations! I hope you find it interesting, and maybe even useful.
 
 
-## Another Configuration
+## Configuration 1
+
+#### PALAVO_TYPE=1
 
 "That's all well and good." I hear you say, "But can't the Pico do DVI with its fancy HSTX peripheral?". Well, yes it can. Try this:
 
@@ -186,12 +194,12 @@ VGA_Out_Light Green  GP9 12                29 GP22  VGA_Out_CSYNC
            DVI_CK-  GP15 20                21 GP16  DVI_D1-
 ```
 
-In addition to the previous configuration's hardware, the DVI pins (GP12-GP19) can be connected to a monitor via a [Pico DVI Sock](https://github.com/Wren6991/Pico-DVI-Sock) and an HDMI-shaped cable. Originally designed by Raspberry Pi's Luke Wren, Adafruit now make their own version called the [DVI Sock for Pico](https://www.adafruit.com/product/5957). There are other products, such as the [PiCowBell HSTX DVI Output for Pico](https://www.adafruit.com/product/6363) that could be used instead.
+In addition to the previous configuration's hardware, the DVI pins (GP12-GP19) should be connected to a monitor via a [Pico DVI Sock](https://github.com/Wren6991/Pico-DVI-Sock) and an HDMI-shaped cable. Originally designed by Raspberry Pi's Luke Wren, Adafruit now make their own version called the [DVI Sock for Pico](https://www.adafruit.com/product/5957). There are other products, such as the [PiCowBell HSTX DVI Output for Pico](https://www.adafruit.com/product/6363) that could be used instead.
 
 
 ### Firmware
 
-In the `build` directory create a different, but still suitably named, directory, and enter that directory:
+In the `build` directory create a different, but still suitably-named, directory, and enter that directory:
 
 `$ mkdir pico2_with_DVI`
 
@@ -212,27 +220,18 @@ Shortly after that, you should see the same screen as you can see on the VGA mon
 
 ![A monitor screen displaying coloured traces of a section of the logic levels of various GPIO pins. Above the traces, at the top of the screen is the Palavo logo on the left, and then various adjustable settings. Underneath the main traces is a minimap of the whole of each trace. Beneath the minimap, at the bottom of the screen, is a status bar.](image.jpg)
 
-
-### Using
-
 Press the 'h' key and the same help menu should appear with the addition of this item:
 
 ![v to cycle DVI modes: mirror VGA out -> test -> VGA in ](image.jpg)
-
 
 In 'mirror VGA out' mode, whatever is displayed on VGA_Out is also displayed on DVI.  
 In 'test' mode, a test screen is displayed on DVI.  
 In 'VGA in' mode, whatever is detected on VGA_In is also displayed on DVI. In addition to VGA_In_CSYNC, VGA_HSYNC_In and VGA_VSYNC_In are used for synchronisation.  
 
 
+## Configuration 2
 
-#### Note
-In this last mode Palavo is essentially a 6-bit colour, logic level, VGA to DVI converter, except that on start up it's in 'mirror VGA out' mode. To start up in 'VGA in' mode use the CMAKE line:
-
-`$ cmake ../../ -DPICO_BOARD=pico2 -DPALAVO_TYPE=5`
-
-
-## Another Configuration
+#### PALAVO_TYPE=2
 
 The trouble with the previous configuration is that we're using lots of potential inputs as outputs for both the VGA_Out and the DVI_Out. What if, say, we wanted to capture 24 inputs? We can't with a Pico 2. But we can with a board that uses the B variant of the RP2350. The RP2350B has 48 GPIO pins, and we only need 7 for VGA_Out, or 8 for DVI_Out. The slight incovenience with DVI_Out is that it's fixed on pins GP12-GP19, whereas with VGA_Out we can put its 7 signals on whichever pins we like. Allow me introduce you to the [Pimoroni Pico LiPo 2 XL W](https://shop.pimoroni.com/products/pimoroni-pico-lipo-2-xl-w):
 
@@ -271,11 +270,11 @@ The trouble with the previous configuration is that we're using lots of potentia
    VGA_Out_Light_Red  GP37 30                  31 GP38  Serial_TX
 ```
 
-It's so long.
+It's *so* long.
 
 ### Firmware
 
-In the `build` directory create a different, but still suitably named, directory, and enter that directory:
+In the `build` directory create a different, but still suitably-named, directory, and enter that directory:
 
 `$ mkdir pimoroni_pico_lipo2xl_w`
 
@@ -283,16 +282,95 @@ In the `build` directory create a different, but still suitably named, directory
 
 Repeat the rest of the previous build process, only use this CMAKE command instead:
 
-`$ cmake ../../ -DPICO_BOARD=pimoroni_pico_lipo2xl_w_rp2350 -DPALAVO_TYPE=2
+`$ cmake ../../ -DPICO_BOARD=pimoroni_pico_lipo2xl_w_rp2350 -DPALAVO_TYPE=2`
 
 
 ## Testing
 
-The screen on the VGA monitor should look the same as it does in the first configuration, except that the 'base' and 'trigger' settings can be set to use GP0 to GP47 (rather tham GP0 to GP31).
+The screen on the VGA monitor should look the same as it does in the first configuration, except that the 'base' and 'trigger' settings can be set to use GP0 to GP47 (rather than just GP0 to GP31).
 
-### Using 
+Are you missing the DVI output? You can make a VGA to DVI converter and connect the VGA_Out pins on your Palavo logic analyser to the VGA_In pins on a the converter.
 
-If you'd like to output to DVI instead of VGA you can connect the VGA_Out pins to the VGA_In pins on a Pico 2 with Palavo firmware made with `PALAVO_TYPE=5`. See this [note](#note).
+
+#### Making a VGA to DVI converter with a Pico 2
+ 
+ (Or any other suitable board with an RP235x MCU.)
+
+ Palavo can be configured to be a 6-bit-colour, 3.3V-logic-level, VGA to DVI converter. It is the same as [PALAVOTYPE](#PALAVO-TYPE-1) mode except that it starts up in the 'capture VGA in' mode rather than the 'mirror VGA out' mode. To buid the firmware repeat the rest of the previous build process, only use this CMAKE command instead:
+
+`$ cmake ../../ -DPICO_BOARD=pico2 -DPALAVO_TYPE=5`
+
+
+```
+                                                                             GP0  1                  60 VBUS
+                                                                             GP1  2                  59 VSYS
+                                                                             GND  3                  58 GND
+                                                                             GP2  4                  57 3V3 EN
+                                                                             GP3  5                  56 3V3 OUT
+                                                                             GP4  6                  55 ADC VREF
+                                                                             GP5  7                  54 GP28
+                                                                             GND  8                  53 ADC GND
+                                                                             GP6  9                  52 GP27
+                                                                             GP7 10 PICO LIPO 2 XL W 51 GP26
+                                                                             GP8 11                  30 RUN
+                                                                             GP9 12                  49 GP22
+                                                                             GND 13                  48 GND
+                                                                            GP10 14                  47 GP21
+                                                                            GP11 15                  46 GP20
+                                                                            GP12 16                  45 GP19
+                                                                            GP13 17                  44 GP18
+                                                                            GND  18                  43 GND
+                                                                            GP14 19                  42 GP17
+                                                                            GP15 20 ________________ 41 GP16
+                                                                         GND 3V3 21                  40 BT
+                                                             VGA_Out_CSYNC  GP31 22                  39 GP47
+                                                                             GND 23                  38 GND
+                                          -------------- VGA_Out_Dark_Blue  GP32 24                  37 GP46  Infra_Red_RX
+                                                        VGA_Out_Light_Blue  GP33 25        XL        36 GP45
+                                                        VGA_Out_Dark_Green  GP34 26                  34 GP44
+                                                       VGA_Out_Light_Green  GP35 27                  33 GP43
+                                                                             GND 28                  32 GND
+                                                          VGA_Out_Dark_Red  GP36 29                  31 GP39  Serial_RX
+                                       ----------------- VGA_Out_Light_Red  GP37 30                  31 GP38  Serial_TX
+
+
+
+                                                           VGA_In_Dark Blue  GP0  1                  40 VBUS
+                                                          VGA_In_Light Blue  GP1  2                  39 VSYS
+                                                                             GND  3                  38 GND
+                                                          VGA_In_Dark Green  GP2  4                  37 3V3 EN
+                                                         VGA_In_Light Green  GP3  5                  36 3V3 OUT
+                                                   |        VGA_In_Dark Red  GP4  6                  35 ADC VREF
+                                             ------|------ VGA_In_Light Red  GP5  7                  34 GP28
+                                                                             GND  8                  33 ADC GND
+                                                          VGA_Out_Dark Blue  GP6  9                  32 GP27  VGA_In_VSYNC
+                                                         VGA_Out_Light Blue  GP7 10      PICO  2     31 GP26  VGA_In_HSYNC or CSYNC
+                                                         VGA_Out_Dark Green  GP8 11                  30 RUN
+                                                        VGA_Out_Light Green  GP9 12                  29 GP22  VGA_Out_CSYNC
+                                                                             GND 13                  28 GND
+                                                          VGA_Out_Dark Red  GP10 14                  27 GP21
+                                                         VGA_Out_Light Red  GP11 15                  26 GP20
+                                                                   DVI_D0+  GP12 16                  25 GP19  DVI_D2+
+                                                                   DVI_D0-  GP13 17                  24 GP18  DVI_D2-
+                                                                            GND  18                  23 GND
+                                                                   DVI_CK+  GP14 19                  22 GP17  DVI_D1+
+                                                                   DVI_CK-  GP15 20                  21 GP16  DVI_D1-
+````
+
+
+
+
+
+
+
+
+
+# End of Document
+
+Everything from here is stuff I may use and don't want to delete just yet
+
+
+
 
 
 
@@ -607,3 +685,43 @@ In 'mirror VGA out' mode the Pico uses a couple of PIO programs to output the 7 
 In 'test' mode the above PIO programs are stopped and DVI's frame buffer is filled with a test pattern. 
 
 In 'VGA in' mode the stopped PIO programs used in 'mirror VGA out' mode are restarted, only using the VGA_In pins for CSYNC detection and for Red, Green and Blue sampling. Another PIO program is started which is simultaneously looking for HSYNC and VSYNC signals.
+
+
+
+In the `build` directory create a different, but still suitably-named, directory, and enter that directory:
+
+`$ mkdir solderparty_rp2350_stamp_xl-DVI`
+
+`$ cd solderparty_rp2350_stamp_xl-DVI`
+
+Repeat the rest of the previous build process, only use this CMAKE command instead:
+
+`$ cmake ../../ -DPICO_BOARD=solderparty_rp2350_stamp_xl -DPALAVO_TYPE=1`
+
+<!-- [text](../pico-sdk/src/boards/include/boards/solderparty_rp2350_stamp_xl.h) -->
+
+
+PICO target board is solderparty_rp2350_stamp_xl.
+CMake Error at /home/peter/pico/pico-sdk/src/boards/generic_board.cmake:22 (message):
+  Unable to find definition of board 'solderparty_rp2350_stamp_xl' (specified
+  by PICO_BOARD):
+
+I specified    
+
+     Looked for solderparty_rp2350_stamp_xl.h in /home/peter/pico/pico-sdk/src/boards/include/boards (additional paths specified by PICO_BOARD_HEADER_DIRS)
+     Looked for solderparty_rp2350_stamp_xl.cmake in /home/peter/pico/pico-sdk/src/boards (additional paths specified by PICO_BOARD_CMAKE_DIRS)
+Call Stack (most recent call first):
+  /home/peter/pico/pico-sdk/src/board_setup.cmake:28 (include)
+  /home/peter/pico/pico-sdk/src/CMakeLists.txt:15 (include)
+
+
+  CMake Error at /home/peter/pico/pico-sdk/src/boards/generic_board.cmake:22 (message):
+  Unable to find definition of board 'solderparty_rp2350_stamp_xl' (specified
+  by PICO_BOARD):
+
+     Looked for solderparty_rp2350_stamp_xl.h in /home/peter/pico/pico-sdk/src/boards/include/boards (additional paths specified by PICO_BOARD_HEADER_DIRS)
+     Looked for solderparty_rp2350_stamp_xl.cmake in /home/peter/pico/pico-sdk/src/boards (additional paths specified by PICO_BOARD_CMAKE_DIRS)
+Call Stack (most recent call first):
+  /home/peter/pico/pico-sdk/src/board_setup.cmake:28 (include)
+  /home/peter/pico/pico-sdk/src/CMakeLists.txt:15 (include)
+

@@ -176,23 +176,14 @@ void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour, ui
      vga_1bit_data_array[line * WORDS_PER_LINE] = (((fore_colour << 6) | (back_colour)) << 16) | 639;
 }
 
-void initVGA() {
+void initVGA(uint csync_pin, uint rgb_base_pin) {
     // Choose which PIO instance to use (there are two instances (three for rp2350), each with 4 state machines)
 
-
-    #ifndef PIMORONI_PICO_LIPO2XL_W_RP2350
-    // CSYNC must be in the range 0-31
-    #define CSYNC 22
-    #define RGB_OUT_START_PIN 6
     PIO pio_2 = pio1;
-    #else
-    // CSYNC can also be in the range 32-47
-    #define CSYNC 31
-    #define RGB_OUT_START_PIN 32
 
-    PIO pio_2 = pio1;
-    pio_set_gpio_base(pio_2, 16);
-    #endif
+    if ((rgb_base_pin + 6) >= 32) {
+      pio_set_gpio_base(pio_2, 16);
+    }
 
     // Our assembled program needs to be loaded into this PIO's instruction
     // memory. This SDK function will find a location (offset) in the
@@ -312,7 +303,7 @@ void initVGA() {
 
     // Initialise a second copy of hvsync which we'll call csync and use to test csync
     // uint csync_offset = pio_add_program(pio_2, &hsync5_program);
-    hsync5_program_init(pio_2, csync_sm, hsync5_offset, CSYNC, 1);
+    hsync5_program_init(pio_2, csync_sm, hsync5_offset, csync_pin, 1);
 
 #endif
 // todo - tidy these GPIO pin definitions below
@@ -320,7 +311,7 @@ void initVGA() {
 #if SYS_CLK_KHZ == 125000u
       rgb5_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN);
 #elif SYS_CLK_KHZ == 150000u
-    rgb5_150_mhz_rp235x_program_init(pio_2, rgb5_sm, rgb5_offset, RGB_OUT_START_PIN, 6);
+    rgb5_150_mhz_rp235x_program_init(pio_2, rgb5_sm, rgb5_offset, rgb_base_pin, 6);
 #elif SYS_CLK_KHZ == 250000u
       rgb5_250_mhz_program_init(pio_2, rgb5_250_mhz_sm, rgb5_offset, LO_GRN);
 #endif
