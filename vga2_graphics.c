@@ -181,10 +181,6 @@ void initVGA(uint csync_pin, uint rgb_base_pin) {
 
     PIO pio_2 = pio1;
 
-    if ((rgb_base_pin + 6) >= 32) {
-      pio_set_gpio_base(pio_2, 16);
-    }
-
     // Our assembled program needs to be loaded into this PIO's instruction
     // memory. This SDK function will find a location (offset) in the
     // instruction memory where there is enough space for our program. We need

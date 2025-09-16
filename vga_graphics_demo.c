@@ -41,163 +41,180 @@
 #define DEBUG_PIN 28
 
 
-// See README.md for Palavo Types
+// Bit locations in PALAVO_CONFIG
 
-#ifdef PALAVO_TYPE
+#define PC_BIT_USE_DVI 0
+#define PC_BIT_USE_GPIO_0_47 1
+#define PC_BIT_USE_VGA_IN_TO_DVI 2
 
-#pragma message "PALAVO_TYPE detected."
+// See README.md for more details on PALAVO_CONFIG
 
-#else
+#ifdef PALAVO_CONFIG
 
-#pragma message "PALAVO_TYPE not detected."
-
-// PALAVO_TYPE has not already been defined by CMAKE, so define one here.
-// This is mainly for getting colour syntax working whilst developing.
-
-// For a board with an RP235xB microcontroller use this one.
-// #define PALAVO_TYPE 3
-
-// For a VGA to DVI converter on a RPi Pico 2 use this one.
-// #define PALAVO_TYPE 4
-
-#endif
-
-
-#define PT_BIT_USE_DVI 0
-#define PT_BIT_USE_GPIO_32_47 1
-#define PT_BIT_USE_VGA_IN_TO_DVI 2
-
-
-#ifndef PALAVO_TYPE
-// PALAVO_TYPE has not already been defined externally (by CMAKE for example), 
-// so define some default ones here.
-
-#ifdef RASPBERRYPI_PICO2
-#pragma message "Building Palavo for RASPBERRYPI_PICO2"
-// #define PALAVO_TYPE 0
-#define PALAVO_TYPE ((1 << PT_BIT_USE_DVI) | (1 << PT_BIT_USE_VGA_IN_TO_DVI))
-#else
-
-#ifdef PIMORONI_PICO_LIPO2XL_W_RP2350
-#pragma message "Building Palavo for PIMORONI_PICO_LIPO2XL_W_RP2350"
-#define PALAVO_TYPE (1 << PT_BIT_USE_GPIO_32_47)
-#else
-
-#ifdef SOLDERPARTY_RP2350_STAMP_XL
-#pragma message "Building Palavo for SOLDERPARTY_RP2350_STAMP_XL"
-#define PALAVO_TYPE (1 << PT_BIT_USE_DVI)
-// #define PALAVO_TYPE (1 << PT_BIT_USE_GPIO_32_47)
-#else
-
-// This is a default palavo type for colour syntax whilst developing only.
-// #define PALAVO_TYPE 0
-#define PALAVO_TYPE (1 << PT_BIT_USE_DVI)
-// #define PALAVO_TYPE ((1 << PT_BIT_USE_DVI) | (1 << PT_BIT_USE_GPIO_32_47))
-
-#error "Please specify a supported board, or define a PALAVO_TYPE (See README.md)."
-
-#endif
-
-#endif
-
-#endif
-
-#endif
-
-
-#if (PALAVO_TYPE & (1 << PT_BIT_USE_DVI))
-// Using DVI - define what mode to show on startup.
-#pragma message "Using DVI"
-
-#define USE_DVI 1
-#define USE_VGA_CAPTURE 1
-
-#if (PALAVO_TYPE & (1 << PT_BIT_USE_VGA_IN_TO_DVI))
-
-#pragma message "Display VGA In on DVI on startup"
-#define USE_VGA_IN_TO_DVI 1
-
-#else
-#pragma message "Mirror VGA Out to DVI on startup"
-#endif
-
-#else
-#pragma message "Not using DVI"
-#endif
-
-
-#if (PALAVO_TYPE & (1 << PT_BIT_USE_GPIO_32_47))
-
-#define USE_GPIO_32_47 1
-
-#if (!PICO_PIO_USE_GPIO_BASE)
-#error "Can't use more than 32 pins on this microcontroller."
-#else
-#pragma message "Using GPIO 0-47"
-
-#endif
+    #pragma message "PALAVO_CONFIG detected."
 
 #else
 
-#pragma message "Using GPIO 0-31"
+    #pragma message "PALAVO_CONFIG not detected."
+
+    // PALAVO_CONFIG has not already been defined by CMAKE, so define one here.
+    // This is mainly for getting colour syntax working whilst developing.
+
+    #if (defined RASPBERRYPI_PICO2)
+
+        #pragma message "Building Palavo for RASPBERRYPI_PICO2"
+        // #define PALAVO_CONFIG 0
+        #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (1 << PC_BIT_USE_VGA_IN_TO_DVI))
+
+    #elif (defined PIMORONI_PICO_LIPO2XL_W_RP2350)
+
+        #pragma message "Building Palavo for PIMORONI_PICO_LIPO2XL_W_RP2350"
+        #define PALAVO_CONFIG (1 << PC_BIT_USE_GPIO_0_47)
+
+    #elif (defined SOLDERPARTY_RP2350_STAMP_XL)
+
+        #pragma message "Building Palavo for SOLDERPARTY_RP2350_STAMP_XL"
+        #define PALAVO_CONFIG (1 << PC_BIT_USE_DVI)
+        // #define PALAVO_CONFIG (1 << PC_BIT_USE_GPIO_0_47)
+
+    #else
+
+        // This is a default palavo config for colour syntax whilst developing only.
+        // #define PALAVO_CONFIG 0
+        // #define PALAVO_CONFIG (1 << PC_BIT_USE_DVI)
+        // #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (1 << PC_BIT_USE_GPIO_0_47))
+        #error "Please specify a supported board, or define a PALAVO_CONFIG (See README.md)."
+        // #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (1 << PC_BIT_USE_VGA_IN_TO_DVI))
+
+        #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (1 << PC_BIT_USE_GPIO_0_47))
+        #define PICO_PIO_USE_GPIO_BASE 1
+
+    #endif
 
 #endif
 
 
-#if USE_GPIO_32_47
+#if (PALAVO_CONFIG & (1 << PC_BIT_USE_DVI))
+    // Using DVI - define what mode to show on startup.
+    #pragma message "Using DVI"
+
+    #define USE_DVI 1
+    #define USE_VGA_CAPTURE 1
+
+    #if (PALAVO_CONFIG & (1 << PC_BIT_USE_VGA_IN_TO_DVI))
+
+        #pragma message "Display VGA In on DVI on startup"
+        #define USE_VGA_IN_TO_DVI 1
+
+    #else
+        #pragma message "Mirror VGA Out to DVI on startup"
+    #endif
+
+#else
+    #pragma message "Not using DVI"
+#endif
+
+
+#if (PALAVO_CONFIG & (1 << PC_BIT_USE_GPIO_0_47))
+
+    #define USE_GPIO_0_47 1
+
+    #if (!PICO_PIO_USE_GPIO_BASE)
+        #error "Can't use more than 32 pins on this microcontroller."
+    #else
+        #pragma message "Using GPIO 0-47"
+    #endif
+
+#else
+
+    #pragma message "Using GPIO 0-31"
+
+#endif
+
+
+#if USE_GPIO_0_47
+
+    #define CSYNC_IN_PIN 31
+    // #define RGB_IN_BASE_PIN 32
+    #define RGB_IN_BASE_PIN 0
+
+    #define RGB_OUT_BASE_PIN 32
 
 // #define LED_PIN PICO_DEFAULT_LED_PIN
 
-#define USE_LED_AS_IR_DEBUG 0
+    #define USE_LED_AS_IR_DEBUG 0
 
-#define IR_RX_PIN 46
+    // #define IR_RX_PIN 46
+    #define IR_RX_PIN 28
 
-#define CSYNC 31
+    #define CSYNC 31
 
-#define UART_TX_PIN 38
-#define UART_RX_PIN 39
+    // #define UART_TX_PIN 38
+    // #define UART_RX_PIN 39
 
-#define HSYNC_IN 0
-#define VSYNC_IN 1
+    #define UART_TX_PIN 20
+    #define UART_RX_PIN 21
 
-#define RGB_IN_FIRST_PIN 2
+    // #define HSYNC_IN 0
+    #define HSYNC_IN 26
+    #define VSYNC_IN 1
+
+    // #define RGB_IN_BASE_PIN 2
+
+    // #define GPIO_INPUT_MASK ((1 << 28)  | (1 << 27)  | (1 << 26) | 0x07fffff /* 22-0 */)
+    // #define GPIO_INPUT_MASK ((1 << VSYNC_IN) | (1 << HSYNC_IN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
 
 
-#define GPIO_INPUT_MASK ((1 << 28)  | (1 << 27)  | (1 << 26) | 0x07fffff /* 22-0 */)
+    // #if (UART_TX_PIN < 30)
+    //     #define GPIO_INPUT_MASK ((1 << VSYNC_IN) | (1 << HSYNC_IN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
+    // #else
+    #define GPIO_INPUT_MASK ((1 << 28)  | (1 << 27)  | (1 << 26) | 0x07fffff /* 22-0 */ & ~(1 << UART_TX_PIN) & ~(1 << UART_RX_PIN))
+    // #endif
+
+    // #define SIZE_TEST (1 << 32)
+
+    // #if SIZE_TEST
+    //     #warning SIZE_TEST seems to be 64 bits
+    //     #if (SIZE_TEST == 0x100000000)
+    //         #warning Yes
+    //     #endif
+    // #endif
 
 #else
 
+    #define CSYNC_IN_PIN 22
+    #define RGB_IN_BASE_PIN 0
+ 
+    // #define USE_DVI 1
+    // #define USE_VGA_CAPTURE 1
+    #define LED_PIN PICO_DEFAULT_LED_PIN
 
-// #define USE_DVI 1
-// #define USE_VGA_CAPTURE 1
-#define LED_PIN PICO_DEFAULT_LED_PIN
+    #define USE_LED_AS_IR_DEBUG 0
 
-#define USE_LED_AS_IR_DEBUG 0
+    #define UART_TX_PIN 20
+    #define UART_RX_PIN 21
+    #define CSYNC 22
 
-#define UART_TX_PIN 20
-#define UART_RX_PIN 21
-#define CSYNC 22
+    #define HSYNC_IN 26
+    #define VSYNC_IN 27
+    #define RGB_OUT_BASE_PIN 6
 
-#define HSYNC_IN 26
-#define VSYNC_IN 27
-#define RGB_IN_FIRST_PIN 0
+    #define IR_RX_PIN 28
 
-#define IR_RX_PIN 28
-
-#define GPIO_INPUT_MASK ((1 << VSYNC_IN) | (1 << HSYNC_IN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
+    #define GPIO_INPUT_MASK ((1 << VSYNC_IN) | (1 << HSYNC_IN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
 
 #endif
 
 
 #if USE_DVI
 
-#include "dvi64_graphics.h"
+    #include "dvi64_graphics.h"
 
-#if USE_VGA_CAPTURE
+    #if USE_VGA_CAPTURE
 
-#include "vga_capture.pio.h"
+        #include "vga_capture.pio.h"
 
-#endif
+    #endif
 
 #endif
 
@@ -207,13 +224,12 @@ uint8_t last_uart_char = 0;
 
 #define MAX_NO_OF_PINS 32
 
-#ifdef USE_GPIO_32_47
-
-#define MAX_BASE_PIN_NO 47
+#if PICO_PIO_USE_GPIO_BASE
+    #define MAX_BASE_PIN_NO 47
 
 #else
 
-#define MAX_BASE_PIN_NO 31
+    #define MAX_BASE_PIN_NO 31
 
 #endif
 
@@ -239,9 +255,9 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 
 #if USE_LED_AS_IR_DEBUG
 
-#ifdef LED_PIN
-    gpio_xor_mask(1u << LED_PIN); // toggle LED_PIN
-#endif
+    #ifdef LED_PIN
+        gpio_xor_mask(1u << LED_PIN); // toggle LED_PIN
+    #endif
 
 #endif
 
@@ -284,7 +300,7 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 
 #define CAPTURE_PIN_BASE 0 // HSYNC
 
-#ifdef USE_GPIO_32_47
+#if USE_GPIO_0_47
 
 #define CAPTURE_PIN_COUNT 27 // GPIO0 - GPIO26
 #define CAPTURE_TRIGGER_PIN_BASE 0 // one of the keybord row drivers
@@ -404,9 +420,40 @@ void logic_analyser_configure(PIO pio, uint sm, uint pin_base, uint pin_count, f
 }
 
 
-void logic_analyser_init(PIO pio, uint sm, uint pin_base, uint pin_count, float div, bool init) {
+void uart_putcf(uart_inst_t *uart, const char *s, int c) {
+    char str[80];
+    sprintf(str, s, c);
+    uart_puts(uart, str);
+}
+
+
+uint get_pio_number(PIO pio) {
+    int pio_num = 0;
+    if (pio == pio1) {
+        pio_num = 1;
+    } else if (pio == pio2) {
+        pio_num = 2;
+    }
+    return pio_num;
+}
+
+
+uint my_pio_set_gpio_base(PIO pio, uint base) {
+    char str[80];
+    uint res = pio_set_gpio_base(pio, base);
+    int pio_num = get_pio_number(pio);
+    sprintf(str, "pio_set_gpio_base(%d, %d); res: %d\n", pio_num, base, res);
+    uart_puts(UART_ID, str);
+    return res;
+}
+
+
+void logic_analyser_init(uint pin_base, uint pin_count, float div, bool init) {
     // Load a program to capture n pins. This is just a single `in pins, n`
     // instruction with a wrap.
+
+    PIO pio = pio2;
+    uint sm = 3;
 
     static bool initialised;
     static uint16_t prog_inst;
@@ -432,12 +479,6 @@ void logic_analyser_init(PIO pio, uint sm, uint pin_base, uint pin_count, float 
         prog.length = 1;
         prog.origin = -1;
 
-#if USE_GPIO_32_47
-        // this is designed for when ((pin_base >= 16) && (pin_base + pin_count > 32))
-        // so set it - just in case
-        pio_set_gpio_base(pio, 16);
-#endif
-
         offset = pio_add_program(pio, &prog);
         logic_analyser_configure(pio, sm, pin_base, pin_count, div, offset);
         initialised = true;
@@ -453,13 +494,16 @@ void logic_analyser_init(PIO pio, uint sm, uint pin_base, uint pin_count, float 
     }
 }
 
-#ifdef USE_GPIO_32_47
+#if PICO_PIO_USE_GPIO_BASE
 
-void logic_analyser0_init(PIO pio, uint sm, uint pin_base, uint pin_count, float div, bool init) {
+void logic_analyser0_init(/*PIO pio, uint sm,*/ uint pin_base, uint pin_count, float div, bool init) {
     // Load a program to capture n pins. This is just a single `in pins, n`
     // instruction with a wrap.
 
     // This is a copy of `logic_analyser_init()` with the setting of the gpio_base removed
+
+    PIO pio = pio0;
+    uint sm = 3;
 
     static bool initialised;
     static uint16_t prog_inst;
@@ -515,7 +559,7 @@ bool pio_sm_exec_timeout_us(PIO pio, uint sm, uint instr, uint32_t timeout_us) {
 }
 
 
-#ifdef USE_GPIO_32_47
+#if PICO_PIO_USE_GPIO_BASE
 
 // When this is #define'ed instead of a global variable the triggering respose is much slower
 // Is it because it's stored in flash rather than ram? todo -find out
@@ -569,15 +613,9 @@ void init_ir_rx(bool init) {
 
         if (!initialised) {
 
-#if IR_RX_PIN >= 32
-            int res = pio_set_gpio_base(ir_rx_pio, 16);
-            uart_putuif(UART_ID, "pio_set_gpio_base for IR RX: %d\n", res);
+            // IR_RX_PIN must always be on GPIO16 or higher
 
-#else
-#if USE_GPIO_32_47
-            pio_set_gpio_base(ir_rx_pio, 0);
-#endif
-#endif
+            int res = my_pio_set_gpio_base(ir_rx_pio, 16);
             offset = pio_add_program(ir_rx_pio, &nec_ir_rx_program);
 
         #if USE_LED_AS_IR_DEBUG
@@ -634,40 +672,71 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
 
     init_ir_rx(false);
 
-#if USE_GPIO_32_47
+#if PICO_PIO_USE_GPIO_BASE
 
-    if ((g_pins_base >= 16) && (g_pins_base + g_no_of_pins_to_capture > 32)) { 
+    PIO pio_with_base_0;
+    PIO pio_with_base_16;
+
+    uint la_capture_base = pio_get_gpio_base(la_capture_pio);
+    if (la_capture_base == 0) {
+        // la_capture_base is 0, so we need to change the base of this pio to 16
+        my_pio_set_gpio_base(pio, 16);
+        pio_with_base_16 = pio;
+        pio_with_base_0 = la_capture_pio;
+    } else {
+        // la_capture_base is 16, so we need to change the base of this pio to 0
+        my_pio_set_gpio_base(pio, 0);
+        pio_with_base_0 = pio;
+        pio_with_base_16 = la_capture_pio;
+    }
+
+    if ((g_pins_base >= 16) && (g_pins_base + g_no_of_pins_to_capture > 32)) {
         // res = pio_set_gpio_base(pio, 16);
-        uart_puts(UART_ID, "using PIO2 to capture\n");
+        uart_puts(UART_ID, "using pio_with_base_16 to capture\n");
         // leave the pio pointing here
 
         // PIO capture_pio = pio;
         // uint capture_sm = sm;
 
-        logic_analyser_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
+        // logic_analyser_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
+        // logic_analyser_init(pio_with_base_16, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
+
+        capture_pio = pio_with_base_16;
+        capture_sm = sm;
 
     } else {
-        uart_puts(UART_ID, "using PIO0 to capture\n");
-        capture_pio = la_capture_pio; //it's badly named - todo - change it 
-        capture_sm = la_capture_sm; //it's badly named - todo - change it 
+        uart_puts(UART_ID, "using pio_with_base_0 to capture\n");
+        capture_pio = pio_with_base_0; //it's badly named - todo - change it 
+        capture_sm = sm; //it's badly named - todo - change it 
 
-        logic_analyser0_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
+        // logic_analyser0_init(pio_with_base_0, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
     }
 
     if (trigger_pin >= 32) {
         // leave the pio pointing here
-        uart_puts(UART_ID, "using PIO2 to trigger\n");
+        uart_puts(UART_ID, "using pio_with_base_16 to trigger\n");
 
         // PIO capture_pio = pio;
         // uint capture_sm = sm;
 
         // adjust the trigger_pin for use in the inline PIO instructions for triggering
         trigger_pin -= 16;
+        trigger_pio = pio_with_base_16;
+        trigger_sm = sm;
     } else {
-        uart_puts(UART_ID, "using PIO0 to trigger\n");
-        trigger_pio = la_capture_pio; //it's badly named - todo - change it 
+        uart_puts(UART_ID, "using pio_with_base_0 to trigger\n");
+        trigger_pio = pio_with_base_0; //it's badly named - todo - change it 
         trigger_sm = la_capture_sm; //it's badly named - todo - change it 
     }
+
+    uart_putcf(UART_ID, "capture_pio: %d\n", get_pio_number(capture_pio));
+    uart_putcf(UART_ID, "trigger_pio: %d\n", get_pio_number(trigger_pio));
+
+
+    // Initialise both LAs, one on pio0 and one on pio2, regardles of whether we use them bith, or not.
+    logic_analyser_init(/*pio_with_base_16, capture_sm, */ g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
+    logic_analyser0_init(/*pio_with_base_16, capture_sm, */ g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
+
     
     // logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
     // ooh, this aint gonna work, yet
@@ -895,13 +964,27 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
 
     clear_previous_edges();
 
-#ifdef USE_GPIO_32_47
+#if PICO_PIO_USE_GPIO_BASE
 
-    if (capture_pio == pio) {
-        logic_analyser_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
-    } else {
-        logic_analyser0_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
-    }
+    // if (capture_pio == pio) {
+    //     logic_analyser_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
+    // } else {
+    //     logic_analyser0_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
+    // }
+
+    // if (capture_pio == pio) {
+
+    // deinit pio2, sm (2, 3) as we may need to change the base at some point in the future
+    // I don't think there's any need to 
+    logic_analyser_init(/*pio, sm,*/ g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
+    // } else {
+    //     logic_analyser0_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
+    // }
+
+    // deitit pio 0, sm 3
+    logic_analyser0_init(/*la_capture_pio, la_capture_sm,*/ g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
+
+
 
 #else 
     logic_analyser_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
@@ -952,15 +1035,6 @@ int mag_factor(int value) {
         return value / (g_mag + 1);
     }
 }
-
-
-void uart_putcf(uart_inst_t *uart, const char *s, int c) {
-    char str[80];
-    sprintf(str, s, c);
-    uart_puts(uart, str);
-}
-
-
 
 
 // writes a formatted integer to the VGA framebuffer
@@ -3097,7 +3171,7 @@ void init_pio_vga_capture_with_vsync_and_vsync_on_csync() {
     if (vga_capture_mode == VC_NONE) {
         vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
 
-        vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, RGB_IN_FIRST_PIN);
+        vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, RGB_IN_BASE_PIN);
 
         vga_detect_vsync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_program);
         vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, HSYNC_IN);
@@ -3117,26 +3191,17 @@ void init_pio_vga_capture_with_vsync_and_vsync_on_csync() {
 
 
 // capture the RGB of pins 6 to 11 using CSYNC of pins 22.
-// or the RGB of pins 33 to 38 using CSYNC of pin 32
+// or the RGB of pins 32 to 37 using CSYNC of pin 31
 void init_pio_vga_detect_vsync_on_csync() {
-
-#ifdef USE_GPIO_32_47
-    #define CSYNC_IN_PIN 31
-    #define RGB_OUT_FIRST_PIN 32
-#else
-    #define CSYNC_IN_PIN 22
-    #define RGB_OUT_FIRST_PIN 6
-#endif
 
     if (vga_capture_mode == VC_NONE) {
 
-#if USE_GPIO_32_47
-        pio_set_gpio_base(vga_capture_pio, 16);
-        // #warning pio_set_gpio_base(vga_capture_pio, 16)
+#if ((RGB_OUT_BASE_PIN + 6) >= 32)
+        my_pio_set_gpio_base(vga_capture_pio, 16);
 #endif
 
         vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
-        vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, RGB_OUT_FIRST_PIN);
+        vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, RGB_OUT_BASE_PIN);
 
         vga_detect_vsync_on_csync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_on_csync_program);
         vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, CSYNC_IN_PIN);
@@ -3176,8 +3241,8 @@ void deinit_vga_capture() {
         dma_channel_unclaim(rgb_test_chan_1);
         dma_channel_unclaim(rgb_test_chan_0);
 
-#if USE_GPIO_32_47
-        pio_set_gpio_base(vga_capture_pio, 0);
+#if PICO_PIO_USE_GPIO_BASE
+        my_pio_set_gpio_base(vga_capture_pio, 0);
 #endif
 
         vga_capture_mode = VC_NONE;
@@ -3234,6 +3299,8 @@ uint check_ir() {
             last_ir_button_time = time_now;
             last_ir_button_start_time = time_now;
             last_ir_command = ir_command;
+            sprintf(str, "%#x " , ir_command);
+            writeString(str);
         } else {
             // ir_command == 0, ie repeat code
            if (last_ir_button_start_time) {
@@ -3242,7 +3309,7 @@ uint check_ir() {
                     // Had enough time to allow a repeat code
                     if (time_now - last_ir_button_time < 500) {
                         // Still haven't timed out between repeat codes
-                        ir_command = last_ir_command;                
+                        ir_command = last_ir_command;
                         last_ir_button_time = time_now;
                         sprintf(str, "repeat %#x ", ir_command);
                         writeString(str);
@@ -3406,13 +3473,16 @@ int main() {
     
     stdio_init_all();
 
-    #ifdef USE_GPIO_32_47
+#ifdef USE_GPIO_0_47
+
+    uart_init(UART_ID, BAUD_RATE);
 
     gpio_set_function(UART_TX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_TX_PIN));
     gpio_set_function(UART_RX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_RX_PIN));
-    uart_init(UART_ID, BAUD_RATE);
 
-    #else
+    // gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
+    // gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
+#else
 
     // todo - we can probably and should use the code below (in the #else), which is from the SDK docs
 
@@ -3420,11 +3490,14 @@ int main() {
 
     // Set the TX and RX pins by using the function select on the GPIO
     // Set datasheet for more information on function select
-    gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
-    gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
+    // gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
+    // gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
+    gpio_set_function(UART_TX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_TX_PIN));
+    gpio_set_function(UART_RX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_RX_PIN));
+
     // gpio_set_function(LED_PIN, GPIO_FUNC_UART);
 
-    #endif
+#endif
 
 #if USE_LED_AS_IR_DEBUG
 
@@ -3450,6 +3523,16 @@ int main() {
     gpio_pull_up(IR_RX_PIN);
 
     uart_putcf(UART_ID, "GPIO Inputs: %d\n", GPIO_INPUT_MASK);
+
+#if PICO_PIO_USE_GPIO_BASE
+    gpio_init(40);
+    gpio_set_dir(40, GPIO_IN); // set IR_RX_PIN GPIO to an input
+    gpio_pull_up(40);
+
+    gpio_init(CSYNC);
+    gpio_set_dir(CSYNC, GPIO_IN); // set IR_RX_PIN GPIO to an input
+    gpio_pull_up(CSYNC);
+#endif
 
     uart_puts(UART_ID, "\n\n");
     // uart_puts(UART_ID, left_rect_text);
@@ -3561,11 +3644,13 @@ int main() {
 
     dvi_testbars();
 
+    sleep_ms(100);
+
 #endif
 
     // Initialize the VGA screen
 
-#if USE_GPIO_32_47
+#if PICO_PIO_USE_GPIO_BASE
 
     // When connected to another Pico 2 (for VGA to DVI conversion) CSYNC seems
     // to suffer electrically. Increasing the drive strength improves it.
@@ -3586,29 +3671,22 @@ int main() {
 
     uart_puts(UART_ID, "Initialising VGA...\n");
     
-#if USE_GPIO_32_47
-    #define CSYNC 31
-    #define RGB_BASE_PIN 32
-#else 
-    #define CSYNC 22
-    #define RGB_BASE_PIN 6
-#endif
+    // sometimes we the VGA to DVI doesn't work if this delay is too short
+    // sleep_ms(1);
 
-    initVGA(CSYNC, RGB_BASE_PIN /*
-    #ifndef PIMORONI_PICO_LIPO2XL_W_RP2350
-    // CSYNC must be in the range 0-31
-    #define CSYNC 22
-    #define RGB_OUT_START_PIN 6
-    PIO pio_2 = pio1;
-    #else
-    // CSYNC can also be in the range 32-47
-    #define CSYNC 31
-    #define RGB_OUT_START_PIN 32
+    // uart_puts(UART_ID, "Initialising VGA...\n");
+    
+    // uart_putcf(UART_ID, "RGB_OUT_BASE_PIN: %x\n", RGB_OUT_BASE_PIN);
+    
+    
 
-    PIO pio_2 = pio1;
-    pio_set_gpio_base(pio_2, 16);
-    #endif
-*/) ;
+    // The VGA driver state mchines are on pio1
+
+    if ((RGB_OUT_BASE_PIN + 6) >= 32) {
+        my_pio_set_gpio_base(pio1, 16);
+    }
+
+    initVGA(CSYNC, RGB_OUT_BASE_PIN);
     init_line_colours();
 
     // We're going to capture into a u32 buffer, for best DMA efficiency. Need
@@ -3650,7 +3728,11 @@ int main() {
 
     // Define PIO and State Machines for the trigger and capture logic.
     // Could make these more global to avoid lots of parameter passing - todo. 
+#if PICO_PIO_USE_GPIO_BASE 
+    PIO pio = pio2;
+#else
     PIO pio = pio1;
+#endif
     uint sm = 3;
 
     // Claim a DMA channel for the pio state machine(s) used for capturing.

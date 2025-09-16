@@ -38,12 +38,12 @@ if (PICO_RP2350)
     # add_compile_definitions(USE_DVI=0)
 endif()
 
-# without the following we can't pass the `PALAVO_TYPE` definition 
-# `-DPALAVO_TYPE=x` as an argument when running `cmake`.
+# without the following we can't pass the `PALAVO_CONFIG` definition 
+# `-DPALAVO_CONFIG=x` as an argument when running `cmake`.
 
-if (DEFINED PALAVO_TYPE)
-    # add_compile_definitions(PALAVO_TYPE
-    add_compile_definitions(PALAVO_TYPE=${PALAVO_TYPE})
+if (DEFINED PALAVO_CONFIG)
+    # add_compile_definitions(PALAVO_CONFIG
+    add_compile_definitions(PALAVO_CONFIG=${PALAVO_CONFIG})
 endif()
 
 # must match with executable name
