@@ -144,16 +144,16 @@
 
     #define USE_LED_AS_IR_DEBUG 0
 
-    // #define IR_RX_PIN 46
-    #define IR_RX_PIN 28
+    #define IR_RX_PIN 46
+    // #define IR_RX_PIN 28
 
     #define CSYNC 31
 
-    // #define UART_TX_PIN 38
-    // #define UART_RX_PIN 39
+    #define UART_TX_PIN 38
+    #define UART_RX_PIN 39
 
-    #define UART_TX_PIN 20
-    #define UART_RX_PIN 21
+    // #define UART_TX_PIN 20
+    // #define UART_RX_PIN 21
 
     // #define HSYNC_IN 0
     #define HSYNC_IN 26
@@ -168,7 +168,7 @@
     // #if (UART_TX_PIN < 30)
     //     #define GPIO_INPUT_MASK ((1 << VSYNC_IN) | (1 << HSYNC_IN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
     // #else
-    #define GPIO_INPUT_MASK ((1 << 28)  | (1 << 27)  | (1 << 26) | 0x07fffff /* 22-0 */ & ~(1 << UART_TX_PIN) & ~(1 << UART_RX_PIN))
+    #define GPIO_INPUT_MASK ((1 << 28)  | (1 << 27)  | (1 << 26) | 0x07fffff) /* 22-0 */ /*& ~(1 << UART_TX_PIN) & ~(1 << UART_RX_PIN))*/
     // #endif
 
     // #define SIZE_TEST (1 << 32)
@@ -1168,9 +1168,12 @@ int plot_height;
 #define STATUSBAR_INFO_RIGHT STATUSBAR_INFO_LEFT + STATUSBAR_INFO_WIDTH
 #define STATUSBAR_INFO_COLOR STATUSBAR_COLOR
 
+// There must be at least 48 of these colours - one for every possible GPIO
 char colours[] = {DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, BLUE, MAGENTA, LIGHT_GREY_64, WHITE, DARK_GREY_64,
-                  DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, BLUE, /*MAGENTA,*/ LIGHT_GREY_64, /*WHITE,*/ DARK_GREY_64,
-                  DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, DARK_RED_64, DARK_RED_64, DARK_RED_64,BLUE, MAGENTA, LIGHT_GREY_64, WHITE, DARK_GREY_64,
+                  DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, BLUE, MAGENTA, LIGHT_GREY_64, WHITE, DARK_GREY_64,
+                //   DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, DARK_RED_64, DARK_RED_64, DARK_RED_64,BLUE, MAGENTA, LIGHT_GREY_64, WHITE, DARK_GREY_64,
+                  DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, BLUE, MAGENTA, LIGHT_GREY_64, WHITE, DARK_GREY_64,
+                  DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, BLUE, MAGENTA, LIGHT_GREY_64, WHITE, DARK_GREY_64,
                   DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, BLUE, MAGENTA, LIGHT_GREY_64, WHITE, DARK_GREY_64};
 
 #define MINIMAP_SCROLLBAR_HEIGHT 2
@@ -1276,9 +1279,24 @@ void set_plot_line_colors(uint pin_count) {
     int y_padding = get_plot_padding();
     int y = PLOT_TOP;
 
+    int get_colour_index(int pin) {
+
+#if PICO_PIO_USE_GPIO_BASE
+        if (g_pins_base < 16) {
+            return (g_pins_base + pin) % 32;
+        } else {
+            // sample is between GP16 and GP47
+            return ((g_pins_base + pin + 16) % 32) + 16;
+        }
+#else
+        return = (g_pins_base + pin) % 32;
+#endif
+
+    }
+
     for (int pin = 0; pin < pin_count; ++pin) {
 
-        char line_col = colours[pin];
+        char line_col = colours[get_colour_index(pin)];
 
         // char back_col = BLACK;
         // if (pin == g_channel) {
@@ -1302,7 +1320,7 @@ void set_plot_line_colors(uint pin_count) {
     int minimap_height = get_minimap_height();
     int minimap_padding = get_minimap_padding();
     for (int pin = 0; pin < pin_count; ++pin) {
-        char line_col = colours[pin];
+        char line_col = colours[get_colour_index(pin)];
         for (int i = 0; i < minimap_height; i++) {
             set_line_colors(y + i, BLACK, line_col, 0, 0);
         }

@@ -336,7 +336,7 @@ If you're missing the DVI output, you can make a VGA to DVI converter and connec
  
  (Or any other suitable board with an RP235x.)
 
- Palavo can be configured to be a 6-bit-colour, 3.3V-logic-level, VGA to DVI converter. It is the same as [PALAVOTYPE](#PALAVO-TYPE-1) mode except that it starts up in the 'capture VGA in' mode rather than the 'mirror VGA out' mode. To buid the firmware repeat the rest of the previous build process, only use this CMAKE command instead:
+ Palavo can be configured to be a 6-bit-colour, 3.3V-logic-level, VGA to DVI converter. It is the same as `PALAVO_CONFIG=1` mode except that it starts up in the 'capture VGA in' mode rather than the 'mirror VGA out' mode. To buid the firmware repeat the rest of the previous build process, only use this CMAKE command instead:
 
 `$ cmake ../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=5`
 
@@ -667,20 +667,26 @@ How many combinations of Palavo are there?
 
 N.B. Available for capture does NOT mean you can put external signals into any GPIO pins that are used as outputs. It means you can still capture those output signals.
 
-## Palavo Types
+## Palavo Config
 
-Palavo can be configured, depending on the microcontroller, in one of 5 modes and the mode is selected by passing the additional define into the CMAKE command line, above:
+Palavo can be configured, depending on the variant of the RP235x, in one of 5 modes and the mode is selected by passing the additional define into the CMAKE command line, above:
 
-` -DPALAVO_CONFIG=X` where X is a number between 0 and 5, although 4 is the same as 0.
+` -DPALAVO_CONFIG=X` where X is a number between 0 and 7, although 4 is the same as 0, and 6 is the same as 2.
 
-| PALAVO_CONFIG | RP235x Variant | VGA Out | DVI Out | DVI Output at Startup | GPIOs |
-|    :---:    | :---           |  :---:  |  :---:  |         :---:         | :---  |
-|      0      | A or B         |   Yes   |   No    |          n/a          | 0-31  |
-|      1      | A or B         |   Yes   |   Yes   |        VGA Out        | 0-31  |
-|      2      | B              |   Yes   |   No    |          n/a          | 0-47  |
-|      3      | B              |   Yes   |   Yes   |        VGA Out        | 0-47  |
-|      4      | A or B         |   Yes   |   No    |          n/a          | 0-31  |
-|      5      | A or B         |   Yes   |   Yes   |        VGA In         | 0-31  |
+| PALAVO_CONFIG | RP235x Variant | DVI Output at Startup | Use High GPIO for UI | DVI Out | VGA Out |
+|     :---:     | :---           |         :---:         |        :---:         |  :---:  |  :---:  |
+|       0       | A or B         |          n/a          |          No          |   No    |   Yes   |
+|       1       | A or B         |        VGA Out        |          No          |   Yes   |   Yes   |
+|       2       | B              |          n/a          |          Yes         |   No    |   Yes   |
+|       3       | B              |        VGA Out        |          Yes         |   Yes   |   Yes   |
+|       4       | A or B         |          n/a          |          No          |   No    |   Yes   |
+|       5       | A or B         |        VGA In         |          No          |   Yes   |   Yes   |
+|       6       | A or B         |          n/a          |          Yes         |   No    |   Yes   |
+|       7       | A or B         |        VGA In         |          Yes         |   Yes   |   Yes   |
+
+
+
+Use_Off_Pico_UI
 
 Currently only Types 0, 1, 2 and 4, and 5 have been tested (4 is the same as 0). 
 
