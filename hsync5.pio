@@ -113,7 +113,7 @@ static inline void hsync5_program_init(PIO pio, uint sm, uint offset, uint pin, 
     }
     
     // Set the pin direction to output at the PIO
-    pio_sm_set_consecutive_pindirs(pio, sm, pin, 2, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, no_of_pins, true);
 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);

@@ -203,7 +203,7 @@
 
     #define GPIO_INPUT_MASK ((1 << VSYNC_IN) | (1 << HSYNC_IN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
 
-#endif
+    #endif
 
 
 #if USE_DVI
@@ -333,6 +333,7 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 uint g_sample_frequency = CAPTURE_SAMPLE_FREQ_DIVISOR;
 uint8_t g_no_of_captured_pins = CAPTURE_PIN_COUNT;
 uint8_t g_pins_base = CAPTURE_PIN_BASE;
+uint8_t g_pins_base_captured;
 
 #define HORIZONTAL_BLANKING_PIXELS 160
 #define VERTICAL_BLANKING_PIXELS 45
@@ -961,6 +962,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     pio_sm_set_enabled(capture_pio, capture_sm, false); // Disable the state machine, which might save a bit of power? (todo - find out)
 
     g_no_of_captured_pins = g_no_of_pins_to_capture;
+    g_pins_base_captured = g_pins_base;
 
     clear_previous_edges();
 
@@ -1282,11 +1284,11 @@ void set_plot_line_colors(uint pin_count) {
     int get_colour_index(int pin) {
 
 #if PICO_PIO_USE_GPIO_BASE
-        if (g_pins_base < 16) {
-            return (g_pins_base + pin) % 32;
+        if (g_pins_base_captured < 16) {
+            return (g_pins_base_captured + pin) % 32;
         } else {
             // sample is between GP16 and GP47
-            return ((g_pins_base + pin + 16) % 32) + 16;
+            return ((g_pins_base_captured + pin + 16) % 32) + 16;
         }
 #else
         return = (g_pins_base + pin) % 32;
