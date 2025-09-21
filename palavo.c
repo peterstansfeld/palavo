@@ -46,6 +46,7 @@
 #define PC_BIT_USE_DVI 0
 #define PC_BIT_USE_GPIO_0_47 1
 #define PC_BIT_USE_VGA_IN_TO_DVI 2
+#define PC_BIT_USE_NEW_IO_MAPPING 3
 
 // See README.md for more details on PALAVO_CONFIG
 
@@ -86,8 +87,9 @@
         #error "Please specify a supported board, or define a PALAVO_CONFIG (See README.md)."
         // #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (1 << PC_BIT_USE_VGA_IN_TO_DVI))
 
-        #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (1 << PC_BIT_USE_GPIO_0_47))
-        #define PICO_PIO_USE_GPIO_BASE 1
+        // #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (1 << PC_BIT_USE_GPIO_0_47))
+        #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (0 << PC_BIT_USE_GPIO_0_47) | (1 << PC_BIT_USE_VGA_IN_TO_DVI) | (1 << PC_BIT_USE_NEW_IO_MAPPING))
+        #define PICO_PIO_USE_GPIO_BASE 0
 
     #endif
 
@@ -128,6 +130,14 @@
 #else
 
     #pragma message "Using GPIO 0-31"
+
+#endif
+
+#if (PALAVO_CONFIG & (1 << PC_BIT_USE_NEW_IO_MAPPING))
+
+    #define USE_NEW_IO_MAPPING 1
+
+    #pragma message "Using new IO mapping"
 
 #endif
 
@@ -182,6 +192,32 @@
 
 #else
 
+    // #if USE_NEW_IO_MAPPING
+
+
+    // #define CSYNC_IN_PIN 0
+    // #define RGB_IN_BASE_PIN 1
+ 
+    // // #define USE_DVI 1
+    // // #define USE_VGA_CAPTURE 1
+    // #define LED_PIN PICO_DEFAULT_LED_PIN
+
+    // #define USE_LED_AS_IR_DEBUG 0
+
+    // #define UART_TX_PIN 8
+    // #define UART_RX_PIN 9
+    // #define CSYNC 22
+
+    // #define HSYNC_IN 0
+    // #define VSYNC_IN 7
+    // // #define RGB_OUT_BASE_PIN 6
+
+    // #define IR_RX_PIN 10
+
+    // #define GPIO_INPUT_MASK ((1 << VSYNC_IN) | (1 << HSYNC_IN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
+
+
+    // #else
     #define CSYNC_IN_PIN 22
     #define RGB_IN_BASE_PIN 0
  
@@ -204,6 +240,7 @@
     #define GPIO_INPUT_MASK ((1 << VSYNC_IN) | (1 << HSYNC_IN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
 
     #endif
+// #endif
 
 
 #if USE_DVI
@@ -439,6 +476,7 @@ uint get_pio_number(PIO pio) {
 }
 
 
+#if PICO_PIO_USE_GPIO_BASE
 uint my_pio_set_gpio_base(PIO pio, uint base) {
     char str[80];
     uint res = pio_set_gpio_base(pio, base);
@@ -447,6 +485,7 @@ uint my_pio_set_gpio_base(PIO pio, uint base) {
     uart_puts(UART_ID, str);
     return res;
 }
+#endif
 
 
 void logic_analyser_init(uint pin_base, uint pin_count, float div, bool init) {
@@ -616,7 +655,9 @@ void init_ir_rx(bool init) {
 
             // IR_RX_PIN must always be on GPIO16 or higher
 
-            int res = my_pio_set_gpio_base(ir_rx_pio, 16);
+#if PICO_PIO_USE_GPIO_BASE
+            my_pio_set_gpio_base(ir_rx_pio, 16);
+#endif
             offset = pio_add_program(ir_rx_pio, &nec_ir_rx_program);
 
         #if USE_LED_AS_IR_DEBUG
@@ -752,7 +793,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
 
 #else
 
-    logic_analyser_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
+    logic_analyser_init(g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
 
 #endif
 
@@ -989,7 +1030,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
 
 
 #else 
-    logic_analyser_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
+    logic_analyser_init(g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
 #endif
 
     // Restart the ir rx as we stopped it at the top of this function.
@@ -1291,7 +1332,7 @@ void set_plot_line_colors(uint pin_count) {
             return ((g_pins_base_captured + pin + 16) % 32) + 16;
         }
 #else
-        return = (g_pins_base + pin) % 32;
+        return (g_pins_base + pin) % 32;
 #endif
 
     }
@@ -3702,9 +3743,11 @@ int main() {
 
     // The VGA driver state mchines are on pio1
 
+    #if PICO_PIO_USE_GPIO_BASE
     if ((RGB_OUT_BASE_PIN + 6) >= 32) {
         my_pio_set_gpio_base(pio1, 16);
     }
+#endif
 
     initVGA(CSYNC, RGB_OUT_BASE_PIN);
     init_line_colours();
@@ -3751,7 +3794,7 @@ int main() {
 #if PICO_PIO_USE_GPIO_BASE 
     PIO pio = pio2;
 #else
-    PIO pio = pio1;
+    PIO pio = pio2;
 #endif
     uint sm = 3;
 
