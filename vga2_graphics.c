@@ -176,7 +176,7 @@ void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour, ui
      vga_1bit_data_array[line * WORDS_PER_LINE] = (((fore_colour << 6) | (back_colour)) << 16) | 639;
 }
 
-void initVGA(uint csync_pin, uint rgb_base_pin) {
+void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
     // Choose which PIO instance to use (there are two instances (three for rp2350), each with 4 state machines)
 
     PIO pio_2 = pio1;
@@ -307,7 +307,7 @@ void initVGA(uint csync_pin, uint rgb_base_pin) {
 #if SYS_CLK_KHZ == 125000u
       rgb5_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN);
 #elif SYS_CLK_KHZ == 150000u
-    rgb5_150_mhz_rp235x_program_init(pio_2, rgb5_sm, rgb5_offset, rgb_base_pin, 6);
+    rgb5_150_mhz_rp235x_program_init(pio_2, rgb5_sm, rgb5_offset, rgb_base_pin, rgb_pin_count);
 #elif SYS_CLK_KHZ == 250000u
       rgb5_250_mhz_program_init(pio_2, rgb5_250_mhz_sm, rgb5_offset, LO_GRN);
 #endif

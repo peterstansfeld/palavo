@@ -47,6 +47,59 @@ VGA_Out_Light_Green  GP9 12                29 GP22  VGA_Out_CSYNC
                     GP15 20                21 GP16
 ```
 
+Suggest changing the above to this...
+
+```
+      VGA_Out_VSYNC  GP0  1                40 VBUS
+VGA_Out_HSYNC_CSYNC  GP1  2                39 VSYS
+                     GND  3                38 GND
+  VGA_Out_Dark_Blue  GP2  4                37 3V3 EN
+ VGA_Out_Light_Blue  GP3  5                36 3V3 OUT
+ VGA_Out_Dark_Green  GP4  6                35 ADC VREF
+VGA_Out_Light_Green  GP5  7                34 GP28
+                     GND  8                33 ADC GND
+   VGA_Out_Dark_Red  GP6  9                32 GP27
+  VGA_Out_Light_Red  GP7 10     PICO 2     31 GP26
+          Serial_TX  GP8 11                30 RUN
+          Serial_RX  GP9 12                29 GP22
+                     GND 13                28 GND
+      Infra_Red_RX  GP10 14                27 GP21
+                    GP11 15                26 GP20
+                    GP12 16                25 GP19
+                    GP13 17                24 GP18
+                    GND  18                23 GND
+                    GP14 19                22 GP17
+                    GP15 20                21 GP16
+```
+
+... so that we can have the possibility of using HSTX if we want, and by changing the VGA_Out\*s to VGA_In\*s we can make a VGA - DVI Converter with another Pico 2, which can sit on top, or underneath, the Palavo Pico 2 (with only the connections we need; these we also include VSYS, all the GNDs (for strength), and not include SERIAL Tx and RX, and Infra-Red RX)...
+
+```
+       VGA_In_VSYNC  GP0  1                40 VBUS
+ VGA_In_HSYNC_CSYNC  GP1  2                39 VSYS
+                     GND  3                38 GND
+   VGA_In_Dark_Blue  GP2  4                37 3V3 EN
+  VGA_In_Light_Blue  GP3  5                36 3V3 OUT
+  VGA_In_Dark_Green  GP4  6                35 ADC VREF
+ VGA_In_Light_Green  GP5  7                34 GP28  Infra_Red_RX
+             Ground  GND  8                33 ADC GND
+    VGA_In_Dark_Red  GP6  9                32 GP27
+   VGA_In_Light_Red  GP7 10     PICO 2     31 GP26
+          Serial_TX  GP8 11                30 RUN
+          Serial_RX  GP9 12                29 GP22
+                     GND 13                28 GND
+     VGA_Out_CSYNC  GP10 14                27 GP21
+       VGA_Out_RGB  GP11 15                26 GP20
+           DVI_D0+  GP12 16                25 GP19  DVI_D2+
+           DVI_D0-  GP13 17                24 GP18  DVI_D2-
+                    GND  18                23 GND
+           DVI_CK+  GP14 19                22 GP17  DVI_D1+
+           DVI_CK-  GP15 20                21 GP16  DVI_D1-
+```
+
+Could add a 3-bit VGA_Out for testing purposes, I suppose. But why? Ok, let's make one of these. Let's use bit 3 of the PALAVO_CONFIG, so 8 and add bit 2 (for start in DVI in mode), so 12 and add bit 0 dor DVI enable, so 13 - uh oh.
+
+
 The VGA_Out_signals need to be fed into a resistor network to provide the voltages for the Red, Green, and Blue colour pins on a VGA cable that's attached to a VGA monitor:
 
 ```
@@ -95,6 +148,8 @@ Create a suitably-named directory (the target for this example is a Raspberry Pi
 Specify where the pico-sdk directory can be found:
 
 `$ export PICO_SDK_PATH=~/pico/pico-sdk`
+
+(In my case, `$ export PICO_SDK_PATH=~/pico2.2/pico/pico-sdk`)
 
 Specify where the top level CMakeLists.txt file can be found - in this case
 it's the grandparent directory `../../`, and specify the board `pico2`:
@@ -266,6 +321,10 @@ VGA_Out_Light_Green        VGA_In_Light_Green
 VGA_Out_Red                VGA_In_Dark_Red & VGA_In_Light_Red
 ```
 
+Start both devices, and using the serial terminal press 'v' once or twice and hopefully you should see Hunter's demo appearing on the DVI monitor.
+
+
+
 If you're wondering why Palavo uses 6-bit colour, it's because when converting the VGA output to DVI, using the HSTX peripheral on the RP235x, the colours remain looking the same. This is due to each colour having the same number of bits, which is not the case with 4-bit colour. To save SRAM used by the VGA driver each horizontal line consists of only two 6-bit colours.
 
 
@@ -339,6 +398,49 @@ If you're missing the DVI output, you can make a VGA to DVI converter and connec
  Palavo can be configured to be a 6-bit-colour, 3.3V-logic-level, VGA to DVI converter. It is the same as `PALAVO_CONFIG=1` mode except that it starts up in the 'capture VGA in' mode rather than the 'mirror VGA out' mode. To buid the firmware repeat the rest of the previous build process, only use this CMAKE command instead:
 
 `$ cmake ../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=5`
+
+
+## Configuration 8
+
+#### PALAVO_CONFIG=8
+
+What if we wanted to capture 32 contiguous channels? Well, unfortunately, it's not possible with the Pimoroni Pico LiPo 2 XL W because some GPIO pins are not broken out, and others are used for the on-board PSRAM and the wireless module. The answer is to use something that breaks out every GPIO pin, and the only boards which do that, that I know of, are the Pimoroni PGA2350 and the Solder Party RP2350 Stamp XL. Here's the Stamp XL housed in a Solder Party RP2xxx Stamp Carrier Basic:
+
+
+ G 0  VGA_Out_CSYNC            USB                          GND G
+ G 1  VGA_Out_Dark_Blue                                      3V G
+ G 2  VGA_Out_Light_Blue                                     5V G
+ G 3  VGA_Out_Dark_Green  -------------------               BAT G
+ G 4  VGA_Out_Light_Green                    |             BOOT G
+ G 5  VGA_Out_Dark_Red                       |              RST G
+ G 6  VGA_Out_Light_Red                      |              CLK G
+ G 7  Infra_Red_RX|                          |               IO G
+ G 8  Serial_TX   |                          |               EN G
+ G 9  Serial_RX   |                          |         BAT STAT G
+ G 10             |                          |               47 G
+ G 11             |      RP2350 Stamp XL     |               46 G
+ G 12             |                          |               45 G
+ G 13             |                          |               44 G
+ G 14             |                          |               43 G
+ G 15             |                          |               42 G
+ G 16             |                          |               41 G
+ G 17             |                          |               40 G
+ G 18             |                          |               39 G
+ G 19              ---------------------------               38 G
+ G 20              RP2xxx Stamp Carrier Basic                37 G
+ G 21                                                        36 G
+      22  23  24  25  26  27  28  29  30  31  32  33  34  35
+      G   G   G   G   G   G   G   G   G   G   G   G   G   G
+
+
+
+
+
+
+
+
+
+
 
 
 ```
@@ -771,3 +873,23 @@ Call Stack (most recent call first):
   /home/peter/pico/pico-sdk/src/board_setup.cmake:28 (include)
   /home/peter/pico/pico-sdk/src/CMakeLists.txt:15 (include)
 
+
+
+      G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G
+      21 20 19 18 17 16 15 14 13 12 11 10 9  8  7  6  5  4  3  2  1  0
+ G 22
+ G 23                 RP2xxx Stamp Carrier Basic
+ G 24       ------------------------------------------------
+ G 25       |                                              |
+ G 26       |                                              |     -------
+ G 27       |                                              |     |     |
+ G 28       |              RP2350 Stamp XL                 |     | USB |
+ G 29       |                                              |     |     |
+ G 30       |                                              |     -------
+ G 31       |                                              |
+ G 32       |                                              |
+ G 33       ------------------------------------------------
+ G 34                
+ G 35                                              CL RS BO BA 
+      36  37  38  39  40  41  42  43  44  45  46  47  BS  EN  IO  C   RST OT  T   5V  3V  GND
+      G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G

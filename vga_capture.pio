@@ -11,15 +11,15 @@
 .wrap_target
 start:
 ; Wait for a VSYNC
-    wait 0 jmppin+1                 ; wait for VSYNC to be low (VSYNC must be 1 GPIO higher than HSYNC's GPIO)
-    wait 1 jmppin+1                 ; wait for VSYNC to be high
+    wait 0 jmppin+0                 ; wait for VSYNC to be low (VSYNC must be 1 GPIO higher than HSYNC's GPIO)
+    wait 1 jmppin+0                 ; wait for VSYNC to be high
 
 ; Wait for 32 HSYNCs
     set x, 31                       ; prepare to count 32 HSYNCS
 
 clock_count_loop:
-    wait 0 jmppin+0                 ; wait for HSYNC to be low
-    wait 1 jmppin+0                 ; wait for HSYNC to be high
+    wait 0 jmppin+1                 ; wait for HSYNC to be low
+    wait 1 jmppin+1                 ; wait for HSYNC to be high
     jmp x-- clock_count_loop
 
     mov y, osr                      ; y = 479 for 480 vertical lines
@@ -27,8 +27,8 @@ clock_count_loop:
 ; Wait for one more HSYNC (a total of 33 HSYNCS)
 
 wait_for_hsync:
-    wait 0 jmppin+0                 ; wait for HSYNC to be low
-    wait 1 jmppin+0                 ; wait for HSYNC to be high
+    wait 0 jmppin+1                 ; wait for HSYNC to be low
+    wait 1 jmppin+1                 ; wait for HSYNC to be high
    
     irq 4                           ; signal to another state machine to grab the pixel value
     jmp y-- wait_for_hsync
@@ -38,12 +38,12 @@ wait_for_hsync:
 
 % c-sdk {
 
-static inline void vga_detect_vsync_program_init(PIO pio, uint sm, uint offset, uint hsync_pin) {
+static inline void vga_detect_vsync_program_init(PIO pio, uint sm, uint offset, uint vsync_pin) {
 
     pio_sm_config c = vga_detect_vsync_program_get_default_config(offset);
 
-    // Configure the jmp pin group to start at `hsync_pin`
-    sm_config_set_jmp_pin(&c, hsync_pin);
+    // Configure the jmp pin group to start at `vsync_pin`
+    sm_config_set_jmp_pin(&c, vsync_pin);
 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);

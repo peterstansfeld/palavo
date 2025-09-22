@@ -144,11 +144,13 @@
 
 #if USE_GPIO_0_47
 
-    #define CSYNC_IN_PIN 31
-    // #define RGB_IN_BASE_PIN 32
-    #define RGB_IN_BASE_PIN 0
+    #define VGA_OUT_RGB_PIN_COUNT 6
 
-    #define RGB_OUT_BASE_PIN 32
+    #define VGA_OUT_CSYNC_PIN 31
+    // #define VGA_IN_RGB_BASE_PIN 32
+    #define VGA_IN_RGB_BASE_PIN 0
+
+    #define VGA_OUT_RGB_BASE_PIN 32
 
 // #define LED_PIN PICO_DEFAULT_LED_PIN
 
@@ -165,18 +167,18 @@
     // #define UART_TX_PIN 20
     // #define UART_RX_PIN 21
 
-    // #define HSYNC_IN 0
-    #define HSYNC_IN 26
-    #define VSYNC_IN 1
+    // #define VGA_IN_HSYNC_CSYNC_PIN 0
+    #define VGA_IN_HSYNC_CSYNC_PIN 26
+    #define VGA_IN_VSYNC_PIN 1
 
-    // #define RGB_IN_BASE_PIN 2
+    // #define VGA_IN_RGB_BASE_PIN 2
 
     // #define GPIO_INPUT_MASK ((1 << 28)  | (1 << 27)  | (1 << 26) | 0x07fffff /* 22-0 */)
-    // #define GPIO_INPUT_MASK ((1 << VSYNC_IN) | (1 << HSYNC_IN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
+    // #define GPIO_INPUT_MASK ((1 << VGA_IN_VSYNC_PIN) | (1 << VGA_IN_HSYNC_CSYNC_PIN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
 
 
     // #if (UART_TX_PIN < 30)
-    //     #define GPIO_INPUT_MASK ((1 << VSYNC_IN) | (1 << HSYNC_IN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
+    //     #define GPIO_INPUT_MASK ((1 << VGA_IN_VSYNC_PIN) | (1 << VGA_IN_HSYNC_CSYNC_PIN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
     // #else
     #define GPIO_INPUT_MASK ((1 << 28)  | (1 << 27)  | (1 << 26) | 0x07fffff) /* 22-0 */ /*& ~(1 << UART_TX_PIN) & ~(1 << UART_RX_PIN))*/
     // #endif
@@ -192,34 +194,51 @@
 
 #else
 
-    // #if USE_NEW_IO_MAPPING
+    #if USE_NEW_IO_MAPPING
 
 
-    // #define CSYNC_IN_PIN 0
-    // #define RGB_IN_BASE_PIN 1
- 
-    // // #define USE_DVI 1
-    // // #define USE_VGA_CAPTURE 1
-    // #define LED_PIN PICO_DEFAULT_LED_PIN
+    // #define VGA_IN_HSYNC_CSYNC_PIN 26
+    #define VGA_IN_VSYNC_PIN 0
+    #define VGA_IN_HSYNC_CSYNC_PIN 1
+    // #define VGA_IN_VSYNC_PIN 27
+    #define VGA_IN_RGB_BASE_PIN 2   
 
-    // #define USE_LED_AS_IR_DEBUG 0
+    // #define USE_DVI 1
+    // #define USE_VGA_CAPTURE 1
+    #define LED_PIN PICO_DEFAULT_LED_PIN
 
-    // #define UART_TX_PIN 8
-    // #define UART_RX_PIN 9
+    #define USE_LED_AS_IR_DEBUG 0
+
+    #define UART_TX_PIN 8
+    #define UART_RX_PIN 9
     // #define CSYNC 22
 
-    // #define HSYNC_IN 0
-    // #define VSYNC_IN 7
-    // // #define RGB_OUT_BASE_PIN 6
+    #define VGA_OUT_CSYNC_PIN 10
+    #define VGA_OUT_RGB_BASE_PIN 11
+    #define VGA_OUT_RGB_PIN_COUNT 1
 
-    // #define IR_RX_PIN 10
+    // #define USE_IR 1
 
-    // #define GPIO_INPUT_MASK ((1 << VSYNC_IN) | (1 << HSYNC_IN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
+    #if USE_IR
+    #define IR_RX_PIN 28
+    #endif
 
+    // #define GPIO_INPUT_MASK ((1 << VGA_IN_VSYNC_PIN) | (1 << VGA_IN_HSYNC_CSYNC_PIN) | (1 << IR_RX_PIN) | 0b111111111 /* 8-0*/ & ~(1 << UART_TX_PIN)) 
 
-    // #else
-    #define CSYNC_IN_PIN 22
-    #define RGB_IN_BASE_PIN 0
+    // make everything an input except UART_TX_PIN and 
+    
+    
+    #define DONT_MAKE_INPUTS ((1 << 31) | (1 << 30) | (1 << 29) | (1 << 25) | (1 << 24)  | (1 << 23) | (1 << UART_TX_PIN) | (1 << UART_RX_PIN))
+
+    // #define GPIO_INPUT_MASK ((1 << VGA_IN_VSYNC_PIN) | (1 << VGA_IN_HSYNC_CSYNC_PIN) | (1 << IR_RX_PIN) | 0b111111111 /* 8-0*/ & ~(1 << UART_TX_PIN)) 
+    #define GPIO_INPUT_MASK (0xffffffff & ~DONT_MAKE_INPUTS) 
+
+    #else
+
+    #define VGA_OUT_RGB_PIN_COUNT 6
+
+    #define VGA_OUT_CSYNC_PIN 22
+    #define VGA_IN_RGB_BASE_PIN 0
  
     // #define USE_DVI 1
     // #define USE_VGA_CAPTURE 1
@@ -231,16 +250,16 @@
     #define UART_RX_PIN 21
     #define CSYNC 22
 
-    #define HSYNC_IN 26
-    #define VSYNC_IN 27
-    #define RGB_OUT_BASE_PIN 6
+    #define VGA_IN_HSYNC_CSYNC_PIN 26
+    #define VGA_IN_VSYNC_PIN 27
+    #define VGA_OUT_RGB_BASE_PIN 6
 
     #define IR_RX_PIN 28
 
-    #define GPIO_INPUT_MASK ((1 << VSYNC_IN) | (1 << HSYNC_IN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
+    #define GPIO_INPUT_MASK ((1 << VGA_IN_VSYNC_PIN) | (1 << VGA_IN_HSYNC_CSYNC_PIN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
 
     #endif
-// #endif
+#endif
 
 
 #if USE_DVI
@@ -640,6 +659,9 @@ void clear_previous_edges() {
         memset(edges, 0, sizeof(edges[0]) * MAX_NO_OF_CHANNELS);
 }
 
+
+#if USE_IR
+
     PIO ir_rx_pio = pio2;
 
 uint ir_rx_sm = 0;
@@ -694,6 +716,9 @@ void init_ir_rx(bool init) {
     }
 }
 
+#endif
+
+
 #define TRIGGER_TIMEOUT_US 2000000 // 2 seconds
 
 
@@ -712,7 +737,9 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     // Keep it for now. After trying without stopping it, the response time of the trigger (a 
     // falling edge one) seemed to increase. Don't quite understand why. todo.
 
+#if USE_IR
     init_ir_rx(false);
+#endif
 
 #if PICO_PIO_USE_GPIO_BASE
 
@@ -871,15 +898,15 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
 
             uint32_t expiry_time = time_us_32() + TRIGGER_TIMEOUT_US;
 
-            if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin + 1), expiry_time)) {
+            if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin), expiry_time)) {
                 // VSYNC is high
-                if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(0, trigger_pin + 1), expiry_time)) {
+                if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(0, trigger_pin), expiry_time)) {
                     // VSYNC is low
                     triggered = true; // assume pass
                     // Wait for x HSYNC pulses before starting the capture
                     for (int i = 0; i < x; i++) {
-                        if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin), expiry_time)) {
-                            if (!pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(0, trigger_pin), expiry_time)) {
+                        if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin + 1), expiry_time)) {
+                            if (!pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(0, trigger_pin + 1), expiry_time)) {
                                 triggered = false;
                                 break;
                             }
@@ -1033,8 +1060,11 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     logic_analyser_init(g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
 #endif
 
+
+#if USE_IR
     // Restart the ir rx as we stopped it at the top of this function.
     init_ir_rx(true);
+#endif
 
     return triggered;
 }
@@ -1339,7 +1369,11 @@ void set_plot_line_colors(uint pin_count) {
 
     for (int pin = 0; pin < pin_count; ++pin) {
 
+#if VGA_OUT_RGB_PIN_COUNT == 6
         char line_col = colours[get_colour_index(pin)];
+#else 
+        char line_col = WHITE;
+#endif
 
         // char back_col = BLACK;
         // if (pin == g_channel) {
@@ -1363,7 +1397,11 @@ void set_plot_line_colors(uint pin_count) {
     int minimap_height = get_minimap_height();
     int minimap_padding = get_minimap_padding();
     for (int pin = 0; pin < pin_count; ++pin) {
+#if VGA_OUT_RGB_PIN_COUNT == 6
         char line_col = colours[get_colour_index(pin)];
+#else
+        char line_col = WHITE;
+#endif
         for (int i = 0; i < minimap_height; i++) {
             set_line_colors(y + i, BLACK, line_col, 0, 0);
         }
@@ -3232,14 +3270,14 @@ void init_pio_vga_capture_with_vsync_and_vsync_on_csync() {
     if (vga_capture_mode == VC_NONE) {
         vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
 
-        vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, RGB_IN_BASE_PIN);
+        vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_IN_RGB_BASE_PIN);
 
         vga_detect_vsync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_program);
-        vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, HSYNC_IN);
+        vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, VGA_IN_VSYNC_PIN);
         // vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, 0);
 
         vga_detect_vsync_on_csync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_on_csync_program);
-        vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, HSYNC_IN);
+        vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, VGA_IN_HSYNC_CSYNC_PIN);
         // vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, 0);
 
         init_vga_capture_dma_and_start_capturing();
@@ -3257,15 +3295,15 @@ void init_pio_vga_detect_vsync_on_csync() {
 
     if (vga_capture_mode == VC_NONE) {
 
-#if ((RGB_OUT_BASE_PIN + 6) >= 32)
+#if ((VGA_OUT_RGB_BASE_PIN + 6) >= 32)
         my_pio_set_gpio_base(vga_capture_pio, 16);
 #endif
 
         vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
-        vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, RGB_OUT_BASE_PIN);
+        vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
 
         vga_detect_vsync_on_csync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_on_csync_program);
-        vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, CSYNC_IN_PIN);
+        vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, VGA_OUT_CSYNC_PIN);
 
         init_vga_capture_dma_and_start_capturing();
 
@@ -3333,6 +3371,7 @@ void set_vga_capture(uint8_t new_capture_mode) {
 #endif
 
 
+#if USE_IR
 
 uint32_t time_ms() {
     return time_us_64() / 1000;
@@ -3502,6 +3541,8 @@ void ir_flush() {
     pio_sm_clear_fifos(ir_rx_pio, ir_rx_sm);
 }
 
+#endif
+
 
 #if USE_DVI
 void print_dvi_regs() {
@@ -3533,6 +3574,14 @@ int main() {
     // Initialize stdio
     
     stdio_init_all();
+
+    gpio_init_mask(GPIO_INPUT_MASK); // init all GPIO in the above mask
+
+    for (int i = 0; i < 32; i++) {
+        if (GPIO_INPUT_MASK & (1 << i)) {
+            gpio_pull_up(i);
+        }
+    }
 
 #ifdef USE_GPIO_0_47
 
@@ -3571,19 +3620,8 @@ int main() {
 
 #endif
 
-    gpio_init_mask(GPIO_INPUT_MASK); // init all GPIO in the above mask
 
-    for (int i = 0; i < 32; i++) {
-        if (GPIO_INPUT_MASK & (1 << i)) {
-            gpio_pull_up(i);
-        }
-    }
-
-    gpio_init(IR_RX_PIN);
-    gpio_set_dir(IR_RX_PIN, GPIO_IN); // set IR_RX_PIN GPIO to an input
-    gpio_pull_up(IR_RX_PIN);
-
-    uart_putcf(UART_ID, "GPIO Inputs: %d\n", GPIO_INPUT_MASK);
+    uart_putcf(UART_ID, "GPIO Inputs: %x\n", GPIO_INPUT_MASK);
 
 #if PICO_PIO_USE_GPIO_BASE
     gpio_init(40);
@@ -3737,19 +3775,19 @@ int main() {
 
     // uart_puts(UART_ID, "Initialising VGA...\n");
     
-    // uart_putcf(UART_ID, "RGB_OUT_BASE_PIN: %x\n", RGB_OUT_BASE_PIN);
+    // uart_putcf(UART_ID, "VGA_OUT_RGB_BASE_PIN: %x\n", VGA_OUT_RGB_BASE_PIN);
     
     
 
     // The VGA driver state mchines are on pio1
 
-    #if PICO_PIO_USE_GPIO_BASE
-    if ((RGB_OUT_BASE_PIN + 6) >= 32) {
+#if PICO_PIO_USE_GPIO_BASE
+    if ((VGA_OUT_RGB_BASE_PIN + 6) >= 32) {
         my_pio_set_gpio_base(pio1, 16);
     }
 #endif
 
-    initVGA(CSYNC, RGB_OUT_BASE_PIN);
+    initVGA(VGA_OUT_CSYNC_PIN, VGA_OUT_RGB_BASE_PIN, VGA_OUT_RGB_PIN_COUNT);
     init_line_colours();
 
     // We're going to capture into a u32 buffer, for best DMA efficiency. Need
@@ -3926,8 +3964,11 @@ int main() {
 
     draw_minimap_indicator();
 
+#if USE_IR
     init_ir_rx(true);
-#if USE_VGA_CAPTURE
+#endif
+
+    #if USE_VGA_CAPTURE
     sleep_ms(500);
 #if USE_VGA_IN_TO_DVI
     set_vga_capture(VC_VSYNC_AND_VSYNC_ON_CSYNC);
@@ -3972,9 +4013,11 @@ int main() {
 
         uint ui_command = check_keyboard();
 
+#if USE_IR
         if (!ui_command) {
             ui_command = check_ir();
         }
+#endif
 
         if (ui_command) {
 
@@ -4135,9 +4178,10 @@ int main() {
                         plot_required = true;
 
                         mini_map_redraw_required = true;
-
+#if USE_IR
                         ir_flush();
                         // last_ir_command = 0;
+#endif
 
                         break;
 
