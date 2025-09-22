@@ -88,8 +88,18 @@
         // #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (1 << PC_BIT_USE_VGA_IN_TO_DVI))
 
         // #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (1 << PC_BIT_USE_GPIO_0_47))
-        #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (0 << PC_BIT_USE_GPIO_0_47) | (1 << PC_BIT_USE_VGA_IN_TO_DVI) | (1 << PC_BIT_USE_NEW_IO_MAPPING))
-        #define PICO_PIO_USE_GPIO_BASE 0
+
+// config13
+        // #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (0 << PC_BIT_USE_GPIO_0_47) | (1 << PC_BIT_USE_VGA_IN_TO_DVI) | (1 << PC_BIT_USE_NEW_IO_MAPPING))
+        // #define PICO_PIO_USE_GPIO_BASE 0
+
+// config2
+        #define PALAVO_CONFIG (1 << PC_BIT_USE_GPIO_0_47)
+        #define PICO_PIO_USE_GPIO_BASE 1
+
+// config0
+        // #define PALAVO_CONFIG 0
+        // #define PICO_PIO_USE_GPIO_BASE 0
 
     #endif
 
@@ -142,6 +152,9 @@
 #endif
 
 
+#define PICO_RESERVED_GPIO_0_31 ((1 << 31) | (1 << 30) | (1 << 29) | (1 << 25) | (1 << 24)  | (1 << 23))
+
+
 #if USE_GPIO_0_47
 
     #define VGA_OUT_RGB_PIN_COUNT 6
@@ -156,8 +169,12 @@
 
     #define USE_LED_AS_IR_DEBUG 0
 
-    #define IR_RX_PIN 46
-    // #define IR_RX_PIN 28
+
+    #define USE_IR 1
+
+    #if USE_IR
+        #define IR_RX_PIN 46
+    #endif
 
     #define CSYNC 31
 
@@ -180,7 +197,7 @@
     // #if (UART_TX_PIN < 30)
     //     #define GPIO_INPUT_MASK ((1 << VGA_IN_VSYNC_PIN) | (1 << VGA_IN_HSYNC_CSYNC_PIN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
     // #else
-    #define GPIO_INPUT_MASK ((1 << 28)  | (1 << 27)  | (1 << 26) | 0x07fffff) /* 22-0 */ /*& ~(1 << UART_TX_PIN) & ~(1 << UART_RX_PIN))*/
+    // #define GPIO_INPUT_MASK ((1 << 28)  | (1 << 27)  | (1 << 26) | 0x07fffff) /* 22-0 */ /*& ~(1 << UART_TX_PIN) & ~(1 << UART_RX_PIN))*/
     // #endif
 
     // #define SIZE_TEST (1 << 32)
@@ -191,6 +208,12 @@
     //         #warning Yes
     //     #endif
     // #endif
+
+    #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~PICO_RESERVED_GPIO_0_31)
+
+    #define PICO_RESERVED_GPIO_32_47 ((1 << (UART_TX_PIN - 32)) | (1 << (UART_RX_PIN - 32)))
+    #define GPIO_INPUT_MASK_32_47 (0xffff & ~PICO_RESERVED_GPIO_32_47)
+
 
 #else
 
@@ -223,15 +246,8 @@
     #define IR_RX_PIN 28
     #endif
 
-    // #define GPIO_INPUT_MASK ((1 << VGA_IN_VSYNC_PIN) | (1 << VGA_IN_HSYNC_CSYNC_PIN) | (1 << IR_RX_PIN) | 0b111111111 /* 8-0*/ & ~(1 << UART_TX_PIN)) 
-
-    // make everything an input except UART_TX_PIN and 
-    
-    
-    #define DONT_MAKE_INPUTS ((1 << 31) | (1 << 30) | (1 << 29) | (1 << 25) | (1 << 24)  | (1 << 23) | (1 << UART_TX_PIN) | (1 << UART_RX_PIN))
-
-    // #define GPIO_INPUT_MASK ((1 << VGA_IN_VSYNC_PIN) | (1 << VGA_IN_HSYNC_CSYNC_PIN) | (1 << IR_RX_PIN) | 0b111111111 /* 8-0*/ & ~(1 << UART_TX_PIN)) 
-    #define GPIO_INPUT_MASK (0xffffffff & ~DONT_MAKE_INPUTS) 
+    // Make every GPIO an input except UART_TX_PIN and any reserved pins. 
+    #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~(PICO_RESERVED_GPIO_0_31) | (1 <<UART_TX_PIN))
 
     #else
 
@@ -3575,13 +3591,24 @@ int main() {
     
     stdio_init_all();
 
-    gpio_init_mask(GPIO_INPUT_MASK); // init all GPIO in the above mask
+    // gpio_init_mask(GPIO_INPUT_MASK_0_31); // init all GPIO in the above mask
 
     for (int i = 0; i < 32; i++) {
-        if (GPIO_INPUT_MASK & (1 << i)) {
+        if (GPIO_INPUT_MASK_0_31 & (1 << i)) {
+            gpio_init(i);
             gpio_pull_up(i);
         }
     }
+
+#if PICO_PIO_USE_GPIO_BASE
+    for (int i = 0; i < 16; i++) {
+        if (GPIO_INPUT_MASK_32_47 & (1 << i)) {
+            gpio_init(i + 32);
+            gpio_pull_up(i + 32);
+        }
+    }
+#endif
+
 
 #ifdef USE_GPIO_0_47
 
@@ -3621,17 +3648,7 @@ int main() {
 #endif
 
 
-    uart_putcf(UART_ID, "GPIO Inputs: %x\n", GPIO_INPUT_MASK);
-
-#if PICO_PIO_USE_GPIO_BASE
-    gpio_init(40);
-    gpio_set_dir(40, GPIO_IN); // set IR_RX_PIN GPIO to an input
-    gpio_pull_up(40);
-
-    gpio_init(CSYNC);
-    gpio_set_dir(CSYNC, GPIO_IN); // set IR_RX_PIN GPIO to an input
-    gpio_pull_up(CSYNC);
-#endif
+    uart_putcf(UART_ID, "GPIO Inputs: %x\n", GPIO_INPUT_MASK_0_31);
 
     uart_puts(UART_ID, "\n\n");
     // uart_puts(UART_ID, left_rect_text);
