@@ -64,8 +64,8 @@
     #if (defined RASPBERRYPI_PICO2)
 
         #pragma message "Building Palavo for RASPBERRYPI_PICO2"
-        // #define PALAVO_CONFIG 0
-        #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (1 << PC_BIT_USE_VGA_IN_TO_DVI))
+        #define PALAVO_CONFIG 0
+        // #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (1 << PC_BIT_USE_VGA_IN_TO_DVI))
 
     #elif (defined PIMORONI_PICO_LIPO2XL_W_RP2350)
 
@@ -94,12 +94,12 @@
         // #define PICO_PIO_USE_GPIO_BASE 0
 
 // config2
-        #define PALAVO_CONFIG (1 << PC_BIT_USE_GPIO_0_47)
-        #define PICO_PIO_USE_GPIO_BASE 1
+        // #define PALAVO_CONFIG (1 << PC_BIT_USE_GPIO_0_47)
+        // #define PICO_PIO_USE_GPIO_BASE 1
 
 // config0
-        // #define PALAVO_CONFIG 0
-        // #define PICO_PIO_USE_GPIO_BASE 0
+        #define PALAVO_CONFIG 0
+        #define PICO_PIO_USE_GPIO_BASE 0
 
     #endif
 
@@ -211,9 +211,10 @@
 
     #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~PICO_RESERVED_GPIO_0_31)
 
+    #if PICO_PIO_USE_GPIO_BASE
     #define PICO_RESERVED_GPIO_32_47 ((1 << (UART_TX_PIN - 32)) | (1 << (UART_RX_PIN - 32)))
     #define GPIO_INPUT_MASK_32_47 (0xffff & ~PICO_RESERVED_GPIO_32_47)
-
+    #endif
 
 #else
 
@@ -247,32 +248,48 @@
     #endif
 
     // Make every GPIO an input except UART_TX_PIN and any reserved pins. 
-    #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~(PICO_RESERVED_GPIO_0_31) | (1 <<UART_TX_PIN))
+    #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~(PICO_RESERVED_GPIO_0_31) | (1 << UART_TX_PIN))
+
+    #if PICO_PIO_USE_GPIO_BASE
+    #define GPIO_INPUT_MASK_32_47 (0xffff)
+    #endif
 
     #else
 
+    
+    #define VGA_OUT_CSYNC_PIN 1
+    #define VGA_OUT_RGB_BASE_PIN 2
     #define VGA_OUT_RGB_PIN_COUNT 6
 
-    #define VGA_OUT_CSYNC_PIN 22
-    #define VGA_IN_RGB_BASE_PIN 0
- 
+    #define UART_TX_PIN 8
+    #define UART_RX_PIN 9
+    
     // #define USE_DVI 1
     // #define USE_VGA_CAPTURE 1
     #define LED_PIN PICO_DEFAULT_LED_PIN
 
     #define USE_LED_AS_IR_DEBUG 0
 
-    #define UART_TX_PIN 20
-    #define UART_RX_PIN 21
-    #define CSYNC 22
+    #if USE_DVI
 
     #define VGA_IN_HSYNC_CSYNC_PIN 26
     #define VGA_IN_VSYNC_PIN 27
-    #define VGA_OUT_RGB_BASE_PIN 6
+    #define VGA_IN_RGB_BASE_PIN 0
+ 
+    #endif
 
+    #define USE_IR 1
+
+    #if USE_IR
     #define IR_RX_PIN 28
+    #endif
 
-    #define GPIO_INPUT_MASK ((1 << VGA_IN_VSYNC_PIN) | (1 << VGA_IN_HSYNC_CSYNC_PIN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
+    // #define GPIO_INPUT_MASK ((1 << VGA_IN_VSYNC_PIN) | (1 << VGA_IN_HSYNC_CSYNC_PIN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
+    #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~((PICO_RESERVED_GPIO_0_31) | (1 << UART_TX_PIN)))
+
+    #if PICO_PIO_USE_GPIO_BASE
+    #define GPIO_INPUT_MASK_32_47 (0xffff)
+    #endif
 
     #endif
 #endif
@@ -3610,7 +3627,7 @@ int main() {
 #endif
 
 
-#ifdef USE_GPIO_0_47
+#if USE_GPIO_0_47
 
     uart_init(UART_ID, BAUD_RATE);
 
@@ -3783,6 +3800,9 @@ int main() {
     enum gpio_drive_strength gds = gpio_get_drive_strength(CSYNC /*CSYNC*/);
     uart_putcf(UART_ID, "CSYNC drive strength: %d\n", gds);
 
+#else
+    // gpio_set_function(VGA_OUT_CSYNC_PIN, GPIO_OUT); // set CSYNC to output
+    // gpio_set_drive_strength(VGA_OUT_CSYNC_PIN /*CSYNC*/, GPIO_DRIVE_STRENGTH_8MA);
 #endif
 
     uart_puts(UART_ID, "Initialising VGA...\n");
