@@ -50,6 +50,28 @@
 
 // See README.md for more details on PALAVO_CONFIG
 
+#if (defined RASPBERRYPI_PICO2)
+
+    #pragma message "Building Palavo for RASPBERRYPI_PICO2"
+    #define BOARD_TYPE 1
+
+#elif (defined PIMORONI_PICO_LIPO2XL_W_RP2350)
+
+    #pragma message "Building Palavo for PIMORONI_PICO_LIPO2XL_W_RP2350"
+    #define BOARD_TYPE 2
+
+#elif (defined SOLDERPARTY_RP2350_STAMP_XL)
+
+    #pragma message "Building Palavo for SOLDERPARTY_RP2350_STAMP_XL"
+    #define BOARD_TYPE 3
+
+#else
+
+    #pragma message "Building Palavo for an unknown board"
+    #define BOARD_TYPE 0
+#endif
+
+
 #ifdef PALAVO_CONFIG
 
     #pragma message "PALAVO_CONFIG detected."
@@ -61,20 +83,20 @@
     // PALAVO_CONFIG has not already been defined by CMAKE, so define one here.
     // This is mainly for getting colour syntax working whilst developing.
 
-    #if (defined RASPBERRYPI_PICO2)
+    #if (BOARD_TYPE == 1)
 
-        #pragma message "Building Palavo for RASPBERRYPI_PICO2"
+        // #pragma message "Building Palavo for RASPBERRYPI_PICO2"
         #define PALAVO_CONFIG 0
         // #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (1 << PC_BIT_USE_VGA_IN_TO_DVI))
 
-    #elif (defined PIMORONI_PICO_LIPO2XL_W_RP2350)
+    #elif (BOARD_TYPE == 2)
 
-        #pragma message "Building Palavo for PIMORONI_PICO_LIPO2XL_W_RP2350"
+        // #pragma message "Building Palavo for PIMORONI_PICO_LIPO2XL_W_RP2350"
         #define PALAVO_CONFIG (1 << PC_BIT_USE_GPIO_0_47)
 
-    #elif (defined SOLDERPARTY_RP2350_STAMP_XL)
+    #elif (BOARD_TYPE == 3)
 
-        #pragma message "Building Palavo for SOLDERPARTY_RP2350_STAMP_XL"
+        // #pragma message "Building Palavo for SOLDERPARTY_RP2350_STAMP_XL"
         #define PALAVO_CONFIG (1 << PC_BIT_USE_DVI)
         // #define PALAVO_CONFIG (1 << PC_BIT_USE_GPIO_0_47)
 
@@ -244,7 +266,7 @@
     // #define USE_IR 1
 
     #if USE_IR
-    #define IR_RX_PIN 28
+    #define IR_RX_PIN 10
     #endif
 
     // Make every GPIO an input except UART_TX_PIN and any reserved pins. 
@@ -281,7 +303,7 @@
     #define USE_IR 1
 
     #if USE_IR
-    #define IR_RX_PIN 28
+    #define IR_RX_PIN 10
     #endif
 
     // #define GPIO_INPUT_MASK ((1 << VGA_IN_VSYNC_PIN) | (1 << VGA_IN_HSYNC_CSYNC_PIN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
@@ -708,10 +730,13 @@ void init_ir_rx(bool init) {
 
         if (!initialised) {
 
-            // IR_RX_PIN must always be on GPIO16 or higher
-
 #if PICO_PIO_USE_GPIO_BASE
+            #if (IR_RX_PIN < 16) 
+            my_pio_set_gpio_base(ir_rx_pio, 0);
+            #else
             my_pio_set_gpio_base(ir_rx_pio, 16);
+            #endif
+
 #endif
             offset = pio_add_program(ir_rx_pio, &nec_ir_rx_program);
 
@@ -3794,11 +3819,14 @@ int main() {
     // enum gpio_drive_strength gds = gpio_get_drive_strength(CSYNC /*CSYNC*/);
     // uart_putcf(UART_ID, "CSYNC drive strength: %d\n", gds);
 
-    gpio_set_function(CSYNC, GPIO_OUT); // set CSYNC to output
+    // gpio_set_function(CSYNC, GPIO_OUT); // set CSYNC to output
     // gpio_set_drive_strength(CSYNC /*CSYNC*/, GPIO_DRIVE_STRENGTH_12MA);
 
-    enum gpio_drive_strength gds = gpio_get_drive_strength(CSYNC /*CSYNC*/);
-    uart_putcf(UART_ID, "CSYNC drive strength: %d\n", gds);
+    // enum gpio_drive_strength gds = gpio_get_drive_strength(CSYNC /*CSYNC*/);
+    // uart_putcf(UART_ID, "CSYNC drive strength: %d\n", gds);
+
+    // I have a nasty feeling that most or all of the above issues may have been
+    // caused by a bad breadboard contact.
 
 #else
     // gpio_set_function(VGA_OUT_CSYNC_PIN, GPIO_OUT); // set CSYNC to output
