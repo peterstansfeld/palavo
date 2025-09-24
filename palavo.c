@@ -1770,7 +1770,8 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                             top_pixels[wi] |= or_mask;
                         } else {
                             bot_pixels[wi] |= or_mask;
-                    }   
+                        }
+                    }
 
                     last_pixel_x = x;
                 }
