@@ -421,9 +421,9 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 #else
 
 #define CAPTURE_PIN_COUNT 8 // HSYNC, VSYNC and BBGGRR (blue, green, red)
-#define CAPTURE_TRIGGER_PIN_BASE 26 // HSYNC
+#define CAPTURE_TRIGGER_PIN_BASE 1 // HSYNC
 
-#define CAPTUTRE_TRIGGER_TYPE TT_VGA_VSYNC
+#define CAPTUTRE_TRIGGER_TYPE TT_VGA_CSYNC
 
 #if PICO_RP2350
 // assume this is a PICO2350 (running at 150 MHz)
@@ -1698,7 +1698,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                     int wi = (x / 32);
                     
                     // calculate the bit index (0 - 31) and then the or mask 
-                    int or_mask = 1 << (x & 0x1f);
+                    uint or_mask = 1 << (x & 0x1f);
                     
                     top_pixels[wi] |= (or_mask);
                     mid_pixels[wi] |= (or_mask);
@@ -1754,17 +1754,23 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
                     // We've not yet drawn a pixel at this x location, so let's draw one.
                     // drawPixel(x, y + (sample ? 0 : trace_height - 1), line_col);
 
-                    // calculate the word index 0 - 19
-                    int wi = (x / 32);
-                    
-                    // calculate the bit index (0 - 31) and then the or mask 
-                    int or_mask = 1 << (x & 0x1f);
-                    
-                    if (sample) {
-                        top_pixels[wi] |= or_mask;
-                    } else {
-                        bot_pixels[wi] |= or_mask;
-                    }
+                    if (x < 640) {
+                        // Not sure why x is getting to >= 640, but it is, and this has been the 
+                        // cause of the bug in the first sample of minimap traces. It only happens 
+                        // when there's a minimap trace. Maybe it's just more noticeable when the
+                        // trace is zoomed out? todo - find out.
+
+                        // calculate the word index 0 - 19
+                        int wi = (x / 32);
+                        
+                        // calculate the bit index (0 - 31) and then the or mask 
+                        uint or_mask = 1 << (x & 0x1f);
+
+                        if (sample) {
+                            top_pixels[wi] |= or_mask;
+                        } else {
+                            bot_pixels[wi] |= or_mask;
+                    }   
 
                     last_pixel_x = x;
                 }
