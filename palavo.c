@@ -2785,10 +2785,13 @@ char* help_strings =
     "m to measure VGA timings\n"
     "h to show this help window\n"
     "a to show the about window\n"
+    "SPACE to play / pause graphics demo\n"
 #if USE_DVI
     "v to cycle DVI modes: mirror VGA out -> test -> VGA in\n"
+#else
+    "\n"
 #endif
-    "SPACE to play / pause graphics demo\n";
+    "\n";
 
 char* press_any_key_string = 
     "Press any key to close this window\n";
@@ -2826,7 +2829,8 @@ void show_help_window() {
     writeString(help_strings);
     // writeString(press_any_key_string);
 
-    setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + HELP_WINDOW_HEIGHT - (2 * (FONT_HEIGHT + HELP_WINDOW_PADDING)));
+    // setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + HELP_WINDOW_HEIGHT - (2 * (FONT_HEIGHT + HELP_WINDOW_PADDING)));
+    setCursorX(HELP_WINDOW_LEFT + FONT_WIDTH);
     writeString(press_any_key_string);
 
     uart_puts(UART_ID, "\nHELP\n\n");
@@ -3088,9 +3092,9 @@ void logo_med(int x, int y, bool use_fore_col) {
 
 char* name_string = "PALAVO";
 
-char* about_strings =
+char* about_strings_title =
     "PIO-Assisted Logic Analyser with VGA Output\n"
-    "Version 0.0.1\n"
+    "Version: 0.0.1\n"
     "\n"
     "Developed by Peter Stansfeld.\n"
     "\n"
@@ -3104,7 +3108,12 @@ char* about_strings =
     "* Raspberry Pi's Logic Analyser example for the Pico.\n"
     "\n"
     "* Hunter Adams's Graphics Primitives demo with Bruce\n"
-    "  Land's 4-bit mod.\n";
+    "  Land's 4-bit mod.\n"
+    "\n"
+    "\n";
+
+    char* about_strings_etc =
+    "Board: ";
 
 
     // "vha3@cornell.edu\n"
@@ -3125,16 +3134,34 @@ void show_about_window() {
     setTextColor(BLACK);
 
     // setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + FONT_HEIGHT + HELP_WINDOW_PADDING + );
-    setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + 20 + 8 + 4 + 4);
+    setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + 20 + 8 + 4 + 4 + 4);
     set_text_padding(HELP_WINDOW_PADDING);
-    writeString(about_strings);
+    writeString(about_strings_title);
     // writeString(press_any_key_string);
+    // writeString("\n\n");
+    setCursorX(HELP_WINDOW_LEFT + FONT_WIDTH);
+    writeString(about_strings_etc);
 
-    setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + HELP_WINDOW_HEIGHT - (2 * (FONT_HEIGHT + HELP_WINDOW_PADDING)));
+#ifdef PICO_BOARD
+    writeString(PICO_BOARD);
+#endif
+
+    writeString("\n\n\n");
+
+    setCursorX(HELP_WINDOW_LEFT + FONT_WIDTH);
+
+    // HELP_WINDOW_TOP + HELP_WINDOW_HEIGHT - (2 * (FONT_HEIGHT + HELP_WINDOW_PADDING)));
     writeString(press_any_key_string);
 
     uart_puts(UART_ID, "\nABOUT\n\nPALAVO\n");
-    uart_puts(UART_ID, about_strings);
+    uart_puts(UART_ID, about_strings_title);
+    uart_puts(UART_ID, about_strings_etc);
+
+#ifdef PICO_BOARD
+    uart_puts(UART_ID, PICO_BOARD);
+    uart_puts(UART_ID,"\n\n\n");
+#endif
+
     uart_puts(UART_ID, press_any_key_string);
     uart_puts(UART_ID, "\n");
 
@@ -3707,7 +3734,7 @@ int main() {
     uart_puts(UART_ID, name_string);
     uart_puts(UART_ID, "\n");
 
-    uart_puts(UART_ID, about_strings);
+    uart_puts(UART_ID, about_strings_title);
     uart_puts(UART_ID, "\n");
     // uart_puts(UART_ID, right_rect_text);
 
@@ -3797,19 +3824,21 @@ int main() {
     //     250000000,                               // Input frequency
     //     125000000                                // Output (must be same as no divider)
     // );
+
+    // sleep_ms(100) ;
+
+
+    dvi_init();
+
+    dvi_testbars();
+
+    print_dvi_regs();
+
     uart_putcf(UART_ID, "clk_peri: %d\n", clock_get_hz(clk_peri));
 
     uart_putcf(UART_ID, "clk_hstx: %d\n", clock_get_hz(clk_hstx));
 
-    sleep_ms(100) ;
-
-    dvi_init();
-
-    print_dvi_regs();
-
-    dvi_testbars();
-
-    sleep_ms(100);
+    sleep_ms(500);
 
 #endif
 
@@ -3841,17 +3870,17 @@ int main() {
 #endif
 
     uart_puts(UART_ID, "Initialising VGA...\n");
-    
+
     // sometimes we the VGA to DVI doesn't work if this delay is too short
     // sleep_ms(1);
 
     // uart_puts(UART_ID, "Initialising VGA...\n");
     
     // uart_putcf(UART_ID, "VGA_OUT_RGB_BASE_PIN: %x\n", VGA_OUT_RGB_BASE_PIN);
-    
-    
 
-    // The VGA driver state mchines are on pio1
+
+
+    // The VGA driver state machines are on pio1
 
 #if PICO_PIO_USE_GPIO_BASE
     if ((VGA_OUT_RGB_BASE_PIN + 6) >= 32) {
@@ -4050,8 +4079,6 @@ int main() {
     // set_vga_capture(VC_NONE);
 #endif
 
-    // mainloop
-
     uint ins = 0;
 
     for (int i = 0; i < 32; i++) {
@@ -4067,7 +4094,7 @@ int main() {
 
     uart_putcf(UART_ID, "Inputs: %x\n", ins);
 
-
+    // mainloop
     while(true) {
 
         // Timing text

@@ -161,6 +161,7 @@ void fillRoundRect(short x, short y, short w, short h, short r, char color) ;
 void fillRect(short x, short y, short w, short h, char color) ;
 void drawChar(short x, short y, unsigned char c, char color, char bg, unsigned char size) ;
 void setCursor(short x, short y);
+void setCursorX(short x);
 void setTextColor(char c);
 void setTextColor2(char c, char bg);
 void setTextSize(unsigned char s);

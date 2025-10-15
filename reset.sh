@@ -16,13 +16,4 @@ target_adapter_cmnd="adapter serial ${adapter_serial_no}"
 
 # target_adapter_cmnd=
 
-make -j4
-
-if [ $? -ne 0 ]; then
-    echo "An error occured compiling the project."
-else
-    # For some reason when running dvi on hstx the RP2350 needs `init`ing and
-    # `reset`ing before attempting to program, verify and reset it.
-
-    openocd -f interface/cmsis-dap.cfg -f target/rp2350.cfg -c "${target_adapter_cmnd}" -c "adapter speed 5000" -c "init; reset; program palavo.elf verify reset exit"
-fi
+openocd -f interface/cmsis-dap.cfg -f target/rp2350.cfg -c "${target_adapter_cmnd}" -c "adapter speed 5000" -c "init; reset; exit"
