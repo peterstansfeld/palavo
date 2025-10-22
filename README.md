@@ -1,20 +1,19 @@
 # palavo
 
-### PIO-Assisted Logic Analyser with VGA Output.
+### PIO-Assisted Logic Analyser with VGA Output*
 
-Calling Palavo a logic analyser is a bit of a stretch, as it does precious little anlysis, but it does capture the state of its Raspberry Pi RP235x microcontoller's GPIO pins and displays them on a VGA monitor. It allows the user, via a simple user interface, to specify which GPIO pins to capture, the frequency at which they should be captured, which GPIO pin to use as the trigger pin to start the capturing, and what type of trigger that should be. The user interface is controlled using a serial terminal (on a PC), a keyboard to serial terminal adapter, and/or an [Argon IR Remote](https://argon40.com/products/argon-remote).
+Palavo uses the PIO (Programmable Input Output) feature of the Raspberry Pi RP235x microcontroller to capture the state of its GPIO pins over time. It then displays those captured states on a VGA monitor. Calling Palavo a logic analyser is a bit of a stretch, as it does very little analysis, but it does allow the user, via a simple interface, to analyse the logic themselves. It also allows the user to specify which GPIO pins to capture, the frequency at which they should be captured, which GPIO pin to use as the trigger pin to start the capturing, and what type of trigger that should be. The user interface is controlled using a serial terminal (on a PC), a keyboard to serial terminal adapter, and/or an [Argon IR Remote](https://argon40.com/products/argon-remote).
 
-PIO is Raspberry Pi's amazing Programmable Input Output feature found on their RP2xxx microcontrollers. The *Assisted* in *PIO-Assisted* doesn't really do PIO justice as without it Palavo would not be possible.
+This project was inspired by, and uses code from, Raspberry Pi's [Logic Analyser example in the SDK.](https://github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser) as well as Hunter Adams' [PIO-Based VGA Graphics Driver for RP2040](https://github.com/vha3/Hunter-Adams-RP2040-Demos/blob/master/VGA_Graphics/README.md). I created Palavo to help me *view* the inputs and outputs of various PIO programs I was working on, including the VGA driver.
 
 The VGA output uses a resolution of 640 x 480 with 6-bit colour (2 red, 2 green, 2 blue), and uses CSYNC (combined sync) instead of HSYNC (horizontal sync) and VSYNC (vertical sync) to save a GPIO pin. Not all VGA monitors support CSYNC, but many do. More details about CSYNC can be found on this [HDRetrovision blog post](https://www.hdretrovision.com/blog/2018/10/22/engineering-csync-part-1-setting-the-stage).
 
-This project was inspired by, and uses code from, Raspberry Pi's [Logic Analyser example in the SDK.](https://github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser) as well as Hunter Adams' [PIO-Based VGA Graphics Driver for RP2040](https://github.com/vha3/Hunter-Adams-RP2040-Demos/blob/master/VGA_Graphics/README.md).
-
+\*The *Assisted* in *PIO-Assisted* doesn't really do PIO justice, as without it Palavo would not be possible.
 
 
 ## How to build Palavo
 
-There are a number of configurations for Palavo, which can use either the A variant (32 GPIOs) or the B variant (48 GPIOs) of the RP235x, or even both. Configurations are defined with the variable `PALAVO_CONFIG` in the `cmake` command line when creating a build directory.
+There are a number of configurations for Palavo, which can use either the A variant (32 GPIOs) or the B variant (48 GPIOs) of the RP235x, or even both. Configurations are defined with the `PALAVO_CONFIG` variable in the `cmake` command line when creating a build directory.
 
 ## Configuration 0
 
@@ -67,12 +66,12 @@ The Serial_RX and Serial_TX can be connected to a PC via a 3.3V logic level UART
 Alternatively the Serial_RX and Serial_TX can be connected to a keyboard to serial terminal adapter, which is a Pico 2 in USB host mode with a keyboard attached. The details for this can be found in this repository.
 
 
-The Infra_Red_RX pin, along with connections to 3.3V, can be connected to an infra-red receiver. I use this [Grove IR Receiver](https://thepihut.com/products/grove-infrared-receiver), and Palavo accepts commands transmitted from this [Argon IR Remote](https://argon40.com/products/argon-remote) control.
+The Infra_Red_RX pin, along with connections to 3.3V and GND, can be connected to an infra-red receiver. I use this [Grove IR Receiver](https://thepihut.com/products/grove-infrared-receiver), and Palavo accepts commands transmitted from this [Argon IR Remote](https://argon40.com/products/argon-remote) control.
 
 
 ### Firmware
 
-There may be a simpler way, using Raspberry Pi's Pico Visual Studio Code Extension perhaps, but I haven't experimented with that enough yet. This is how I build the firmware (on a Raspberry Pi 5):
+There may be a simpler way, using Raspberry Pi's Pico Visual Studio Code Extension perhaps, but I haven't experimented with that enough yet (todo). This is how I build the firmware (on a Raspberry Pi 5):
 
 Follow the instructions in Appendix C: Manual toolchain setup of [Getting started with Raspberry Pi Pico-series](https://datasheets.raspberrypi.com/pico/getting-started-with-pico.pdf).
 
@@ -94,16 +93,22 @@ Create a suitably-named directory (the target for this example is a Raspberry Pi
 
 `$ cd pico2`
 
+Create a suitably-named directory for this particular configuration of Palavo and enter that directory:
+
+`$ mkdir config0`
+
+`$ cd config`
+
+
 Specify where the pico-sdk directory can be found:
 
 `$ export PICO_SDK_PATH=~/pico/pico-sdk`
 
-(In my case, `$ export PICO_SDK_PATH=~/pico2.2/pico/pico-sdk`)
-
 Specify where the top level CMakeLists.txt file can be found - in this case
-it's the grandparent directory `../../`, and specify the board `pico2`:
+it's the great-grandparent directory `../../../`, specify the board `pico2`, 
+and specify the configuration `PALAVO_CONFIG=0`:
 
-`$ cmake ../../ -DPICO_BOARD=pico2`
+`$ cmake ../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=0`
 
 Then build it:
 
@@ -111,7 +116,7 @@ Then build it:
 
 This should generate, amongst other files, a `palavo.uf2` file and a `palavo.elf` file.
 
-To program the RP2350 using the `palavo.uf2` file, put the Pico into boot mode and copy the file onto the drive that appears.
+To program the RP2350 using the `palavo.uf2` file, put the Pico into boot mode and copy the file onto the drive that appears on you  PC.
 
 To program the RP2350 using the `palavo.elf` file using Openocd and a Raspberry Pi Debug Probe:
 
@@ -123,7 +128,7 @@ Instead of remembering the above command line each time, you can copy the script
 
 Using a text editor modify the `adapter_serial_no` variable to that of your Debug Probe. If you don't want or need to specify a serial number, blank the `target_adapter_cmnd` variable.
 
-Then, make and flash the RP235x:
+Then make and flash the RP235x:
 
 `$ ./make-and-flash.sh`
 
@@ -203,15 +208,15 @@ With this setup the VGA_Out output is mirrored to the DVI pins, which is amazing
 
 ### Firmware
 
-In the `build` directory create a different, but still suitably-named, directory, and enter that directory:
+In the `build/pico2` directory create a different, but still suitably-named, directory, and enter that directory:
 
-`$ mkdir pico2_with_DVI`
+`$ mkdir config1`
 
-`$ cd pico2_with_DVI`
+`$ cd config1`
 
 Repeat the rest of the previous build process, only use this CMAKE command instead:
 
-`$ cmake ../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=1`
+`$ cmake ../../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=1`
 
 
 ### Testing
@@ -235,7 +240,7 @@ In 'VGA in' mode, whatever is detected on VGA_In is also displayed on DVI. In ad
 
 ### Thoughts
 
-This is great, but it doesn't leave many pins free to capture external input signals - only 7: GP15, 20, 21, 22, 26, 27 and 28. So...
+This is great, but it doesn't leave many pins free to capture external input signals - only 7, namely: GP15, 20, 21, 22, 26, 27 and 28. So...
 
 
 ## Configuration 13
@@ -268,6 +273,8 @@ If we use another Pico 2, and change the VGA_Out\*s to VGA_In\*s we can to make 
 ```
 
 This can then sit on top of, or underneath, the Pico 2 (Configuration 0) with *only* the connections we need, namely all the VGA_In pins (which connect to the VGA_Out pins), VSYS, and the GNDs.
+
+
 
 
 
