@@ -65,7 +65,6 @@ The Serial_RX and Serial_TX can be connected to a PC via a 3.3V logic level UART
 
 Alternatively the Serial_RX and Serial_TX can be connected to a keyboard to serial terminal adapter, which is a Pico 2 in USB host mode with a keyboard attached. The details for this can be found in this repository.
 
-
 The Infra_Red_RX pin, along with connections to 3.3V and GND, can be connected to an infra-red receiver. I use this [Grove IR Receiver](https://thepihut.com/products/grove-infrared-receiver), and Palavo accepts commands transmitted from this [Argon IR Remote](https://argon40.com/products/argon-remote) control.
 
 
@@ -116,13 +115,13 @@ Then build it:
 
 This should generate, amongst other files, a `palavo.uf2` file and a `palavo.elf` file.
 
-To program the RP2350 using the `palavo.uf2` file, put the Pico into boot mode and copy the file onto the drive that appears on you  PC.
+To program the RP2350 using the `palavo.uf2` file, put the Pico into boot mode and copy the file onto the drive that appears on your PC.
 
-To program the RP2350 using the `palavo.elf` file using Openocd and a Raspberry Pi Debug Probe:
+To program the RP2350 using the `palavo.elf` file, use Openocd and a Raspberry Pi Debug Probe:
 
 `$ openocd -f interface/cmsis-dap.cfg -f target/rp2350.cfg -c "adapter speed 5000" -c "init; reset; program palavo.elf verify reset exit"`
 
-Instead of remembering the above command line each time, you can copy the script file `make-and-flash.sh` from the palavo directory:
+Instead of remembering the above command line each time you can copy the script file `make-and-flash.sh` from the palavo directory:
 
 `$ cp ../../make-and-flash.sh .`
 
@@ -139,9 +138,11 @@ If all went well, when Palavo starts you should see something like the following
 
 ![A monitor screen displaying the main coloured traces of a section of the logic levels of various GPIO pins. Above the main traces, at the top of the screen is the Palavo logo on the left, and then various adjustable settings. Underneath the main traces is a minimap of traces of the whole of each captured channel. Beneath the minimap, at the bottom of the screen, is a status bar.](image.jpg)
 
-Open a serial terminal on your PC. I use Minicom with this command line (you may need to change the device - the bit after the `-D`):
+Open a serial terminal on your PC. I use `minicom` with this command line (You may need to change the device - the bit after the `-D`.):
 
 `$ minicom -b 115200 -w -D /dev/ttyACM0`
+
+(You may need to add carriage returns with 'Ctrl-A U'.)
 
 Press the 'h' key and something like the following help screen should appear:
 
@@ -246,7 +247,7 @@ This is great, but it doesn't leave many pins free to capture external input sig
 
 #### PALAVO_CONFIG=13
 
-If we use another Pico 2, and change the VGA_Out\*s to VGA_In\*s we can to make a VGA (6-bit logic level) - DVI Converter. If we also lose, or move, the Infra_Red_RX we can squeeze in VGA_Out_CSYNC and VGA_Out_RGB to provide a monochrome VGA output for testing purposes.
+If we use a second Pico 2, and change the VGA_Out\*s to VGA_In\*s we can to make a VGA (6-bit logic level) - DVI Converter. If we also lose, or move, the Infra_Red_RX we can squeeze in VGA_Out_CSYNC and VGA_Out_RGB to provide a monochrome VGA output for testing purposes.
 
 ```
        VGA_In_VSYNC  GP0  1                40 VBUS
@@ -489,14 +490,7 @@ As you can see the GPIOs GP11 to GP47 (37 GPIOs in total) are free to use and th
 
    16    15    19    21    23    25    27    29    31    32
 
-    G     17    18    20    22    24    26    28    30   G
-
-
-
-
-
-
-
+    G    17    18    20    22    24    26    28    30   G
 
 ```
 
@@ -678,7 +672,7 @@ PIO      SM       Size  Needs PIO1*  Usage
 0        3
 Total             31
 
-1        0
+1        0                          hsync5_program (vsync and hsync for vga out) 
 1        1        13                rgb5_150_mhz_rp235x_program (rrggbb for vga out) 
 1        2        15                hsync5_program (csync for vga out)      
 1        3        1                 logic_capture
@@ -702,7 +696,7 @@ SM       Size  Needs PIO1*  GPIO(s)  Usage
 Total    32
 
 PIO 1 (GPIO_BASE=16)
-0
+0                                    hsync5_program (vsync and hsync for vga out)
 1        13                          rgb5_150_mhz_rp235x_program (rrggbb for vga out) 
 2        15                          hsync5_program (csync for vga out)
 3        1                           trigger and/or logic_capture for pin(s) using GPIO_BASE=16

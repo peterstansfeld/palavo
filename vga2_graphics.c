@@ -36,7 +36,7 @@
 
 #define USE_HSYNC_AND_VSYNC 0
 
-#define USE_CSYNC 1
+#define USE_CSYNC !USE_HSYNC_AND_VSYNC
 
 
 #if SYS_CLOCK_FREQ_KHZ == 250000u
@@ -86,12 +86,15 @@
 // #define SYNC_DMA_TRANSFER_COUNT SYNC_BUFFER_COUNT * 60 // one second (ish)
 // #define SYNC_DMA_TRANSFER_COUNT SYNC_BUFFER_COUNT * 60 * 10 // ten seconds (ish)
 
+#if USE_HSYNC_AND_VSYNC
+
 // uint32_t sync_buffer [SYNC_BUFFER_COUNT];
 uint32_t sync_buffer [SYNC_BUFFER_COUNT] __attribute__ ((aligned(SYNC_BUFFER_COUNT * sizeof(uint32_t))));
 
 uint32_t * sync_buffer_address_pointer = &sync_buffer[0] ;
 
-#ifdef USE_CSYNC
+#endif
+#if USE_CSYNC
 
 uint32_t csync_buffer [SYNC_BUFFER_COUNT] __attribute__ ((aligned(SYNC_BUFFER_COUNT * sizeof(uint32_t))));
 
@@ -214,7 +217,7 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
     
     uint rgb5_sm = 1;
 
-#ifdef USE_CSYNC
+#if USE_CSYNC
 
     uint csync_sm = 2;
 
@@ -237,7 +240,8 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
     // is consolidated in one place. Here in the C, we then just import and use it.
     
 #if USE_HSYNC_AND_VSYNC
-      hsync5_program_init(pio_2, hsync5_sm, hsync5_offset, HSYNC2, 2);
+      // hsync5_program_init(pio_2, hsync5_sm, hsync5_offset, HSYNC2, 2);
+      hsync5_program_init(pio_2, hsync5_sm, hsync5_offset, 0 /*VSYNC*/, 2);
 #endif
 
       // bi_decl(bi_program_feature("This is a feature?"));
@@ -294,8 +298,8 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
       bi_decl(bi_2pins_with_func(20, 21, GPIO_FUNC_UART));
 
       bi_decl(bi_1pin_with_name(28, "IR RX"));
-#ifdef USE_CSYNC
 
+#if USE_CSYNC
 
     // Initialise a second copy of hvsync which we'll call csync and use to test csync
     // uint csync_offset = pio_add_program(pio_2, &hsync5_program);
@@ -453,7 +457,7 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
 
 #endif 
 
-#ifdef USE_CSYNC
+#if USE_CSYNC
 
     // More DMA channels - test ones - 0 sends color data, 1 reconfigures and restarts 0
 
@@ -584,11 +588,17 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
         // return ((delay1 - 9) << 3 | vsync1 << 1 | hsync1) << 19 | repeat << 10 | (delay0 - 6) << 2 | vsync0 << 1 | hsync0;
     //  }
 
+#if USE_HSYNC_AND_VSYNC
+
     uint32_t encode(int repeat, bool vsync0, bool hsync0, char delay0, bool irq, bool vsync1, bool hsync1, char delay1) {
-        return ((delay1 - 8 - irq) << 3 | vsync1 << 2 | hsync1 << 1 | irq) << 20 | (delay0 - 4) << 11 | vsync0 << 10 | hsync0 << 9 | repeat;
+        // return ((delay1 - 8 - irq) << 3 | vsync1 << 2 | hsync1 << 1 | irq) << 20 | (delay0 - 4) << 11 | vsync0 << 10 | hsync0 << 9 | repeat;
+        // VSYNC was on a GPIO one higher than HSYNC. They are now reversed so that HSYNC is on a GPIO one higher than VSYNC.
+        // The reason for this is CSYNC needs to be on HSYNC and when displaying the trace its neater to have CSYNC immediately
+        // above the RGB GPIOs.
+        return ((delay1 - 8 - irq) << 3 | vsync1 << 1 | hsync1 << 2 | irq) << 20 | (delay0 - 4) << 11 | vsync0 << 9 | hsync0 << 10 | repeat;
      }
 
-//                          rpt    V  H, delay         irq V  H, delay
+//                          rpt    V  H  delay         irq V  H  delay
     sync_buffer[0] = encode(479,   1, 0, 24,           1,  1, 1, 176     );
     sync_buffer[1] = encode(9,     1, 0, 24,           0,  1, 1, 176     );
     sync_buffer[2] = encode(0,     1, 0, 24,           0,  1, 1, 12      );
@@ -599,9 +609,18 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
 // add a buffer entry so we can use RING on the DMA channel
     sync_buffer[7] = encode(0,     1, 0, 24,           0,  1, 1, 176     );
 
+#endif
 
-#ifdef USE_CSYNC
 
+#if USE_CSYNC
+
+
+/*
+    uint32_t encode(int repeat, bool vsync0, bool hsync0, char delay0, bool irq, bool vsync1, bool hsync1, char delay1) {
+        return ((delay1 - 8 - irq) << 3 | vsync1 << 2 | hsync1 << 1 | irq) << 20 | (delay0 - 4) << 11 | vsync0 << 10 | hsync0 << 9 | repeat;
+     }
+
+//                           rpt    V  H  delay         irq V  H  delay
     csync_buffer[0] = encode(479,   1, 0, 24,           1,  1, 1, 176     ); // 480 lines with irq triggering
     csync_buffer[1] = encode(9,     1, 0, 24,           0,  1, 1, 176     ); // 10 lines with no irq triggering
     csync_buffer[2] = encode(0,     1, 0, 24,           0,  1, 1, 12      ); // 1 short delay before start of vsync 
@@ -611,6 +630,24 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
     csync_buffer[6] = encode(30,    1, 0, 24,           0,  1, 1, 176     );
 // add a buffer entry so we can use RING on the DMA channel
     csync_buffer[7] = encode(0,     1, 0, 24,           0,  1, 1, 176     );
+*/
+
+
+    uint32_t encode(int repeat, bool hsync0, char delay0, bool irq, bool hsync1, char delay1) {
+        return ((delay1 - 8 - irq) << 3 | hsync1 << 1 | irq) << 20 | (delay0 - 4) << 11 | hsync0 << 9 | repeat;
+     }
+
+//                           rpt    C  delay         irq C  delay
+    csync_buffer[0] = encode(479,   0, 24,           1,  1, 176     ); // 480 lines with irq triggering
+    csync_buffer[1] = encode(9,     0, 24,           0,  1, 176     ); // 10 lines with no irq triggering
+    csync_buffer[2] = encode(0,     0, 24,           0,  1, 12      ); // 1 short delay before start of vsync 
+    csync_buffer[3] = encode(0,     0, 176 - 12,     0,  1, 24      ); // 1 start of vsync
+    csync_buffer[4] = encode(0,     0, 176,          0,  1, 24      ); // 
+    csync_buffer[5] = encode(0,     0, 12,           0,  1, 176 - 12);
+    csync_buffer[6] = encode(30,    0, 24,           0,  1, 176     );
+// add a buffer entry so we can use RING on the DMA channel
+    csync_buffer[7] = encode(0,     0, 24,           0,  1, 176     );
+
 
 
 // HSYNC   24  176         24  176        24 12   
@@ -759,7 +796,7 @@ for (int y = 0; y < NO_OF_LINES; y++) {
     // start them all simultaneously anyway.
 
 
-#ifndef USE_CSYNC
+#if !USE_CSYNC
     pio_enable_sm_mask_in_sync(pio_2, ((1u << hsync5_sm) | (1u << rgb5_sm)));
 #else
 
@@ -803,7 +840,7 @@ for (int y = 0; y < NO_OF_LINES; y++) {
     // Manually call the handler once, to trigger the first transfer
     // dma_handler();
 
-#ifndef USE_CSYNC
+#if !USE_CSYNC
 
     dma_start_channel_mask((1u << sync_test_chan_0));
 #else
