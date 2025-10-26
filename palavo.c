@@ -1217,40 +1217,47 @@ void write_intf(const char *s, int c) {
 // #define TOOLBAR_HINT_WIDTH 100
 #define TOOLBAR_HINT_WIDTH 0
 
-
-// #define CHANNEL_NO_LEFT (SCREEN_WIDTH / 2)
-
+char channel_text[] = "ch.";
 #define CHANNEL_NO_LEFT TOOLBAR_LEFT + TOOLBAR_TEXT_PADDING + TOOLBAR_HINT_WIDTH + TOOLBAR_TEXT_PADDING
+#define CHANNEL_NO_LABEL_CHARS 3
+#define CHANNEL_NO_INPUT_CHARS 4
+#define CHANNEL_NO_WIDTH (FONT_WIDTH * (CHANNEL_NO_LABEL_CHARS + 1 + CHANNEL_NO_INPUT_CHARS)) + TOOLBAR_ITEM_PADDING
 
-#define CHANNEL_NO_WIDTH (FONT_WIDTH * (6 + 6)) + TOOLBAR_ITEM_PADDING
-
+char mag_text[] = "zoom";
 #define MAG_LEFT CHANNEL_NO_LEFT + CHANNEL_NO_WIDTH + TOOLBAR_ITEM_PADDING
-#define MAG_WIDTH (FONT_WIDTH * 11) + TOOLBAR_ITEM_PADDING
+#define MAG_LABEL_CHARS 4
+#define MAG_INPUT_CHARS 7   
+#define MAG_WIDTH (FONT_WIDTH * (MAG_LABEL_CHARS + 1 + MAG_INPUT_CHARS)) + TOOLBAR_ITEM_PADDING
 
-
+char freq_text[] = "freq.div";
 #define FREQ_LEFT MAG_LEFT + MAG_WIDTH + TOOLBAR_ITEM_PADDING
-#define FREQ_WIDTH (FONT_WIDTH * 14) + TOOLBAR_ITEM_PADDING
+#define FREQ_LABEL_CHARS 8
+#define FREQ_INPUT_CHARS 6   
+#define FREQ_WIDTH (FONT_WIDTH * (FREQ_LABEL_CHARS + 1 + FREQ_INPUT_CHARS)) + TOOLBAR_ITEM_PADDING
 
-
-// #define NO_OF_PINS_LEFT FREQ_LEFT + FREQ_WIDTH + TOOLBAR_ITEM_PADDING
-// #define NO_OF_PINS_WIDTH (FONT_WIDTH * 8) + TOOLBAR_ITEM_PADDING
-
-// #define PINS_BASE_LEFT NO_OF_PINS_LEFT + NO_OF_PINS_WIDTH + TOOLBAR_ITEM_PADDING
-// #define PINS_BASE_WIDTH (FONT_WIDTH * 11) + TOOLBAR_ITEM_PADDING
-
-
-
+char base_text[] = "base";
 #define PINS_BASE_LEFT FREQ_LEFT + FREQ_WIDTH + TOOLBAR_ITEM_PADDING
-#define PINS_BASE_WIDTH (FONT_WIDTH * 11) + TOOLBAR_ITEM_PADDING
+#define PINS_BASE_LABEL_CHARS 4
+#define PINS_BASE_INPUT_CHARS 6
+#define PINS_BASE_WIDTH (FONT_WIDTH * (PINS_BASE_LABEL_CHARS + 1 + PINS_BASE_INPUT_CHARS)) + TOOLBAR_ITEM_PADDING
 
+char pins_text[] = "pins";
 #define NO_OF_PINS_LEFT PINS_BASE_LEFT + PINS_BASE_WIDTH + TOOLBAR_ITEM_PADDING
-#define NO_OF_PINS_WIDTH (FONT_WIDTH * 9) + TOOLBAR_ITEM_PADDING
+#define NO_OF_PINS_LABEL_CHARS 4
+#define NO_OF_PINS_INPUT_CHARS 4
+#define NO_OF_PINS_WIDTH (FONT_WIDTH * (NO_OF_PINS_LABEL_CHARS + 1 + NO_OF_PINS_INPUT_CHARS)) + TOOLBAR_ITEM_PADDING
 
+char trigger_text[] = "trig.";
 #define TRIGGER_BASE_LEFT NO_OF_PINS_LEFT + NO_OF_PINS_WIDTH + TOOLBAR_ITEM_PADDING
-#define TRIGGER_BASE_WIDTH (FONT_WIDTH * (11 + 3)) + TOOLBAR_ITEM_PADDING
+#define TRIGGER_BASE_LABEL_CHARS 5
+#define TRIGGER_BASE_INPUT_CHARS 6
+#define TRIGGER_BASE_WIDTH (FONT_WIDTH * (TRIGGER_BASE_LABEL_CHARS + 1 + TRIGGER_BASE_INPUT_CHARS)) + TOOLBAR_ITEM_PADDING
 
+char trigger_type[] = "type";
 #define TRIGGER_TYPE_LEFT TRIGGER_BASE_LEFT + TRIGGER_BASE_WIDTH + TOOLBAR_ITEM_PADDING
-#define TRIGGER_TYPE_WIDTH (FONT_WIDTH * 13) + TOOLBAR_ITEM_PADDING
+#define TRIGGER_TYPE_LABEL_CHARS 4
+#define TRIGGER_TYPE_INPUT_CHARS 8
+#define TRIGGER_TYPE_WIDTH (FONT_WIDTH * (TRIGGER_TYPE_LABEL_CHARS + 1 + TRIGGER_TYPE_INPUT_CHARS)) + TOOLBAR_ITEM_PADDING
 
 #define PLOT_PADDING 4
 #define PLOT_TOP (TOOLBAR_TOP + TOOLBAR_HEIGHT + 6)
@@ -2245,7 +2252,7 @@ void draw_setting_helper(uint left, uint8_t label_len, uint8_t str_len) {
 
 
 void draw_channel_no() {
-    draw_setting_helper(CHANNEL_NO_LEFT, 2 + 5, 4);
+    draw_setting_helper(CHANNEL_NO_LEFT, CHANNEL_NO_LABEL_CHARS, CHANNEL_NO_INPUT_CHARS);
     if (settings_state == SS_CHANNEL) {
         uart_putcf(UART_ID, "ch: %d\n", g_channel);
         setTextColor2(TOOLBAR_COLOR, WHITE);
@@ -2255,7 +2262,7 @@ void draw_channel_no() {
 
 
 void draw_magnification() {
-    draw_setting_helper(MAG_LEFT, 4, 7);
+    draw_setting_helper(MAG_LEFT, MAG_LABEL_CHARS, MAG_INPUT_CHARS);
     if (settings_state == SS_ZOOM) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
         uart_puts(UART_ID, "zoom: ");
@@ -2274,7 +2281,7 @@ void draw_magnification() {
 
 
 void draw_no_of_pins() {
-    draw_setting_helper(NO_OF_PINS_LEFT, 4, 5);
+    draw_setting_helper(NO_OF_PINS_LEFT, NO_OF_PINS_LABEL_CHARS, NO_OF_PINS_INPUT_CHARS);
     if (settings_state == SS_NO_OF_PINS) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
         uart_putcf(UART_ID, "pins: %d\n", g_no_of_pins_to_capture);
@@ -2284,7 +2291,7 @@ void draw_no_of_pins() {
 
 
 void draw_pins_base() {
-    draw_setting_helper(PINS_BASE_LEFT, 4, 7);
+    draw_setting_helper(PINS_BASE_LEFT, PINS_BASE_LABEL_CHARS, PINS_BASE_INPUT_CHARS);
     if (settings_state == SS_PINS_BASE) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
         uart_putcf(UART_ID, "base: %d\n", g_pins_base);
@@ -2294,7 +2301,7 @@ void draw_pins_base() {
 
 
 void draw_sample_frequency() {
-    draw_setting_helper(FREQ_LEFT, 8, 5);
+    draw_setting_helper(FREQ_LEFT, FREQ_LABEL_CHARS, FREQ_INPUT_CHARS);
     if (settings_state == SS_FREQ) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
         uart_putcf(UART_ID, "fdiv: %d\n", g_sample_frequency);
@@ -2304,7 +2311,7 @@ void draw_sample_frequency() {
 
 
 void draw_trigger_pin_base() {
-    draw_setting_helper(TRIGGER_BASE_LEFT, 7, 6);
+    draw_setting_helper(TRIGGER_BASE_LEFT, TRIGGER_BASE_LABEL_CHARS, TRIGGER_BASE_INPUT_CHARS);
     if (settings_state == SS_TRIGGER_PIN_BASE) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
         uart_putcf(UART_ID, "tpin: %d\n", g_trigger_pin_base);
@@ -2318,7 +2325,7 @@ void draw_trigger_type() {
 // enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_VSYNC, TT_VGA_RGB, TT_VGA_VFRONT_PORCH, TT_COUNT};
 
     unsigned char tt_chars[TT_COUNT][8] = {" NONE ", " LOW ", " HIGH ", " RISE ", " FALL ", " EDGE ", " VSYNC ", " RGB ", " VFPOR ", " CSYNC ",  " CRGB ", " CFPOR "};
-    draw_setting_helper(TRIGGER_TYPE_LEFT, 4, 7);
+    draw_setting_helper(TRIGGER_TYPE_LEFT, TRIGGER_TYPE_LABEL_CHARS, TRIGGER_TYPE_INPUT_CHARS);
     if (settings_state == SS_TRIGGER_TYPE) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
         uart_puts(UART_ID, "ttype:");
@@ -2354,9 +2361,29 @@ void draw_toolbar() {
     // fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
     fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_WIDTH, TOOLBAR_HEIGHT, BLACK);
     setTextColor(WHITE);
-    setCursor(CHANNEL_NO_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
     setTextSize(1);
-    writeString("channel     zoom       freq.div      base       pins     trigger       type");
+    
+    setCursor(CHANNEL_NO_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    writeString(channel_text);
+    
+    setCursor(MAG_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    writeString(mag_text);
+    
+    setCursor(FREQ_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    writeString(freq_text);
+
+    setCursor(PINS_BASE_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    writeString(base_text);
+
+    setCursor(NO_OF_PINS_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    writeString(pins_text);
+
+    setCursor(TRIGGER_BASE_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    writeString(trigger_text);
+   
+    setCursor(TRIGGER_TYPE_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    writeString(trigger_type);
+
     draw_settings();
 }
 

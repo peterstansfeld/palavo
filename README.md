@@ -74,7 +74,9 @@ There may be a simpler way, using Raspberry Pi's Pico Visual Studio Code Extensi
 
 Follow the instructions in Appendix C: Manual toolchain setup of [Getting started with Raspberry Pi Pico-series](https://datasheets.raspberrypi.com/pico/getting-started-with-pico.pdf).
 
-Clone this repository (Palavo) into a suitable location on your PC.
+Clone this repository (Palavo) into a suitable location on your PC:
+
+`$ https://github.com/peterstansfeld/palavo.git`
 
 Enter the `palavo` directory:
 
@@ -99,12 +101,11 @@ Create a suitably-named directory for this particular configuration of Palavo an
 `$ cd config0`
 
 
-Specify where the pico-sdk directory can be found:
+Specify where the pico-sdk directory can be found on your PC, e.g.:
 
 `$ export PICO_SDK_PATH=~/pico/pico-sdk`
 
-Specify where the top level CMakeLists.txt file can be found - in this case
-it's the great-grandparent directory `../../../`, specify the board `pico2`, 
+Run `cmake` specifying where the top level CMakeLists.txt file can be found - in this case it's the great-grandparent directory `../../../`, specify the board `pico2`, 
 and specify the configuration `PALAVO_CONFIG=0`:
 
 `$ cmake ../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=0`
@@ -123,7 +124,7 @@ To program the RP2350 using the `palavo.elf` file, use Openocd and a Raspberry P
 
 Instead of remembering the above command line each time you can copy the script file `make-and-flash.sh` from the palavo directory:
 
-`$ cp ../../make-and-flash.sh .`
+`$ cp ../../../make-and-flash.sh .`
 
 Using a text editor modify the `adapter_serial_no` variable to that of your Debug Probe. If you don't want or need to specify a serial number, blank the `target_adapter_cmnd` variable.
 
