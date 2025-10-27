@@ -356,7 +356,7 @@ uint8_t g_channel = 0;
 
 int g_prev_scrollx = 0;
 
-enum SETTINGS_STATES {SS_CHANNEL, SS_ZOOM, SS_FREQ, SS_PINS_BASE, SS_NO_OF_PINS, SS_TRIGGER_PIN_BASE, SS_TRIGGER_TYPE, SS_COUNT};
+enum SETTINGS_STATES {SS_CHANNEL, SS_PALETTE, SS_ZOOM, SS_FREQ, SS_PINS_BASE, SS_NO_OF_PINS, SS_TRIGGER_PIN_BASE, SS_TRIGGER_TYPE, SS_COUNT};
 
 uint8_t settings_state = SS_CHANNEL;
 
@@ -377,6 +377,8 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
+
+enum COLOUR_PALETTE_TYPES {COLOUR_PALETTE_JUMPER_JERKY, COLOUR_PALETTE_VGA, COLOUR_PALETTE_GREEN, COLOUR_PALETTE_RASPBERRY, CT_COUNT};
 
 enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE,
     TT_VGA_VSYNC, TT_VGA_RGB, TT_VGA_VFRONT_PORCH, TT_VGA_CSYNC, TT_VGA_CRGB, TT_VGA_CVFRONT_PORCH, TT_COUNT};
@@ -440,6 +442,7 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 
 #endif
 
+uint8_t g_palette = COLOUR_PALETTE_JUMPER_JERKY;
 
 uint g_sample_frequency = CAPTURE_SAMPLE_FREQ_DIVISOR;
 uint8_t g_no_of_captured_pins = CAPTURE_PIN_COUNT;
@@ -1200,7 +1203,7 @@ void write_intf(const char *s, int c) {
 // #define TOOLBAR_LEFT 1
 // #define TOOLBAR_WIDTH SCREEN_WIDTH - (2 * TOOLBAR_LEFT)
 
-#define TOOLBAR_LEFT 120
+#define TOOLBAR_LEFT 102
 #define TOOLBAR_WIDTH SCREEN_WIDTH - TOOLBAR_LEFT - 1
 
 #define TOOLBAR_HEIGHT 10
@@ -1223,8 +1226,14 @@ char channel_text[] = "ch.";
 #define CHANNEL_NO_INPUT_CHARS 4
 #define CHANNEL_NO_WIDTH (FONT_WIDTH * (CHANNEL_NO_LABEL_CHARS + 1 + CHANNEL_NO_INPUT_CHARS)) + TOOLBAR_ITEM_PADDING
 
+char palette_text[] = "pal.";
+#define PALETTE_LEFT CHANNEL_NO_LEFT + CHANNEL_NO_WIDTH + TOOLBAR_ITEM_PADDING
+#define PALETTE_LABEL_CHARS 4
+#define PALETTE_INPUT_CHARS 5
+#define PALETTE_WIDTH (FONT_WIDTH * (PALETTE_LABEL_CHARS + 1 + PALETTE_INPUT_CHARS)) + TOOLBAR_ITEM_PADDING
+
 char mag_text[] = "zoom";
-#define MAG_LEFT CHANNEL_NO_LEFT + CHANNEL_NO_WIDTH + TOOLBAR_ITEM_PADDING
+#define MAG_LEFT PALETTE_LEFT + PALETTE_WIDTH + TOOLBAR_ITEM_PADDING
 #define MAG_LABEL_CHARS 4
 #define MAG_INPUT_CHARS 7   
 #define MAG_WIDTH (FONT_WIDTH * (MAG_LABEL_CHARS + 1 + MAG_INPUT_CHARS)) + TOOLBAR_ITEM_PADDING
@@ -1307,12 +1316,7 @@ int plot_height;
 #define STATUSBAR_INFO_COLOR STATUSBAR_COLOR
 
 // There must be at least 48 of these colours - one for every possible GPIO
-char colours[] = {DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, BLUE, MAGENTA, LIGHT_GREY_64, WHITE, DARK_GREY_64,
-                  DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, BLUE, MAGENTA, LIGHT_GREY_64, WHITE, DARK_GREY_64,
-                //   DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, DARK_RED_64, DARK_RED_64, DARK_RED_64,BLUE, MAGENTA, LIGHT_GREY_64, WHITE, DARK_GREY_64,
-                  DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, BLUE, MAGENTA, LIGHT_GREY_64, WHITE, DARK_GREY_64,
-                  DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, BLUE, MAGENTA, LIGHT_GREY_64, WHITE, DARK_GREY_64,
-                  DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, BLUE, MAGENTA, LIGHT_GREY_64, WHITE, DARK_GREY_64};
+char colours[48];
 
 #define MINIMAP_SCROLLBAR_HEIGHT 2
 #define MINIMAP_SCROLLBAR_PADDING 1
@@ -1409,6 +1413,33 @@ int get_plot_height(uint pin_count) {
 
     plot_height = MIN((avail_height - fixed_height) / pin_count, MAX_PLOT_HEIGHT);
     return plot_height;
+}
+
+
+void change_plot_line_colour_palette(char palette) {
+    char jumper_jerky[10] = {DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, BLUE, MAGENTA, LIGHT_GREY_64, WHITE, DARK_GREY_64};
+    char vga[8] = {ORANGE, YELLOW, MED_BLUE_64, LIGHT_BLUE_64, MED_GREEN_64, LIGHT_GREEN_64, MED_RED_64, LIGHT_RED_64};
+    
+    for (int i = 0; i < sizeof(colours); i++) {
+        switch (palette) {
+
+            case COLOUR_PALETTE_JUMPER_JERKY:
+                colours[i] = jumper_jerky[i % sizeof(jumper_jerky)];
+                break;
+
+            case COLOUR_PALETTE_VGA:
+                colours[i] = vga[i % sizeof(vga)];
+                break;
+
+            case COLOUR_PALETTE_GREEN:
+                colours[i] = GREEN;
+                break;
+
+            case COLOUR_PALETTE_RASPBERRY:
+                colours[i] = RASPBERRY_64;
+                break;
+        } 
+    }
 }
 
 
@@ -2261,6 +2292,19 @@ void draw_channel_no() {
 }
 
 
+void draw_palette() {
+    unsigned char palettes[CT_COUNT][7] = {" JJ ", " VGA ", " GRN ", " RSP "};
+    draw_setting_helper(PALETTE_LEFT, PALETTE_LABEL_CHARS, PALETTE_INPUT_CHARS);
+    if (settings_state == SS_PALETTE) {
+        setTextColor2(TOOLBAR_COLOR, WHITE);
+        uart_puts(UART_ID, "palette:");
+        uart_puts(UART_ID, palettes[g_palette]);
+        uart_puts(UART_ID, "\n");
+    }
+    writeString(palettes[g_palette]);
+}
+
+
 void draw_magnification() {
     draw_setting_helper(MAG_LEFT, MAG_LABEL_CHARS, MAG_INPUT_CHARS);
     if (settings_state == SS_ZOOM) {
@@ -2338,6 +2382,7 @@ void draw_trigger_type() {
 
 void draw_settings() {
     draw_channel_no();
+    draw_palette();
     draw_magnification();
     draw_sample_frequency();
     draw_no_of_pins();
@@ -2365,6 +2410,9 @@ void draw_toolbar() {
     
     setCursor(CHANNEL_NO_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
     writeString(channel_text);
+
+    setCursor(PALETTE_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    writeString(palette_text);
     
     setCursor(MAG_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
     writeString(mag_text);
@@ -2704,6 +2752,16 @@ void set_channel (uint8_t ch) {
 }
 
 
+void set_palette (uint8_t colours) {
+    if (g_palette != colours) {
+        g_palette = colours;
+        draw_palette();
+        change_plot_line_colour_palette(g_palette);
+        set_plot_line_colors(g_no_of_captured_pins);
+    }
+}
+
+
 void set_sample_frequency(uint f) {
     if (g_sample_frequency != f) {
         g_sample_frequency = f;
@@ -2748,6 +2806,10 @@ void draw_setting(uint8_t setting) {
     switch (setting) {
         case SS_CHANNEL:
             draw_channel_no();
+            break;
+
+        case SS_PALETTE:
+            draw_palette();
             break;
 
         case SS_FREQ:
@@ -3871,6 +3933,8 @@ int main() {
 
     // Initialize the VGA screen
 
+    change_plot_line_colour_palette(g_palette);
+
 #if PICO_PIO_USE_GPIO_BASE
 
     // When connected to another Pico 2 (for VGA to DVI conversion) CSYNC seems
@@ -4319,6 +4383,10 @@ int main() {
                                 set_channel(MAX(g_channel - 1, 0));
                                 break;
 
+                            case SS_PALETTE:
+                                set_palette(MAX(g_palette - 1, 0));
+                                break;
+
                             case SS_FREQ:
                                 set_sample_frequency(MAX(g_sample_frequency - 1, 1));
                                 break;
@@ -4352,6 +4420,10 @@ int main() {
                         switch (settings_state) {
                             case SS_CHANNEL:
                                 set_channel(MIN(g_channel + 1, g_no_of_captured_pins - 1));
+                                break;
+
+                            case SS_PALETTE:
+                                set_palette(MIN(g_palette + 1, CT_COUNT - 1));
                                 break;
 
                             case SS_FREQ:
