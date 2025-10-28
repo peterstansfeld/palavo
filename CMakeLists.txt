@@ -51,3 +51,7 @@ target_link_libraries(palavo PRIVATE pico_stdlib hardware_pio hardware_dma hardw
 
 # must match with executable name
 pico_add_extra_outputs(palavo)
+
+# disable stdio peripherals
+pico_enable_stdio_uart(palavo 0)
+pico_enable_stdio_usb(palavo 0)

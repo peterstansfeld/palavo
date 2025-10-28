@@ -244,60 +244,6 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
       hsync5_program_init(pio_2, hsync5_sm, hsync5_offset, 0 /*VSYNC*/, 2);
 #endif
 
-      // bi_decl(bi_program_feature("This is a feature?"));
-
-      // bi_decl(bi_2pins_with_func(PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C));
-      // bi_decl(bi_2pins_with_func(12, 13, GPIO_FUNC_I2C));
-      // bi_program_description("This is a program description");
-
-      // bi_decl(bi_2pins_with_func(12, 13, GPIO_FUNC_HSTX));
-      // bi_decl(bi_1pin_with_func(14, GPIO_FUNC_HSTX));
-
-      // bi_decl(bi_pin_mask_with_name((1 << 27) | (1 << 26) | (1 << 5)| (1 << 4)| (1 << 3)| (1 << 2)| (1 << 1)| (1 << 0), "VGA In"));
-      
-      bi_decl(bi_1pin_with_name(0, "VGA In - Dark Blue"));
-      bi_decl(bi_1pin_with_name(1, "VGA In - Light Blue"));
-      bi_decl(bi_1pin_with_name(2, "VGA In - Dark Green"));
-      bi_decl(bi_1pin_with_name(3, "VGA In - Light Green"));
-      bi_decl(bi_1pin_with_name(4, "VGA In - Dark Red"));
-      bi_decl(bi_1pin_with_name(5, "VGA In - Light Red"));
-      bi_decl(bi_1pin_with_name(26, "VGA In - HSYNC / CSYNC"));
-      bi_decl(bi_1pin_with_name(27, "VGA In - VSYNC"));
-
-      // bi_decl(bi_pin_mask_with_name((1 << 22)| (1 << 11)| (1 << 10)| (1 << 9)| (1 << 8)| (1 << 7)| (1 << 6), "VGA Out"));
-#if USE_HSYNC_AND_VSYNC
-      bi_decl(bi_1pin_with_name(6, "HSYNC"));
-      bi_decl(bi_1pin_with_name(7, "VSYNC"));
-#endif
-      // bi_decl(bi_1pin_with_name(8, "Dark Green"));
-      // bi_decl(bi_1pin_with_name(9, "Light Green"));
-      // bi_decl(bi_1pin_with_name(10, "Blue"));
-      // bi_decl(bi_1pin_with_name(11, "Red"));
-      // bi_decl(bi_1pin_with_name(11, "CSYNC"));
-
-      bi_decl(bi_1pin_with_name(6, "VGA Out - Dark Blue"));
-      bi_decl(bi_1pin_with_name(7, "VGA Out - Light Blue"));
-      bi_decl(bi_1pin_with_name(8, "VGA Out - Dark Green"));
-      bi_decl(bi_1pin_with_name(9, "VGA Out - Light Green"));
-      bi_decl(bi_1pin_with_name(10, "VGA Out - Dark Red"));
-      bi_decl(bi_1pin_with_name(11, "VGA Out - Light Red"));
-      bi_decl(bi_1pin_with_name(22, "VGA Out - CSYNC"));
-
-
-      // bi_decl(bi_pin_range_with_func(12, 19, GPIO_FUNC_HSTX));
-
-      bi_decl(bi_1pin_with_name(12, "DVI Out - D0+"));
-      bi_decl(bi_1pin_with_name(13, "DVI Out - D0-"));
-      bi_decl(bi_1pin_with_name(14, "DVI Out - CK+"));
-      bi_decl(bi_1pin_with_name(15, "DVI Out - CK-"));
-      bi_decl(bi_1pin_with_name(16, "DVI Out - D1-"));
-      bi_decl(bi_1pin_with_name(17, "DVI Out - D1+"));
-      bi_decl(bi_1pin_with_name(18, "DVI Out - D2-"));
-      bi_decl(bi_1pin_with_name(19, "DVI Out - D2+"));
-
-      bi_decl(bi_2pins_with_func(20, 21, GPIO_FUNC_UART));
-
-      bi_decl(bi_1pin_with_name(28, "IR RX"));
 
 #if USE_CSYNC
 

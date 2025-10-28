@@ -28,6 +28,8 @@
 #include "hardware/dma.h"
 #include "hardware/uart.h"
 
+#include "pico/binary_info.h"
+
 // #include "hardware/timer.h"
 // #include "hardware/structs/bus_ctrl.h"
 #include <string.h>
@@ -314,6 +316,88 @@
     #endif
 
     #endif
+#endif
+
+
+bi_decl(bi_program_description("A logic analyser with VGA output and UART control"));
+bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
+
+
+#if USE_DVI
+    bi_decl(bi_program_feature("DVI output"));
+
+    bi_decl(bi_1pin_with_name(12, "DVI Out - D0+"));
+    bi_decl(bi_1pin_with_name(13, "DVI Out - D0-"));
+    bi_decl(bi_1pin_with_name(14, "DVI Out - CK+"));
+    bi_decl(bi_1pin_with_name(15, "DVI Out - CK-"));
+    bi_decl(bi_1pin_with_name(16, "DVI Out - D1-"));
+    bi_decl(bi_1pin_with_name(17, "DVI Out - D1+"));
+    bi_decl(bi_1pin_with_name(18, "DVI Out - D2-"));
+    bi_decl(bi_1pin_with_name(19, "DVI Out - D2+"));
+#endif
+
+
+#if USE_GPIO_0_47
+    bi_decl(bi_1pin_with_name(31, "VGA Out - CSYNC"));
+    bi_decl(bi_1pin_with_name(32, "VGA Out - Dark Blue"));
+    bi_decl(bi_1pin_with_name(33, "VGA Out - Light Blue"));
+    bi_decl(bi_1pin_with_name(34, "VGA Out - Dark Green"));
+    bi_decl(bi_1pin_with_name(35, "VGA Out - Light Green"));
+    bi_decl(bi_1pin_with_name(36, "VGA Out - Dark Red"));
+    bi_decl(bi_1pin_with_name(37, "VGA Out - Light Red"));
+
+#else
+    // using GPIO 0..7 for either VGA In or for VGA Out
+
+    #if USE_NEW_IO_MAPPING
+        bi_decl(bi_program_feature("VGA input"));
+
+        bi_decl(bi_1pin_with_name(0, "VGA In - VSYNC"));
+        bi_decl(bi_1pin_with_name(1, "VGA In - HSYNC / CSYNC"));
+        bi_decl(bi_1pin_with_name(2, "VGA In - Dark Blue"));
+        bi_decl(bi_1pin_with_name(3, "VGA In - Light Blue"));
+        bi_decl(bi_1pin_with_name(4, "VGA In - Dark Green"));
+        bi_decl(bi_1pin_with_name(5, "VGA In - Light Green"));
+        bi_decl(bi_1pin_with_name(6, "VGA In - Dark Red"));
+        bi_decl(bi_1pin_with_name(7, "VGA In - Light Red"));
+
+
+        #ifdef VGA_OUT_CSYNC_PIN
+            bi_decl(bi_1pin_with_name(VGA_OUT_CSYNC_PIN, "VGA Out - CSYNC"));
+        #endif
+
+
+        #ifdef VGA_OUT_RGB_BASE_PIN
+            bi_decl(bi_1pin_with_name(VGA_OUT_RGB_BASE_PIN, "VGA Out - RGB"));
+        #endif
+
+    #else
+        bi_decl(bi_1pin_with_name(0, "VGA Out - VSYNC"));
+        bi_decl(bi_1pin_with_name(1, "VGA Out - HSYNC / CSYNC"));
+        bi_decl(bi_1pin_with_name(2, "VGA Out - Dark Blue"));
+        bi_decl(bi_1pin_with_name(3, "VGA Out - Light Blue"));
+        bi_decl(bi_1pin_with_name(4, "VGA Out - Dark Green"));
+        bi_decl(bi_1pin_with_name(5, "VGA Out - Light Green"));
+        bi_decl(bi_1pin_with_name(6, "VGA Out - Dark Red"));
+        bi_decl(bi_1pin_with_name(7, "VGA Out - Light Red"));
+    #endif
+
+#endif
+
+
+#ifdef UART_TX_PIN
+    bi_decl(bi_1pin_with_name(UART_TX_PIN, "UART TX"));
+#endif
+
+
+#ifdef UART_RX_PIN
+    bi_decl(bi_1pin_with_name(UART_RX_PIN, "UART RX"));
+#endif
+
+
+#ifdef IR_RX_PIN
+    bi_decl(bi_1pin_with_name(IR_RX_PIN, "IR RX"));
+    bi_decl(bi_program_feature("Infra-red control"));
 #endif
 
 
