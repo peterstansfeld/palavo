@@ -34,9 +34,16 @@
 #include "hsync5.pio.h"
 #include "rgb5.pio.h"
 
-#define USE_HSYNC_AND_VSYNC 0
+#include "config.h"
 
-#define USE_CSYNC !USE_HSYNC_AND_VSYNC
+#ifdef PALAVO_CONFIG
+    // #pragma message "PALAVO_CONFIG detected from vga2_graphics."
+    #define USE_CSYNC ((PALAVO_CONFIG >> PC_BIT_USE_CSYNC) & 1)
+#else
+    #define USE_CSYNC 0
+#endif
+
+#define USE_HSYNC_AND_VSYNC !USE_CSYNC
 
 
 #if SYS_CLOCK_FREQ_KHZ == 250000u

@@ -43,14 +43,8 @@
 #define DEBUG_PIN 28
 
 
-// Bit locations in PALAVO_CONFIG
-
-#define PC_BIT_USE_DVI 0
-#define PC_BIT_USE_GPIO_0_47 1
-#define PC_BIT_USE_VGA_IN_TO_DVI 2
-#define PC_BIT_USE_NEW_IO_MAPPING 3
-
-// See README.md for more details on PALAVO_CONFIG
+// Configuration details, including bit locations for PALAVO_CONFIG
+#include "config.h"
 
 #if (defined RASPBERRYPI_PICO2)
 
@@ -172,6 +166,15 @@
     #define USE_NEW_IO_MAPPING 1
 
     #pragma message "Using new IO mapping"
+
+#endif
+
+
+#if (PALAVO_CONFIG & (1 << PC_BIT_USE_CSYNC))
+
+    #define USE_CSYNC 1
+
+    #pragma message "Using CSYNC instead of VSYNC and HSYNC"
 
 #endif
 
@@ -507,9 +510,14 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 #else
 
 #define CAPTURE_PIN_COUNT 8 // HSYNC, VSYNC and BBGGRR (blue, green, red)
-#define CAPTURE_TRIGGER_PIN_BASE 1 // HSYNC
 
+#if USE_CSYNC
+#define CAPTURE_TRIGGER_PIN_BASE 1 // HSYNC_CSYNC
 #define CAPTUTRE_TRIGGER_TYPE TT_VGA_CSYNC
+#else
+#define CAPTURE_TRIGGER_PIN_BASE 0 // VSYNC
+#define CAPTUTRE_TRIGGER_TYPE TT_VGA_VSYNC
+#endif
 
 #if PICO_RP2350
 // assume this is a PICO2350 (running at 150 MHz)
