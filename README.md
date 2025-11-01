@@ -108,7 +108,7 @@ Specify where the pico-sdk directory can be found on your PC, e.g.:
 Run `cmake` specifying where the top level CMakeLists.txt file can be found - in this case it's the great-grandparent directory `../../../`, specify the board `pico2`, 
 and specify the configuration `PALAVO_CONFIG=0`:
 
-`$ cmake ../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=0`
+`$ cmake ../../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=0`
 
 Then build it:
 
@@ -906,7 +906,7 @@ In the `build` directory create a different, but still suitably-named, directory
 
 Repeat the rest of the previous build process, only use this CMAKE command instead:
 
-`$ cmake ../../ -DPICO_BOARD=solderparty_rp2350_stamp_xl -DPALAVO_CONFIG=1`
+`$ cmake ../../../ -DPICO_BOARD=solderparty_rp2350_stamp_xl -DPALAVO_CONFIG=1`
 
 <!-- [text](../pico-sdk/src/boards/include/boards/solderparty_rp2350_stamp_xl.h) -->
 

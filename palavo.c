@@ -167,6 +167,10 @@
 
     #pragma message "Using new IO mapping"
 
+    #if (!(PALAVO_CONFIG & (1 << PC_BIT_USE_CSYNC)))
+        #error "VGA Output must use CSYNC."
+    #endif
+
 #endif
 
 
@@ -413,6 +417,8 @@ bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
         #include "vga_capture.pio.h"
 
     #endif
+
+    #define USE_DVI_DEBUG 0
 
 #endif
 
@@ -2354,9 +2360,13 @@ enum UI_COMMANDS {
 
 #if USE_DVI
     UIC_V,
+    #if USE_DVI_DEBUG
+
     UIC_D,
     UIC_R,
     UIC_S,
+
+    #endif
 #endif
 
     UIC_SPACEBAR,
@@ -2769,6 +2779,8 @@ uint check_keyboard() {
                     ui_command = UIC_V;
                     break;
 
+    #if USE_DVI_DEBUG
+
                 case 'd':
                     ui_command = UIC_D;
                     break;
@@ -2780,6 +2792,9 @@ uint check_keyboard() {
                 case 's':
                     ui_command = UIC_S;
                     break;
+
+    #endif
+
 #endif
 
                 case '\t':
@@ -3741,9 +3756,14 @@ uint check_ir() {
                         break;
 
     #if USE_DVI
+
+        #if USE_DVI_DEBUG
+    
                     case 14:
                         ui_command = UIC_R; // reset DVI
                         break;
+        #endif
+    
     #endif
 
                     case 9:
@@ -4361,7 +4381,7 @@ int main() {
                         if (g_mag < 0) {
                             scroll_inc = abs(g_mag) + 1;
                         }
-                        plot_required = set_scroll_x(g_scrollx + scroll_inc);
+                        plot_required = set_scroll_x(MIN(g_scrollx + scroll_inc, g_capture_n_samples));
                         break;
 
                     case UIC_LEFT:
@@ -4380,7 +4400,7 @@ int main() {
 
                     case UIC_PAGE_DOWN:
                         writeString("scroll right a page");
-                        plot_required = set_scroll_x(g_scrollx + mag_factor(SCREEN_WIDTH)); // 100% of the screen width
+                        plot_required = set_scroll_x(MIN(g_scrollx + (mag_factor(SCREEN_WIDTH)), g_capture_n_samples));
                         break;
 
                     case UIC_MINUS:
@@ -4637,6 +4657,7 @@ int main() {
                         break;
 #endif
 
+    #if USE_DVI_DEBUG
                     case UIC_D:
                         writeString("test DVI");
                         test_DVI_framebuf();
@@ -4663,6 +4684,8 @@ int main() {
                         writeString("deinit DVI");
                         dvi_deinit();
                         break;
+    #endif
+
 #endif
 
                 }
@@ -4674,7 +4697,7 @@ int main() {
                     plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, true);
                 }
 
-                if (mini_map_redraw_required){
+                if (mini_map_redraw_required) {
                     plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
                 }
 
@@ -4707,6 +4730,9 @@ int main() {
                     // busy_wait_us(10000);
                 }
             }
+            
+            sleep_ms(10); // testing to see if this still randomly crashes the hstx-dvi (when using it)
+
             // NB sleep_ms, which trys to use the arm's wfe instruction, seems to be the thing
             // that causes the hstx-dvi to fall over.
 
