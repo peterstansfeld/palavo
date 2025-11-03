@@ -185,6 +185,7 @@
 
 #define PICO_RESERVED_GPIO_0_31 ((1 << 31) | (1 << 30) | (1 << 29) | (1 << 25) | (1 << 24)  | (1 << 23))
 
+#define ENABLE_GRAPHICS_DEMO 0
 
 #if USE_GPIO_0_47
 
@@ -2289,7 +2290,7 @@ int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next
     return next_sample;
 }
 
-
+#if ENABLE_GRAPHICS_DEMO
 uint32_t last_demo_time;
 
 // Demonstrates the graphics primitives.
@@ -2339,6 +2340,7 @@ void demo() {
     Hline_y += 2 ;
     if (Hline_y > 400) Hline_y = 240;
 }
+#endif
 
 enum UI_COMMANDS {
     UIC_NONE,
@@ -4159,8 +4161,10 @@ int main() {
     // Claim a DMA channel for the pio state machine(s) used for capturing.
     uint dma_chan = dma_claim_unused_channel(true);
 
+#if ENABLE_GRAPHICS_DEMO
     // animation pause
     bool demo_paused = true;
+#endif
 
     #define CORNER_LEN 2
 
@@ -4353,11 +4357,12 @@ int main() {
 
                 switch (ui_command) {
 
+#if ENABLE_GRAPHICS_DEMO
                     case UIC_SPACEBAR:
                         writeString("space");
                         demo_paused = !demo_paused;
                         break;
-
+#endif
                     case UIC_CTRL_RIGHT:
                     case UIC_CTRL_LEFT:
                         writeString(ui_command == UIC_CTRL_RIGHT ? "next" : "previous");
@@ -4708,6 +4713,7 @@ int main() {
 
         } else {
 
+#if ENABLE_GRAPHICS_DEMO
             if (!demo_paused && !showing_window) {
                 // uint32_t time_us_now = 
                 if (time_us_32() - last_demo_time >= 10000) {
@@ -4730,7 +4736,8 @@ int main() {
                     // busy_wait_us(10000);
                 }
             }
-            
+#endif
+
             sleep_ms(10); // testing to see if this still randomly crashes the hstx-dvi (when using it)
 
             // NB sleep_ms, which trys to use the arm's wfe instruction, seems to be the thing
