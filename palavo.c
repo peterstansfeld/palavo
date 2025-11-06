@@ -46,6 +46,10 @@
 // Configuration details, including bit locations for PALAVO_CONFIG
 #include "config.h"
 
+// #ifndef PALAVO_CONFIG
+//     #define PALAVO_CONFIG 29
+// #endif
+
 #if (defined RASPBERRYPI_PICO2)
 
     #pragma message "Building Palavo for RASPBERRYPI_PICO2"
@@ -3536,6 +3540,8 @@ void init_vga_capture_dma_and_start_capturing() {
 
     #define DVI_LINE_LENGTH_BYTES (640 * 4 / 5)
     
+    #define DVI_FRAME_LENGTH_IN_BYTES (((640 * 4) / 5) * 480)
+
     #define DVI_BUF_TRANSFER_SIZE ((((640 * 4) / 5) * 480) / 4)
 
     static uint32_t testReadValue = /* 0xffffffff */((RED_BITS) | (GREEN_BITS << 6) | (BLUE_BITS << 12)) << 2;
@@ -3545,7 +3551,8 @@ void init_vga_capture_dma_and_start_capturing() {
         &vga_capture_dma_ch0,                        // The configuration we just created
         &dvi_framebuf[0],              // The initial write address (pixel color array)
         &vga_capture_pio->rxf[vga_capture_sm],       // read address (RGB PIO RX FIFO)
-        (0x0 << 28) | (DVI_LINE_LENGTH_BYTES * 480 / 4),                  // Number of transfers in words; in this case each word is 4 byte. this doesn't crash
+        // (0x0 << 28) | (DVI_LINE_LENGTH_BYTES * 480 / 4),                  // Number of transfers in words; in this case each word is 4 byte. this doesn't crash
+        DVI_BUF_TRANSFER_SIZE,
         false                       // Don't start immediately.
     );
 
@@ -3570,6 +3577,81 @@ void init_vga_capture_dma_and_start_capturing() {
     dma_start_channel_mask((1u << rgb_test_chan_0)); 
 }
 
+// this must match the irq number from vga_detect_vsync in vga_capture.pio
+#define VGA_CAPTURE_FRAME_PIO_IRQ 7
+
+#if VGA_CAPTURE_FRAME_PIO_IRQ == 0
+    #define PIS_INTERRUPT_NO pis_interrupt0
+#elif VGA_CAPTURE_FRAME_PIO_IRQ == 1
+    #define PIS_INTERRUPT_NO pis_interrupt1
+#elif VGA_CAPTURE_FRAME_PIO_IRQ == 2
+    #define PIS_INTERRUPT_NO pis_interrupt2
+#elif VGA_CAPTURE_FRAME_PIO_IRQ == 3
+    #define PIS_INTERRUPT_NO pis_interrupt3
+#elif VGA_CAPTURE_FRAME_PIO_IRQ == 4
+    #define PIS_INTERRUPT_NO pis_interrupt4
+#elif VGA_CAPTURE_FRAME_PIO_IRQ == 5
+    #define PIS_INTERRUPT_NO pis_interrupt5
+#elif VGA_CAPTURE_FRAME_PIO_IRQ == 6
+    #define PIS_INTERRUPT_NO pis_interrupt6
+#elif VGA_CAPTURE_FRAME_PIO_IRQ == 7
+    #define PIS_INTERRUPT_NO pis_interrupt7
+#endif
+
+int vsync_counter;
+
+#if defined(PICO_DEFAULT_LED_PIN)
+    bool led_state;
+#endif
+
+#define VGA_VERTICAL_REFRESH_FREQ 60
+
+uint vga_capture_dma_write_addr;
+
+
+void pio0_irq_handler() {
+    pio_interrupt_clear(vga_capture_pio, VGA_CAPTURE_FRAME_PIO_IRQ);
+    if (++vsync_counter >= VGA_VERTICAL_REFRESH_FREQ) {
+        // every second
+        uint write_addr = dma_hw->ch[rgb_test_chan_0].write_addr;
+        if (write_addr != (uintptr_t) &dvi_framebuf) {
+            vga_capture_dma_write_addr = write_addr;
+        }
+#if defined(PICO_DEFAULT_LED_PIN)
+        led_state = !led_state;
+        gpio_put(PICO_DEFAULT_LED_PIN, led_state);
+#endif
+        vsync_counter = 0;
+    }
+}
+
+
+void vga_sync_detect_interrupt_set_enabled(bool enabled) {
+    // configure the LED to be an output and set it
+
+    if (enabled) {
+
+#if defined(PICO_DEFAULT_LED_PIN)
+        gpio_init(PICO_DEFAULT_LED_PIN);
+        gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+        gpio_put(PICO_DEFAULT_LED_PIN, 0);
+#endif
+
+        irq_add_shared_handler(PIO0_IRQ_0, pio0_irq_handler, PICO_SHARED_IRQ_HANDLER_LOWEST_ORDER_PRIORITY);
+        // pio_set_irq0_source_enabled(vga_capture_pio, 4, true);
+        pio_set_irq0_source_enabled(vga_capture_pio, PIS_INTERRUPT_NO, true);
+
+        // enable the interrupt
+        irq_set_enabled(PIO0_IRQ_0, true);
+    } else {
+        // disable the interrupt
+        irq_set_enabled(PIO0_IRQ_0, false);
+
+        pio_set_irq0_source_enabled(vga_capture_pio, PIS_INTERRUPT_NO, false);
+
+        irq_remove_handler(PIO0_IRQ_0, pio0_irq_handler);
+    }
+}
 
 // capture the RGB of pins 0 to 5 using HSYNC and VSYNC of pins 26 & 27, or CSYNC on pin 26.
 void init_pio_vga_capture_with_vsync_and_vsync_on_csync() {
@@ -3587,6 +3669,8 @@ void init_pio_vga_capture_with_vsync_and_vsync_on_csync() {
         // vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, 0);
 
         init_vga_capture_dma_and_start_capturing();
+
+        vga_sync_detect_interrupt_set_enabled(true);
 
         pio_enable_sm_mask_in_sync(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_sm) | (1u << vga_detect_vsync_on_csync_sm));
 
@@ -3637,6 +3721,8 @@ void deinit_vga_capture() {
         // free the remaining state machines
         pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
         pio_remove_program(vga_capture_pio, &vga_detect_vsync_on_csync_program, vga_detect_vsync_on_csync_offset);
+
+        vga_sync_detect_interrupt_set_enabled(false);
 
         // stop and free the dma channels
         dma_channel_cleanup(rgb_test_chan_1);
@@ -4738,8 +4824,23 @@ int main() {
             }
 #endif
 
-            sleep_ms(10); // testing to see if this still randomly crashes the hstx-dvi (when using it)
+#if USE_VGA_CAPTURE
 
+            // test to see if the vga capture dma write address is that of the start of the dvi frame buffer
+            if (vga_capture_dma_write_addr) {
+                // it isn't, so report the write address
+                uart_putuif(UART_ID, "vga_capture_dma_write_addr: %x\n", vga_capture_dma_write_addr);
+                
+                // reinitialise the vga capture PIOs and DMA 
+                deinit_vga_capture();
+                init_pio_vga_capture_with_vsync_and_vsync_on_csync();
+                vga_capture_dma_write_addr = 0;
+            }
+#endif
+
+#if !USE_DVI
+            sleep_ms(10); // testing to see if this still randomly crashes the hstx-dvi (when using it)
+#endif
             // NB sleep_ms, which trys to use the arm's wfe instruction, seems to be the thing
             // that causes the hstx-dvi to fall over.
 

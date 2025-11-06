@@ -14,6 +14,10 @@ start:
     wait 0 jmppin+0                 ; wait for VSYNC to be low (VSYNC must be 1 GPIO higher than HSYNC's GPIO)
     wait 1 jmppin+0                 ; wait for VSYNC to be high
 
+; Signal that a VSYNC has occurred, which allows us to test whether we're out
+; of sync with the DMA channel resposible for writing to the dvi frame buffer.  
+    irq 7
+
 ; Wait for 32 HSYNCs
     set x, 31                       ; prepare to count 32 HSYNCS
 
@@ -74,7 +78,17 @@ static inline void vga_detect_vsync_program_init(PIO pio, uint sm, uint offset, 
 .wrap_target
 
 wait_for_vsync_on_csync:
-    wait 1 jmppin                   ; wait for csync to be high
+
+; I'd really like to gain one instruction so that we can set an irq on VSYNC
+; in vga_detect_vsync in order to test whether we need to resynchronise the
+; dvi frame buffer
+
+; I don't particulaly like it but we can probably lose this instruction
+
+;    wait 1 jmppin                   ; wait for csync to be high
+
+; Yes, it seems we can
+
 ; csync is high
     wait 0 jmppin                   ; wait for csync to be low
 
@@ -150,7 +164,7 @@ static inline void vga_detect_vsync_on_csync_program_init(PIO pio, uint sm, uint
 .wrap_target
 
 start:
-    mov y, osr                      ; load y with 479 for 480 loops
+    mov y, osr                      ; load y with 639 for 640 loops
 
 wait_for_hsync:
     wait 1 irq 4                    ; wait for hsync (1 clk) to be detected and flagged by another sm (1 clk)
@@ -162,7 +176,7 @@ delay_loop:
 
 sample_rgb_pins:
     in pins, 6 [4]                  ; grab the pixel data
-    jmp y-- sample_rgb_pins         ; repeat 479 more times  
+    jmp y-- sample_rgb_pins         ; repeat 639 more times  
 
 .wrap
 

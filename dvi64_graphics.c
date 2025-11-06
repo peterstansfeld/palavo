@@ -27,6 +27,7 @@
 
 #include "dvi64_graphics.h"
 
+#define USE_EXCLUSIVE_IRQ_HANDLER 0
 
 // ----------------------------------------------------------------------------
 
@@ -172,11 +173,46 @@ static uint v_scanline = 2;
 static bool vactive_cmdlist_posted = false;
 
 void __scratch_x("") dma_irq_handler() {
+
+#if !USE_EXCLUSIVE_IRQ_HANDLER
+// this is a shared interrupt handler, so we need to work out which 
+
+// Need to check and clear DMA_IRQ_0 - I don't understand why it's not crashing because this isn't being done. Oh yes it is.
+
+
+#endif
+
+// We need to work out which interrupt has fired this shared interrupt handler
+
     // dma_pong indicates the channel that just finished, which is the one
     // we're about to reload.
     uint ch_num = dma_pong ? DMACH_PONG : DMACH_PING;
     dma_channel_hw_t *ch = &dma_hw->ch[ch_num];
+    
+    // this clears the appropriate interrupt
     dma_hw->intr = 1u << ch_num;
+    
+    /*
+    // so should this, but doesn't work - don't know why
+    // dma_hw->intr = dma_intr_reg; 
+
+    // this does
+
+    // read the interrupt reg and mask the appropriate bits
+    uint dma_intr_reg = dma_hw->intr & 3u;
+
+    // Sometimes the dma_intr_reg.0 is 1, sometimes dma_intr_reg.1 is 1, and sometimes they both are
+    // if they both are we need to clear dma_intr_reg.1 otherwise no dvi signal - don't know why.
+    // Maybe to begin with both interrupts get set and the ping-ponging needs to start with clearing
+    // one interrupt otherwise it's all out of sync? 
+
+    if (dma_intr_reg < 2) {
+        dma_hw->intr = 1u << 0; 
+    } else {
+        dma_hw->intr = 1u << 1; 
+    }
+    */
+
     dma_pong = !dma_pong;
 
     if (v_scanline >= MODE_V_FRONT_PORCH && v_scanline < (MODE_V_FRONT_PORCH + MODE_V_SYNC_WIDTH)) {
@@ -1007,7 +1043,11 @@ void dvi_init_hstx_dma() {
 // IGNORE_THIS starts to fail when here
 // Some of the VGA screen is painted but not the samples, so maybe the sampling DMA stuff is messing with this DVI DMA stuff
 
+#if USE_EXCLUSIVE_IRQ_HANDLER
     irq_set_exclusive_handler(DMA_IRQ_0, dma_irq_handler);
+#else
+    irq_add_shared_handler(DMA_IRQ_0, dma_irq_handler, PICO_SHARED_IRQ_HANDLER_HIGHEST_ORDER_PRIORITY);
+#endif
 
 // #ifndef IGNORE_THIS
 // IGNORE_THIS completely fails when here
