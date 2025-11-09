@@ -1004,3 +1004,93 @@ VGA_Out_Light_Green  GP9 12                29 GP22  VGA_Out_CSYNC
            DVI_CK-  GP15 20                21 GP16  DVI_D1-
 ```
  I created Palavo to help me *view* the inputs and outputs of various PIO programs I was working on, including the VGA driver.
+
+
+Making notes before changing UART functions
+
+in `build/pico2/config29/`
+current `$ picotool info palavo.uf2`
+
+ Program Information
+ name:                palavo
+ web site:            https://github.com/peterstansfeld/palavo
+ description:         A logic analyser with VGA output and UART control
+ features:            VGA input
+                      DVI output
+ binary start:        0x10000000
+ binary end:          0x1000c494
+ target chip:         RP2350
+ image type:          ARM Secure
+
+
+with `pico_enable_stdio_uart(palavo 1)` includee
+
+Program Information
+ name:          palavo
+ web site:      https://github.com/peterstansfeld/palavo
+ description:   A logic analyser with VGA output and UART control
+ features:      VGA input
+                DVI output
+                UART stdin / stdout
+ binary start:  0x10000000
+ binary end:    0x1000c724
+ target chip:   RP2350
+ image type:    ARM Secure
+
+
+Program Information
+ name:          palavo
+ web site:      https://github.com/peterstansfeld/palavo
+ description:   A logic analyser with VGA output and UART control
+ features:      VGA input
+                DVI output
+                UART stdin / stdout
+ binary start:  0x10000000
+ binary end:    0x1000ba0c
+ target chip:   RP2350
+ image type:    ARM Secure
+ 
+pico2/config0
+
+
+uart
+
+Program Information
+ name:          palavo
+ web site:      https://github.com/peterstansfeld/palavo
+ description:   A logic analyser with VGA output and UART control
+ features:      Infra-red control
+ binary start:  0x10000000
+ binary end:    0x1000b72c
+ target chip:   RP2350
+ image type:    ARM Secure
+
+stdio uart
+
+
+Program Information
+ name:          palavo
+ web site:      https://github.com/peterstansfeld/palavo
+ description:   A logic analyser with VGA output and UART control
+ features:      Infra-red control
+                UART stdin / stdout
+ binary start:  0x10000000
+ binary end:    0x1000afbc
+ target chip:   RP2350
+ image type:    ARM Secure
+
+
+stdio usb
+
+Program Information
+ name:          palavo
+ web site:      https://github.com/peterstansfeld/palavo
+ description:   A logic analyser with VGA output and UART control
+ features:      Infra-red control
+                USB stdin / stdout
+ binary start:  0x10000000
+ binary end:    0x1000e4b8
+ target chip:   RP2350
+ image type:    ARM Secure
+
+      

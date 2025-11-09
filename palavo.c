@@ -18,15 +18,25 @@
  *
  */
 
+#define USE_STDIO_UART 1
+
 #include "hardware/clocks.h"
 #include "nec_ir_rx.pio.h"
 
 #include <stdio.h>
 #include <stdlib.h>
+// #include "pico/malloc.h"
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
 #include "hardware/dma.h"
+
+#if !USE_STDIO_UART
+
 #include "hardware/uart.h"
+#else
+// #include "pico/stdio_uart.h"
+// #include "pico/stdio_usb.h"
+#endif
 
 #include "pico/binary_info.h"
 
@@ -37,7 +47,11 @@
 // VGA graphics library
 #include "vga2_graphics.h"
 
+#if !USE_STDIO_UART
+
 #define UART_ID uart1
+
+#endif
 #define BAUD_RATE 115200
 
 #define DEBUG_PIN 28
@@ -331,7 +345,7 @@
 #endif
 
 
-bi_decl(bi_program_description("A logic analyser with VGA output and UART control"));
+bi_decl(bi_program_description("PIO-Assisted Logic Analyser with VGA Output"));
 bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
 
 
@@ -396,6 +410,7 @@ bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
 
 #endif
 
+#ifdef PICO_STDIO_UART
 
 #ifdef UART_TX_PIN
     bi_decl(bi_1pin_with_name(UART_TX_PIN, "UART TX"));
@@ -404,6 +419,8 @@ bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
 
 #ifdef UART_RX_PIN
     bi_decl(bi_1pin_with_name(UART_RX_PIN, "UART RX"));
+#endif
+
 #endif
 
 
@@ -631,10 +648,20 @@ static inline uint bits_packed_per_word(uint pin_count) {
 }
 
 
-void uart_putuif(uart_inst_t *uart, const char *s, uint c) {
+void uart_my_puts(const char * s) {
+
+#if !USE_STDIO_UART
+    uart_puts(UART_ID, s);    
+#else
+    stdio_put_string(s, strlen(s), false, false);
+#endif
+}
+
+
+void uart_my_putuif(const char *s, uint c) {
     char str[80];
     sprintf(str, s, c);
-    uart_puts(uart, str);
+    uart_my_puts(str);
 }
 
 
@@ -654,10 +681,10 @@ void logic_analyser_configure(PIO pio, uint sm, uint pin_base, uint pin_count, f
 }
 
 
-void uart_putcf(uart_inst_t *uart, const char *s, int c) {
+void uart_my_putcf(const char *s, int c) {
     char str[80];
     sprintf(str, s, c);
-    uart_puts(uart, str);
+    uart_my_puts(str);
 }
 
 
@@ -678,7 +705,7 @@ uint my_pio_set_gpio_base(PIO pio, uint base) {
     uint res = pio_set_gpio_base(pio, base);
     int pio_num = get_pio_number(pio);
     sprintf(str, "pio_set_gpio_base(%d, %d); res: %d\n", pio_num, base, res);
-    uart_puts(UART_ID, str);
+    uart_my_puts(str);
     return res;
 }
 #endif
@@ -706,7 +733,7 @@ void logic_analyser_init(uint pin_base, uint pin_count, float div, bool init) {
             // This should be the first time we've called this, as prog_inst is
             // a static variable, and static variables are zeroed on reset, which means
             // we don't need to do anything here, so let's comment it out.
-            uart_puts(UART_ID, "LA1 reiniting\n");
+            uart_my_puts("LA1 reiniting\n");
         }
 
         prog_inst = pio_encode_in(pio_pins, pin_count);
@@ -718,14 +745,14 @@ void logic_analyser_init(uint pin_base, uint pin_count, float div, bool init) {
         offset = pio_add_program(pio, &prog);
         logic_analyser_configure(pio, sm, pin_base, pin_count, div, offset);
         initialised = true;
-        uart_puts(UART_ID, "LA1 inited\n");
+        uart_my_puts("LA1 inited\n");
     } else {
         if (initialised) {
             pio_remove_program(pio, &prog, offset);
             initialised = false;
-            uart_puts(UART_ID, "LA1 deinited\n");
+            uart_my_puts("LA1 deinited\n");
         } else {
-            uart_puts(UART_ID, "LA1 already deinited\n");
+            uart_my_puts("LA1 already deinited\n");
         }
     }
 }
@@ -756,7 +783,7 @@ void logic_analyser0_init(/*PIO pio, uint sm,*/ uint pin_base, uint pin_count, f
             // This should be the first time we've called this, as prog_inst is
             // a static variable, and static variables are zeroed on reset, which means
             // we don't need to do anything here, so let's comment it out.
-            uart_puts(UART_ID, "LA0 reiniting\n");
+            uart_my_puts("LA0 reiniting\n");
         }
 
         prog_inst = pio_encode_in(pio_pins, pin_count);
@@ -768,14 +795,14 @@ void logic_analyser0_init(/*PIO pio, uint sm,*/ uint pin_base, uint pin_count, f
         offset = pio_add_program(pio, &prog);
         logic_analyser_configure(pio, sm, pin_base, pin_count, div, offset);
         initialised = true;
-        uart_puts(UART_ID, "LA0 inited\n");
+        uart_my_puts("LA0 inited\n");
     } else {
         if (initialised) {
             pio_remove_program(pio, &prog, offset);
             initialised = false;
-            uart_puts(UART_ID, "LA0 deinited\n");
+            uart_my_puts("LA0 deinited\n");
         } else {
-            uart_puts(UART_ID, "LA0 already deinited\n");
+            uart_my_puts("LA0 already deinited\n");
         }
     }
 }
@@ -873,10 +900,10 @@ void init_ir_rx(bool init) {
             pio_enable_sm_mask_in_sync(ir_rx_pio, (1u << ir_rx_sm));
 
             initialised = true;
-            uart_puts(UART_ID, "IR inited\n");
+            uart_my_puts("IR inited\n");
 
         } else {
-            uart_puts(UART_ID, "IR already inited\n");
+            uart_my_puts("IR already inited\n");
         }
     } else {
         if (initialised) {
@@ -888,10 +915,10 @@ void init_ir_rx(bool init) {
             pio_remove_program(ir_rx_pio, &nec_ir_rx_program, offset);
             
             initialised = false;
-            uart_puts(UART_ID, "IR deinited\n");
+            uart_my_puts("IR deinited\n");
 
         } else {
-            uart_puts(UART_ID, "IR already deinited\n");
+            uart_my_puts("IR already deinited\n");
         }
     }
 }
@@ -911,7 +938,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     PIO capture_pio = pio;
     uint capture_sm = sm;
 
-    uart_puts(UART_ID, "\nArming trigger...\n");
+    uart_my_puts("\nArming trigger...\n");
 
     // Remove the ir rx - actually, we dont really need to because it's always using GPIO_BASE 16.
     // Keep it for now. After trying without stopping it, the response time of the trigger (a 
@@ -941,7 +968,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
 
     if ((g_pins_base >= 16) && (g_pins_base + g_no_of_pins_to_capture > 32)) {
         // res = pio_set_gpio_base(pio, 16);
-        uart_puts(UART_ID, "using pio_with_base_16 to capture\n");
+        uart_my_puts("using pio_with_base_16 to capture\n");
         // leave the pio pointing here
 
         // PIO capture_pio = pio;
@@ -954,7 +981,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
         capture_sm = sm;
 
     } else {
-        uart_puts(UART_ID, "using pio_with_base_0 to capture\n");
+        uart_my_puts("using pio_with_base_0 to capture\n");
         capture_pio = pio_with_base_0; //it's badly named - todo - change it 
         capture_sm = sm; //it's badly named - todo - change it 
 
@@ -963,7 +990,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
 
     if (trigger_pin >= 32) {
         // leave the pio pointing here
-        uart_puts(UART_ID, "using pio_with_base_16 to trigger\n");
+        uart_my_puts("using pio_with_base_16 to trigger\n");
 
         // PIO capture_pio = pio;
         // uint capture_sm = sm;
@@ -973,13 +1000,13 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
         trigger_pio = pio_with_base_16;
         trigger_sm = sm;
     } else {
-        uart_puts(UART_ID, "using pio_with_base_0 to trigger\n");
+        uart_my_puts("using pio_with_base_0 to trigger\n");
         trigger_pio = pio_with_base_0; //it's badly named - todo - change it 
         trigger_sm = la_capture_sm; //it's badly named - todo - change it 
     }
 
-    uart_putcf(UART_ID, "capture_pio: %d\n", get_pio_number(capture_pio));
-    uart_putcf(UART_ID, "trigger_pio: %d\n", get_pio_number(trigger_pio));
+    uart_my_putcf("capture_pio: %d\n", get_pio_number(capture_pio));
+    uart_my_putcf("trigger_pio: %d\n", get_pio_number(trigger_pio));
 
 
     // Initialise both LAs, one on pio0 and one on pio2, regardles of whether we use them bith, or not.
@@ -1096,10 +1123,10 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
                         }
                     }
                 } else {
-                    // uart_puts(UART_ID, "trigger 2 failed\n");
+                    // uart_my_puts("trigger 2 failed\n");
                 }
             } else {
-                // uart_puts(UART_ID, "trigger 1 failed\n");
+                // uart_my_puts("trigger 1 failed\n");
             }
             break;
 
@@ -1200,7 +1227,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     if (!triggered) {   
         // Failed to trigger, so restart the state machine otherwise it'll be stuck
         // in a latched EXEC instruction, and we'll never fill up the capture buffer.
-        uart_puts(UART_ID, "failed to trigger, restarting the state machine...\n");
+        uart_my_puts("failed to trigger, restarting the state machine...\n");
         pio_sm_restart(capture_pio, capture_sm);
     }
 
@@ -1256,7 +1283,7 @@ int get_channel_sample(const uint32_t *buf, int pin, uint pin_count, int index, 
     uint word_index = bit_index / record_size_bits;
     // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
     uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-    //uart_puts(UART_ID, buf[word_index] & word_mask ? "-" : "_");
+    //uart_my_puts(buf[word_index] & word_mask ? "-" : "_");
 
     return buf[word_index] & word_mask ? 1 :0;
 }
@@ -1266,17 +1293,17 @@ void print_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint3
     // Display the capture buffer in text form, like this:
     // 00: __--__--__--__--__--__--
     // 01: ____----____----____----
-    uart_puts(UART_ID, "Capture:\n");
+    uart_my_puts("Capture:\n");
     // Each FIFO record may be only partially filled with bits, depending on
     // whether pin_count is a factor of 32.
     uint record_size_bits = bits_packed_per_word(pin_count);
     for (int pin = 0; pin < pin_count; ++pin) {
-        // uart_puts(UART_ID, "%02d: ", pin + pin_base);
-        uart_puts(UART_ID, "todo");
+        // uart_my_puts("%02d: ", pin + pin_base);
+        uart_my_puts("todo");
         for (int sample = 0; sample < n_samples; ++sample) {
-            uart_puts(UART_ID, get_channel_sample(buf, pin, pin_count, sample, record_size_bits) ? "-" : "_");
+            uart_my_puts(get_channel_sample(buf, pin, pin_count, sample, record_size_bits) ? "-" : "_");
         }
-        uart_puts(UART_ID, "\n");
+        uart_my_puts("\n");
     }
 }
 
@@ -1642,7 +1669,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
     // 00: __--__--__--__--__--__--
     // 01: ____----____----____----
     // ...only with lines
-    // uart_puts(UART_ID, "Capture:\n");
+    // uart_my_puts("Capture:\n");
     // Each FIFO record may be only partially filled with bits, depending on
     // whether pin_count is a factor of 32.
 
@@ -1701,7 +1728,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
         char str[256];
         sprintf(str, "pin: %d scrollx: %d, prev start: %d prev_end: %d next start: %d next end: %d\n", 
             pin, scrollx, edges[pin].prev_start, edges[pin].prev_end, edges[pin].next_start, edges[pin].next_end);
-        uart_puts(UART_ID, str);
+        uart_my_puts(str);
     }
 
 #endif
@@ -1711,7 +1738,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
     setTextSize(1);
 
 #ifdef DEBUG_PINS
-    uart_puts(UART_ID, "-\n");
+    uart_my_puts("-\n");
 #endif
 
     for (int pin = 0; pin < pin_count; ++pin) {
@@ -1768,7 +1795,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 #ifdef DEBUG_PINS
             if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
                 sprintf(str, "finding prev edge on pin %d at scrollx: %d...\n", pin, scrollx);
-                uart_puts(UART_ID, str);
+                uart_my_puts(str);
             }
 #endif
 
@@ -1979,7 +2006,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 #ifdef DEBUG_PINS
                 if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
                     sprintf(str, "finding next edge on pin %d at scrollx: %d...\n", pin, scrollx);
-                    uart_puts(UART_ID, str);
+                    uart_my_puts(str);
                 }
 #endif
 
@@ -2119,7 +2146,7 @@ bool my_uart_is_readable_within_us(uart_inst_t * uart, uint32_t us) {
 
 // Measures the number of samples between various transitions. Intended for VGA signal analysis.
 int measure(const uint32_t *buf) {
-    uart_puts(UART_ID, "\nMeasuring...\n");
+    uart_my_puts("\nMeasuring...\n");
 
 
     char pin = 2;
@@ -2134,7 +2161,7 @@ int measure(const uint32_t *buf) {
 
         if (sample) {
             green_start = i;
-            uart_putcf(UART_ID, "green_start: %d\n", green_start);
+            uart_my_putcf("green_start: %d\n", green_start);
             break;
         }
 
@@ -2149,13 +2176,13 @@ int measure(const uint32_t *buf) {
 
         if (!sample) {
             hsync_end = i + 1; // this sample is still high (we're going backwards)
-            uart_putcf(UART_ID, "hsync_end: %d\n", hsync_end);
+            uart_my_putcf("hsync_end: %d\n", hsync_end);
             break;
         }
 
     }
 
-    uart_putcf(UART_ID, "hsync_end..green_start: %d\n", green_start - (hsync_end + 0));
+    uart_my_putcf("hsync_end..green_start: %d\n", green_start - (hsync_end + 0));
 
     pin = 1; // vsync
     // uint record_size_bits = bits_packed_per_word(CAPTURE_PIN_COUNT);
@@ -2170,7 +2197,7 @@ int measure(const uint32_t *buf) {
 
         if (!sample) {
             vsync_start = i;
-            uart_putcf(UART_ID, "vsync_start: %d\n", vsync_start);
+            uart_my_putcf("vsync_start: %d\n", vsync_start);
             break;
         }
 
@@ -2184,13 +2211,13 @@ int measure(const uint32_t *buf) {
 
         if (sample) {
             vsync_end = i;
-            uart_putcf(UART_ID, "vsync_end: %d\n", vsync_end);
+            uart_my_putcf("vsync_end: %d\n", vsync_end);
             break;
         }
 
     }
 
-    uart_putcf(UART_ID, "vsync_start..vsync_end: %d\n", vsync_end - (vsync_start + 0));
+    uart_my_putcf("vsync_start..vsync_end: %d\n", vsync_end - (vsync_start + 0));
 
     pin = 0; // hsync
 
@@ -2201,16 +2228,16 @@ int measure(const uint32_t *buf) {
 
         if (!sample) {
             hsync_end = i + 1;
-            uart_putcf(UART_ID, "hsync_end: %d\n", hsync_end);
+            uart_my_putcf("hsync_end: %d\n", hsync_end);
             break;
         }
 
     }
 
 
-    uart_putcf(UART_ID, "hsync_end..vsync_start: %d\n", vsync_end - (hsync_end + 0));
+    uart_my_putcf("hsync_end..vsync_start: %d\n", vsync_end - (hsync_end + 0));
 
-    uart_putcf(UART_ID, "vsync_end..green_start: %d\n", green_start - (vsync_end + 0));
+    uart_my_putcf("vsync_end..green_start: %d\n", green_start - (vsync_end + 0));
 
     pin = 0;
 
@@ -2225,21 +2252,21 @@ int measure(const uint32_t *buf) {
 
         if (!sample) {
             p0 = i; // this sample is still high (we're going backwards)
-            uart_putcf(UART_ID, "previous pin 0 low: %d\n", p0);
+            uart_my_putcf("previous pin 0 low: %d\n", p0);
             break;
         }
 
     }
 */
 
-    // uart_putcf(UART_ID, "p0..p2: %d\n", p2 - (p0 + 1));
+    // uart_my_putcf("p0..p2: %d\n", p2 - (p0 + 1));
     return 0;
 }
 
 
 // Finds the previous or next transition.
 int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next) {
-    // uart_puts(UART_ID, "\nFinding transition...\n");
+    // uart_my_puts("\nFinding transition...\n");
 
     uint record_size_bits = bits_packed_per_word(g_no_of_captured_pins);
 
@@ -2263,7 +2290,7 @@ int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next
 
             if (sample != first_sample) {
                 next_sample = i;
-                // uart_putcf(UART_ID, "next_sample: %d\n", next_sample);
+                // uart_my_putcf("next_sample: %d\n", next_sample);
                 break;
             }
 
@@ -2280,7 +2307,7 @@ int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next
 
             if (sample != first_sample) {
                 next_sample = i + 1;
-                // uart_putcf(UART_ID, "next_sample: %d\n", next_sample);
+                // uart_my_putcf("next_sample: %d\n", next_sample);
                 break;
             }
 
@@ -2409,7 +2436,7 @@ void draw_setting_helper(uint left, uint8_t label_len, uint8_t str_len) {
 void draw_channel_no() {
     draw_setting_helper(CHANNEL_NO_LEFT, CHANNEL_NO_LABEL_CHARS, CHANNEL_NO_INPUT_CHARS);
     if (settings_state == SS_CHANNEL) {
-        uart_putcf(UART_ID, "ch: %d\n", g_channel);
+        uart_my_putcf("ch: %d\n", g_channel);
         setTextColor2(TOOLBAR_COLOR, WHITE);
     }
     write_intf(" %d ", g_channel);
@@ -2421,9 +2448,9 @@ void draw_palette() {
     draw_setting_helper(PALETTE_LEFT, PALETTE_LABEL_CHARS, PALETTE_INPUT_CHARS);
     if (settings_state == SS_PALETTE) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
-        uart_puts(UART_ID, "palette:");
-        uart_puts(UART_ID, palettes[g_palette]);
-        uart_puts(UART_ID, "\n");
+        uart_my_puts("palette:");
+        uart_my_puts(palettes[g_palette]);
+        uart_my_puts("\n");
     }
     writeString(palettes[g_palette]);
 }
@@ -2433,11 +2460,11 @@ void draw_magnification() {
     draw_setting_helper(MAG_LEFT, MAG_LABEL_CHARS, MAG_INPUT_CHARS);
     if (settings_state == SS_ZOOM) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
-        uart_puts(UART_ID, "zoom: ");
+        uart_my_puts("zoom: ");
         if (g_mag < 0) {
-            uart_putcf(UART_ID, "1:%d\n", abs(g_mag - 1));
+            uart_my_putcf("1:%d\n", abs(g_mag - 1));
         } else {
-            uart_putcf(UART_ID, "%d:1\n", abs(g_mag + 1));
+            uart_my_putcf("%d:1\n", abs(g_mag + 1));
         }
     }
     if (g_mag < 0) {
@@ -2452,7 +2479,7 @@ void draw_no_of_pins() {
     draw_setting_helper(NO_OF_PINS_LEFT, NO_OF_PINS_LABEL_CHARS, NO_OF_PINS_INPUT_CHARS);
     if (settings_state == SS_NO_OF_PINS) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
-        uart_putcf(UART_ID, "pins: %d\n", g_no_of_pins_to_capture);
+        uart_my_putcf("pins: %d\n", g_no_of_pins_to_capture);
     }
     write_intf(" %d ", g_no_of_pins_to_capture);
 }
@@ -2462,7 +2489,7 @@ void draw_pins_base() {
     draw_setting_helper(PINS_BASE_LEFT, PINS_BASE_LABEL_CHARS, PINS_BASE_INPUT_CHARS);
     if (settings_state == SS_PINS_BASE) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
-        uart_putcf(UART_ID, "base: %d\n", g_pins_base);
+        uart_my_putcf("base: %d\n", g_pins_base);
     }
     write_intf(" GP%d ", g_pins_base);
 }
@@ -2472,7 +2499,7 @@ void draw_sample_frequency() {
     draw_setting_helper(FREQ_LEFT, FREQ_LABEL_CHARS, FREQ_INPUT_CHARS);
     if (settings_state == SS_FREQ) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
-        uart_putcf(UART_ID, "fdiv: %d\n", g_sample_frequency);
+        uart_my_putcf("fdiv: %d\n", g_sample_frequency);
     }
     write_intf(" %d ", g_sample_frequency);
 }
@@ -2482,7 +2509,7 @@ void draw_trigger_pin_base() {
     draw_setting_helper(TRIGGER_BASE_LEFT, TRIGGER_BASE_LABEL_CHARS, TRIGGER_BASE_INPUT_CHARS);
     if (settings_state == SS_TRIGGER_PIN_BASE) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
-        uart_putcf(UART_ID, "tpin: %d\n", g_trigger_pin_base);
+        uart_my_putcf("tpin: %d\n", g_trigger_pin_base);
     }
     write_intf(" GP%d ", g_trigger_pin_base);
 }
@@ -2496,9 +2523,9 @@ void draw_trigger_type() {
     draw_setting_helper(TRIGGER_TYPE_LEFT, TRIGGER_TYPE_LABEL_CHARS, TRIGGER_TYPE_INPUT_CHARS);
     if (settings_state == SS_TRIGGER_TYPE) {
         setTextColor2(TOOLBAR_COLOR, WHITE);
-        uart_puts(UART_ID, "ttype:");
-        uart_puts(UART_ID, tt_chars[g_trigger_type]);
-        uart_puts(UART_ID, "\n");
+        uart_my_puts("ttype:");
+        uart_my_puts(tt_chars[g_trigger_type]);
+        uart_my_puts("\n");
     }
     writeString(tt_chars[g_trigger_type]);
 }
@@ -2610,7 +2637,12 @@ uint check_keyboard() {
 
     uint ui_command = UIC_NONE;
 
+#if !USE_STDIO_UART
     if ((last_uart_char == 27) || uart_is_readable(UART_ID)) {
+#else
+    int uart_int = stdio_getchar_timeout_us(0);
+    if ((last_uart_char == 27) || (uart_int != PICO_ERROR_TIMEOUT)) {
+#endif
         ui_command = UIC_ANY;
 
         clear_statusbar_hint();
@@ -2623,7 +2655,11 @@ uint check_keyboard() {
         uint8_t ch = last_uart_char;
 
         if (ch != 27) {
+#if !USE_STDIO_UART
             ch = uart_getc(UART_ID);
+#else
+            ch = uart_int;            
+#endif
             last_uart_char = ch;
         }
 
@@ -2648,8 +2684,14 @@ uint check_keyboard() {
             // the "us" parameter was 1 or 1800. Turns out that pressing the Esc
             // key in minicom (serial terminal) has a little delay before it is transmitted
             // unlike any other key. Thank goodness for LEDs on the debug probe.
+#if !USE_STDIO_UART
             while (uart_is_readable_within_us(UART_ID, 1800)) {
-                ch = uart_getc(UART_ID);
+            ch = uart_getc(UART_ID);
+#else
+            int new_uart_int;
+            while ((new_uart_int = stdio_getchar_timeout_us(1800)) != PICO_ERROR_TIMEOUT) {
+                ch = new_uart_int;
+ #endif
                 last_uart_char = ch;
 
                 if (ch == 27 /* ESC */) {
@@ -2830,8 +2872,8 @@ void draw_minimap_indicator() {
     prev_mini_x = mini_x;
     prev_mini_w = mini_w;
 
-    // uart_putcf(UART_ID, "mini_x: %d; ", mini_x);
-    // uart_putcf(UART_ID, "mini_w: %d\n", mini_w);
+    // uart_my_putcf("mini_x: %d; ", mini_x);
+    // uart_my_putcf("mini_w: %d\n", mini_w);
 }
 
 
@@ -2981,7 +3023,7 @@ void set_settings_state(uint8_t state) {
 
     // draw a line under, or something, under the appropriate item in the toolbar
     // the one that now will respond to the up and down keys
-    // uart_putcf(UART_ID, "State: %d\n", settings_state);
+    // uart_my_putcf("State: %d\n", settings_state);
 }
 
 
@@ -3051,10 +3093,10 @@ void show_help_window() {
     setCursorX(HELP_WINDOW_LEFT + FONT_WIDTH);
     writeString(press_any_key_string);
 
-    uart_puts(UART_ID, "\nHELP\n\n");
-    uart_puts(UART_ID, help_strings);
-    uart_puts(UART_ID, press_any_key_string);
-    uart_puts(UART_ID, "\n");
+    uart_my_puts("\nHELP\n\n");
+    uart_my_puts(help_strings);
+    uart_my_puts(press_any_key_string);
+    uart_my_puts("\n");
 
     showing_window = true;
 }
@@ -3371,17 +3413,17 @@ void show_about_window() {
     // HELP_WINDOW_TOP + HELP_WINDOW_HEIGHT - (2 * (FONT_HEIGHT + HELP_WINDOW_PADDING)));
     writeString(press_any_key_string);
 
-    uart_puts(UART_ID, "\nABOUT\n\nPALAVO\n");
-    uart_puts(UART_ID, about_strings_title);
-    uart_puts(UART_ID, about_strings_etc);
+    uart_my_puts("\nABOUT\n\nPALAVO\n");
+    uart_my_puts(about_strings_title);
+    uart_my_puts(about_strings_etc);
 
 #ifdef PICO_BOARD
-    uart_puts(UART_ID, PICO_BOARD);
-    uart_puts(UART_ID,"\n\n\n");
+    uart_my_puts(PICO_BOARD);
+    uart_my_puts("\n\n\n");
 #endif
 
-    uart_puts(UART_ID, press_any_key_string);
-    uart_puts(UART_ID, "\n");
+    uart_my_puts(press_any_key_string);
+    uart_my_puts("\n");
 
     showing_window = true;
 }
@@ -3460,7 +3502,7 @@ void test_DVI_framebuf() {
 
 void close_window() {
     fillRect(HELP_WINDOW_LEFT, HELP_WINDOW_TOP, HELP_WINDOW_WIDTH, HELP_WINDOW_HEIGHT, BLACK);
-    uart_puts(UART_ID, "Window closed\n");
+    uart_my_puts("Window closed\n");
     init_line_colours();
     set_plot_line_colors(g_no_of_captured_pins);
     showing_window = false;
@@ -3779,9 +3821,9 @@ uint check_ir() {
 
         uint32_t ir_command = pio_sm_get_blocking(ir_rx_pio, ir_rx_sm);
 
-        uart_putuif(UART_ID, "ir: %#x\n", ir_command);
+        uart_my_putuif("ir: %#x\n", ir_command);
 
-        // uart_putuif(UART_ID, "  ir: %#x\n", ir_command & 0xffff);
+        // uart_my_putuif("  ir: %#x\n", ir_command & 0xffff);
         char str[80];
         clear_statusbar_hint();
 
@@ -3805,7 +3847,7 @@ uint check_ir() {
                         last_ir_button_time = time_now;
                         sprintf(str, "repeat %#x ", ir_command);
                         writeString(str);
-                        // uart_putuif(UART_ID, "ir2: %#x\n", ir_command);
+                        // uart_my_putuif("ir2: %#x\n", ir_command);
                     } else {
                         // Timed out between repeat codes
                         last_ir_button_start_time = 0;
@@ -3825,7 +3867,7 @@ uint check_ir() {
 
 
 
-                uart_putcf(UART_ID, "  btn: %d\n", ir_button);
+                uart_my_putcf("  btn: %d\n", ir_button);
 
                 switch (ir_button) {
 
@@ -3943,10 +3985,10 @@ void ir_flush() {
 
 #if USE_DVI
 void print_dvi_regs() {
-    uart_putcf(UART_ID, "expand_tmds: %#x\n", dvi_get_expand_tmds());
-    uart_putcf(UART_ID, "expand_shift: %#x\n", dvi_get_expand_shift());
-    uart_putcf(UART_ID, "csr: %#x\n", dvi_get_csr());
-    uart_putcf(UART_ID, "v_scanline: %d\n", dvi_get_v_scanline());
+    uart_my_putcf("expand_tmds: %#x\n", dvi_get_expand_tmds());
+    uart_my_putcf("expand_shift: %#x\n", dvi_get_expand_shift());
+    uart_my_putcf("csr: %#x\n", dvi_get_csr());
+    uart_my_putcf("v_scanline: %d\n", dvi_get_v_scanline());
 }
 #endif
 
@@ -3971,6 +4013,12 @@ int main() {
     // Initialize stdio
     
     stdio_init_all();
+
+    // stdio_driver_t my_uart_driver;
+    // Initialize your UART driver here
+
+    // stdio_set_driver_enabled(&my_uart_driver, true);
+    // stdio_set_translate_crlf(&my_uart_driver, true); // Enable CR/LF 
 
     // gpio_init_mask(GPIO_INPUT_MASK_0_31); // init all GPIO in the above mask
 
@@ -4004,8 +4052,9 @@ int main() {
 
     // todo - we can probably and should use the code below (in the #else), which is from the SDK docs
 
+#if !USE_STDIO_UART
     uart_init(UART_ID, BAUD_RATE);
-
+#endif
     // Set the TX and RX pins by using the function select on the GPIO
     // Set datasheet for more information on function select
     // gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
@@ -4029,52 +4078,52 @@ int main() {
 #endif
 
 
-    uart_putcf(UART_ID, "GPIO Inputs: %x\n", GPIO_INPUT_MASK_0_31);
+    uart_my_putcf("GPIO Inputs: %x\n", GPIO_INPUT_MASK_0_31);
 
-    uart_puts(UART_ID, "\n\n");
-    // uart_puts(UART_ID, left_rect_text);
-    // uart_puts(UART_ID, "\n");
-    // uart_puts(UART_ID, right_rect_text);
+    uart_my_puts("\n\n");
+    // uart_my_puts(left_rect_text);
+    // uart_my_puts("\n");
+    // uart_my_puts(right_rect_text);
 
-    uart_puts(UART_ID, name_string);
-    uart_puts(UART_ID, "\n");
+    uart_my_puts(name_string);
+    uart_my_puts("\n");
 
-    uart_puts(UART_ID, about_strings_title);
-    uart_puts(UART_ID, "\n");
-    // uart_puts(UART_ID, right_rect_text);
+    uart_my_puts(about_strings_title);
+    uart_my_puts("\n");
+    // uart_my_puts(right_rect_text);
 
 
 #ifdef SYS_CLK_KHZ
     int sys_clk_freq_khz = SYS_CLK_KHZ;
-    uart_putcf(UART_ID, "SYS_CLOCK_KHZ: %d\n", sys_clk_freq_khz);
+    uart_my_putcf("SYS_CLOCK_KHZ: %d\n", sys_clk_freq_khz);
 #endif
 
 #ifdef PICO_SDK_VERSION_STRING
-    uart_puts(UART_ID, "SDK Version: ");
-    uart_puts(UART_ID, PICO_SDK_VERSION_STRING);
-    uart_puts(UART_ID, "\n");
+    uart_my_puts("SDK Version: ");
+    uart_my_puts(PICO_SDK_VERSION_STRING);
+    uart_my_puts("\n");
 #endif
 
 #ifdef PICO_BOARD
-    uart_puts(UART_ID, "Board: ");
-    uart_puts(UART_ID, PICO_BOARD);
-    uart_puts(UART_ID, "\n");
+    uart_my_puts("Board: ");
+    uart_my_puts(PICO_BOARD);
+    uart_my_puts("\n");
 #endif
 
 
 #ifdef PICO_PLATFORM
-    uart_puts(UART_ID, "Platform: ");
-    uart_puts(UART_ID, PICO_PLATFORM);
-    uart_puts(UART_ID, "\n");
+    uart_my_puts("Platform: ");
+    uart_my_puts(PICO_PLATFORM);
+    uart_my_puts("\n");
 #endif
 
 
 #if USE_DVI
     // Initialize the VGA screen
-    uart_puts(UART_ID, "Initialising DVI...\n");
+    uart_my_puts("Initialising DVI...\n");
 
-    uart_putcf(UART_ID, "clk_hstx: %d\n", clock_get_hz (clk_hstx));
-    // uart_putcf(UART_ID, "HSTX Frequency: %d\n", clock_get_hz (CLK_DEST_HSTX));
+    uart_my_putcf("clk_hstx: %d\n", clock_get_hz (clk_hstx));
+    // uart_my_putcf("HSTX Frequency: %d\n", clock_get_hz (CLK_DEST_HSTX));
 
 
     // clock_stop(clk_hstx);
@@ -4139,9 +4188,9 @@ int main() {
 
     print_dvi_regs();
 
-    uart_putcf(UART_ID, "clk_peri: %d\n", clock_get_hz(clk_peri));
+    uart_my_putcf("clk_peri: %d\n", clock_get_hz(clk_peri));
 
-    uart_putcf(UART_ID, "clk_hstx: %d\n", clock_get_hz(clk_hstx));
+    uart_my_putcf("clk_hstx: %d\n", clock_get_hz(clk_hstx));
 
     sleep_ms(500);
 
@@ -4160,13 +4209,13 @@ int main() {
     // gpio_set_drive_strength(CSYNC /*CSYNC*/, GPIO_DRIVE_STRENGTH_8MA); // works when Pico2 CSYNC has not pull resistance - unless a debug probe is attached & powered(???)
 
     // enum gpio_drive_strength gds = gpio_get_drive_strength(CSYNC /*CSYNC*/);
-    // uart_putcf(UART_ID, "CSYNC drive strength: %d\n", gds);
+    // uart_my_putcf("CSYNC drive strength: %d\n", gds);
 
     // gpio_set_function(CSYNC, GPIO_OUT); // set CSYNC to output
     // gpio_set_drive_strength(CSYNC /*CSYNC*/, GPIO_DRIVE_STRENGTH_12MA);
 
     // enum gpio_drive_strength gds = gpio_get_drive_strength(CSYNC /*CSYNC*/);
-    // uart_putcf(UART_ID, "CSYNC drive strength: %d\n", gds);
+    // uart_my_putcf("CSYNC drive strength: %d\n", gds);
 
     // I have a nasty feeling that most or all of the above issues may have been
     // caused by a bad breadboard contact.
@@ -4176,14 +4225,14 @@ int main() {
     // gpio_set_drive_strength(VGA_OUT_CSYNC_PIN /*CSYNC*/, GPIO_DRIVE_STRENGTH_8MA);
 #endif
 
-    uart_puts(UART_ID, "Initialising VGA...\n");
+    uart_my_puts("Initialising VGA...\n");
 
     // sometimes we the VGA to DVI doesn't work if this delay is too short
     // sleep_ms(1);
 
-    // uart_puts(UART_ID, "Initialising VGA...\n");
+    // uart_my_puts("Initialising VGA...\n");
     
-    // uart_putcf(UART_ID, "VGA_OUT_RGB_BASE_PIN: %x\n", VGA_OUT_RGB_BASE_PIN);
+    // uart_my_putcf("VGA_OUT_RGB_BASE_PIN: %x\n", VGA_OUT_RGB_BASE_PIN);
 
 
 
@@ -4348,7 +4397,7 @@ int main() {
 
     clear_statusbar_hint(); // set the cursor etc.
     writeString(start_help_text);
-    uart_puts(UART_ID, start_help_text);
+    uart_my_puts(start_help_text);
 
     // Setup a 1Hz timer
     struct repeating_timer timer;
@@ -4401,7 +4450,7 @@ int main() {
 
     }
 
-    uart_putcf(UART_ID, "Inputs: %x\n", ins);
+    uart_my_putcf("Inputs: %x\n", ins);
 
     // mainloop
     while(true) {
@@ -4559,16 +4608,16 @@ int main() {
 
                         // end of code to reverse
 
-                        uart_putcf(UART_ID, "g_capture_n_samples before calc: %d\n", g_capture_n_samples);
+                        uart_my_putcf("g_capture_n_samples before calc: %d\n", g_capture_n_samples);
 
                         total_sample_bits = buf_size_words * bits_packed_per_word(g_no_of_captured_pins);
-                        uart_putcf(UART_ID, "total_sample_bits: %d\n", total_sample_bits);
+                        uart_my_putcf("total_sample_bits: %d\n", total_sample_bits);
 
                         // total_sample_bits -= bits_packed_per_word(g_no_of_pins) - 1; ***
-                        // uart_putcf(UART_ID, "total_sample_bits: %d\n", total_sample_bits);
+                        // uart_my_putcf("total_sample_bits: %d\n", total_sample_bits);
 
                         g_capture_n_samples = total_sample_bits / g_no_of_captured_pins;
-                        uart_putcf(UART_ID, "g_capture_n_samples after calc: %d\n", g_capture_n_samples);
+                        uart_my_putcf("g_capture_n_samples after calc: %d\n", g_capture_n_samples);
 
                         // it seems to work, but when not 4 - it throws the scaling out. for example the zoom to fill screen no
                         // longer calculates correctly - pressing 'END' crashes the program. think I know why, but not now
@@ -4699,7 +4748,7 @@ int main() {
                         set_settings_state((settings_state + 1) % SS_COUNT);
                         // draw a line under, or something under the appropriate item in the toolbar
                         // the one that now will respond to the up and down keys
-                        // uart_putcf(UART_ID, "State: %d\n", settings_state);
+                        // uart_my_putcf("State: %d\n", settings_state);
                         break;
 
                     case UIC_SHIFT_TAB:
@@ -4710,7 +4759,7 @@ int main() {
                         } else {
                             set_settings_state(settings_state - 1);
                         }
-                        // uart_putcf(UART_ID, "State: %d\n", settings_state);
+                        // uart_my_putcf("State: %d\n", settings_state);
                         break;
 
                     case UIC_H:
@@ -4829,7 +4878,7 @@ int main() {
             // test to see if the vga capture dma write address is that of the start of the dvi frame buffer
             if (vga_capture_dma_write_addr) {
                 // it isn't, so report the write address
-                uart_putuif(UART_ID, "vga_capture_dma_write_addr: %x\n", vga_capture_dma_write_addr);
+                uart_my_putuif("vga_capture_dma_write_addr: %x\n", vga_capture_dma_write_addr);
                 
                 // reinitialise the vga capture PIOs and DMA 
                 deinit_vga_capture();

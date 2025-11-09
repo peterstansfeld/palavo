@@ -11,17 +11,6 @@ pico_sdk_init()
 
 add_executable(palavo)
 
-# must match with pio filename and executable name from above
-# pico_generate_pio_header(palavo ${CMAKE_CURRENT_LIST_DIR}/hsync.pio)
-# pico_generate_pio_header(palavo ${CMAKE_CURRENT_LIST_DIR}/vsync.pio)
-# pico_generate_pio_header(palavo ${CMAKE_CURRENT_LIST_DIR}/rgb.pio)
-# pico_generate_pio_header(palavo ${CMAKE_CURRENT_LIST_DIR}/hsync2.pio)
-# pico_generate_pio_header(palavo ${CMAKE_CURRENT_LIST_DIR}/vsync2.pio)
-# pico_generate_pio_header(palavo ${CMAKE_CURRENT_LIST_DIR}/rgb2.pio)
-# pico_generate_pio_header(palavo ${CMAKE_CURRENT_LIST_DIR}/hsync3.pio)
-# pico_generate_pio_header(palavo ${CMAKE_CURRENT_LIST_DIR}/rgb3.pio)
-# pico_generate_pio_header(palavo ${CMAKE_CURRENT_LIST_DIR}/hsync4.pio)
-# pico_generate_pio_header(palavo ${CMAKE_CURRENT_LIST_DIR}/rgb4.pio)
 pico_generate_pio_header(palavo ${CMAKE_CURRENT_LIST_DIR}/hsync5.pio)
 pico_generate_pio_header(palavo ${CMAKE_CURRENT_LIST_DIR}/rgb5.pio)
 pico_generate_pio_header(palavo ${CMAKE_CURRENT_LIST_DIR}/nec_ir_rx.pio)
@@ -38,20 +27,78 @@ if (PICO_RP2350)
     # add_compile_definitions(USE_DVI=0)
 endif()
 
-# without the following we can't pass the `PALAVO_CONFIG` definition 
-# `-DPALAVO_CONFIG=x` as an argument when running `cmake`.
-
 if (DEFINED PALAVO_CONFIG)
-    # add_compile_definitions(PALAVO_CONFIG
+    # without the following line we can't pass the `PALAVO_CONFIG` definition 
+    # `-DPALAVO_CONFIG=x` as an argument when running `make`.
     add_compile_definitions(PALAVO_CONFIG=${PALAVO_CONFIG})
+
+    math(EXPR PC_BIT0 "${PALAVO_CONFIG} & (1<<0)")
+    math(EXPR PC_BIT1 "${PALAVO_CONFIG} & (1<<1)")
+    math(EXPR PC_BIT2 "${PALAVO_CONFIG} & (1<<2)")
+    math(EXPR PC_BIT3 "${PALAVO_CONFIG} & (1<<3)")
+    math(EXPR PC_BIT4 "${PALAVO_CONFIG} & (1<<4)")
+    math(EXPR PC_BIT5 "${PALAVO_CONFIG} & (1<<5)")
+    # if ((PALAVO_CONFIG EQUAL 29))
+    if (PC_BIT0)
+        # PC_BIT_USE_DVI
+        message(STATUS "PALAVO_CONFIG.0 is 1")
+    endif()
+    if (PC_BIT1)
+        # PC_BIT_USE_GPIO_0_47 
+        message(STATUS "PALAVO_CONFIG.1 is 1")
+    endif()
+    if (PC_BIT2)
+        # PC_BIT_USE_VGA_IN_TO_DVI
+        message(STATUS "PALAVO_CONFIG.2 is 1")
+    endif()
+    if (PC_BIT3)
+        # PC_BIT_USE_NEW_IO_MAPPING
+        message(STATUS "PALAVO_CONFIG.3 is 1")
+    endif()
+    if (PC_BIT4)
+        # PC_BIT_USE_CSYNC
+        message(STATUS "PALAVO_CONFIG.4 is 1")
+    endif()
+    if (PC_BIT5)
+        # PC_BIT_USE_USB_STDIO
+        message(STATUS "PALAVO_CONFIG.5 is 1")
+    endif()
 endif()
 
+# specify preprocessor definitions for the target palavo
+target_compile_definitions(palavo PRIVATE
+    PICO_DEFAULT_UART=1)
+
+if (PC_BIT1)
+    target_compile_definitions(palavo PRIVATE
+        PICO_DEFAULT_UART_TX_PIN=38
+        PICO_DEFAULT_UART_RX_PIN=39)
+else()
+    target_compile_definitions(palavo PRIVATE
+        PICO_DEFAULT_UART_TX_PIN=8
+        PICO_DEFAULT_UART_RX_PIN=9)
+endif()
+
+# Set the maximum number of milliseconds to wait during USB stdio 
+# initialization. Without this a number of transmissions are lost
+# because the host (PC) isn't ready to receive. 
+target_compile_definitions(palavo PRIVATE
+    PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=1000)
+
 # must match with executable name
-target_link_libraries(palavo PRIVATE pico_stdlib hardware_pio hardware_dma hardware_adc hardware_irq hardware_uart hardware_clocks)
+target_link_libraries(palavo PRIVATE pico_stdlib hardware_pio hardware_dma hardware_irq hardware_clocks)
 
 # must match with executable name
 pico_add_extra_outputs(palavo)
 
-# disable stdio peripherals
-pico_enable_stdio_uart(palavo 0)
-pico_enable_stdio_usb(palavo 0)
+# Select stdio peripheral
+if (PC_BIT5)
+    message(STATUS "Use USB stdio")
+    pico_enable_stdio_uart(palavo 0)
+    pico_enable_stdio_usb(palavo 1)
+else()
+    message(STATUS "Use UART stdio")
+    pico_enable_stdio_uart(palavo 1)
+    pico_enable_stdio_usb(palavo 0)
+endif()
+

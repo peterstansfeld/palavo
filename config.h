@@ -10,5 +10,6 @@
 #define PC_BIT_USE_VGA_IN_TO_DVI 2
 #define PC_BIT_USE_NEW_IO_MAPPING 3
 #define PC_BIT_USE_CSYNC 4
+#define PC_BIT_USE_USB_STDIO 5
 
 #endif
