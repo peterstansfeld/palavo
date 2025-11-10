@@ -4009,6 +4009,400 @@ void print_dvi_regs() {
 }
 #endif
 
+
+uint32_t *capture_buf;
+
+uint buf_size_words;
+
+uint total_sample_bits;
+
+#if PICO_PIO_USE_GPIO_BASE 
+    PIO pio = pio2;
+#else
+    PIO pio = pio2;
+#endif
+    uint sm = 3;
+
+    // Claim a DMA channel for the pio state machine(s) used for capturing.
+    uint dma_chan;
+
+
+void handle_command(uint ui_command) {
+    if (ui_command) {
+
+        bool plot_required = false;
+        bool mini_map_redraw_required = false;
+        if (showing_window) {
+            // if (ui_command == UIC_ESC) {
+                // writeString("esc");
+                close_window();
+                plot_required = true;
+            // }
+
+        } else {
+
+
+            switch (ui_command) {
+
+#if ENABLE_GRAPHICS_DEMO
+                case UIC_SPACEBAR:
+                    writeString("space");
+                    demo_paused = !demo_paused;
+                    break;
+#endif
+                case UIC_CTRL_RIGHT:
+                case UIC_CTRL_LEFT:
+                    writeString(ui_command == UIC_CTRL_RIGHT ? "next" : "previous");
+                    writeString(" edge");
+                    plot_required = set_scroll_x(find_transition(capture_buf, g_channel, g_scrollx, ui_command == UIC_CTRL_RIGHT));
+                    break;
+
+                case UIC_HOME:
+                    writeString("scroll home");
+                    plot_required = set_scroll_x(0);
+                    break;
+
+                case UIC_END:
+                    writeString("scroll end");
+                    plot_required = set_scroll_x(MAX(g_capture_n_samples - (mag_factor(SCREEN_WIDTH)), 0));
+                    break;
+
+                case UIC_RIGHT:
+                    writeString("scroll right");
+                    int scroll_inc = 1;
+                    if (g_mag < 0) {
+                        scroll_inc = abs(g_mag) + 1;
+                    }
+                    plot_required = set_scroll_x(MIN(g_scrollx + scroll_inc, g_capture_n_samples));
+                    break;
+
+                case UIC_LEFT:
+                    writeString("scroll left");
+                    int scroll_dec = 1;
+                    if (g_mag < 0) {
+                        scroll_dec = abs(g_mag) + 1;
+                    }
+                    plot_required = set_scroll_x(MAX(g_scrollx - scroll_dec, 0));
+                    break;
+
+                case UIC_PAGE_UP:
+                    writeString("scroll left a page");
+                    plot_required = set_scroll_x(MAX(g_scrollx - mag_factor(SCREEN_WIDTH), 0));
+                    break;
+
+                case UIC_PAGE_DOWN:
+                    writeString("scroll right a page");
+                    plot_required = set_scroll_x(MIN(g_scrollx + (mag_factor(SCREEN_WIDTH)), g_capture_n_samples));
+                    break;
+
+                case UIC_MINUS:
+                    writeString("zoom out");
+                    plot_required = set_mag(g_mag - 1);
+                    break;
+
+                case UIC_PLUS:
+                    writeString("zoom in");
+                    plot_required = set_mag(g_mag + 1);
+                    break;
+
+                case UIC_EQUALS:
+                    writeString("no zoom");
+                    plot_required = set_mag(0);
+                    break;
+
+                case UIC_M:
+                    writeString("measure");
+                    measure(capture_buf);
+                    break;
+
+                case UIC_Z:
+                    writeString("zoom to fill");
+                    if (g_capture_n_samples >= SCREEN_WIDTH) {
+                        // we need to zoom out
+                        int factor = g_capture_n_samples / SCREEN_WIDTH;
+                        plot_required = set_mag(-(factor - 1));
+                    } else {
+                        // we need to zoom in
+                        int factor = SCREEN_WIDTH / g_capture_n_samples;
+                        plot_required = set_mag(factor - 1);
+                    }
+                    // set_scroll_x(0);
+                    break;
+
+                case UIC_C:
+                    writeString("capture");
+                    // fillRect(0, PLOT_TOP, SCREEN_WIDTH, MINIMAP_BOTTOM - PLOT_TOP, BLACK);
+
+                    if (!logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, g_trigger_pin_base, g_trigger_type)) {
+                        writeString(" - failed to trigger");
+                    }
+
+                    fillRect(0, PLOT_TOP, SCREEN_WIDTH, MINIMAP_BOTTOM - PLOT_TOP, BLACK);
+
+
+                    // each bit on a uart travels at 115200 bits per second
+                    // the clock goes at 125,000,000 hz (I think)
+
+                    // so if we want to take, say, 4 samples per bit then we need to sample at  4 * 115200 = 460800 bps
+                    // 125,000,000 / 460,800 = 271.267
+
+                    // The logic analyser should have started capturing as soon as it saw the
+                    // first transition. Wait until the last sample comes in from the DMA.
+
+                    // before we plot, let's recalculate g_capture_n_samples as we may have changed the number of pins
+                    // to capture...
+
+                    // heres the code to reverse
+
+                    // uint total_sample_bits = g_capture_n_samples * g_no_of_pins;
+                    // total_sample_bits += bits_packed_per_word(g_no_of_pins) - 1;
+                    // uint buf_size_words = total_sample_bits / bits_packed_per_word(g_no_of_pins);
+
+                    // end of code to reverse
+
+                    uart_my_putcf("g_capture_n_samples before calc: %d\n", g_capture_n_samples);
+
+                    total_sample_bits = buf_size_words * bits_packed_per_word(g_no_of_captured_pins);
+                    uart_my_putcf("total_sample_bits: %d\n", total_sample_bits);
+
+                    // total_sample_bits -= bits_packed_per_word(g_no_of_pins) - 1; ***
+                    // uart_my_putcf("total_sample_bits: %d\n", total_sample_bits);
+
+                    g_capture_n_samples = total_sample_bits / g_no_of_captured_pins;
+                    uart_my_putcf("g_capture_n_samples after calc: %d\n", g_capture_n_samples);
+
+                    // it seems to work, but when not 4 - it throws the scaling out. for example the zoom to fill screen no
+                    // longer calculates correctly - pressing 'END' crashes the program. think I know why, but not now
+                    // actually it can't be quite right as the
+                    // strangely removing the line with the *** aove seems to have fixed it. Hmm...
+
+
+                    // plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
+
+                    set_scroll_x(0);
+
+                    get_plot_height(g_no_of_captured_pins);
+
+                    set_plot_line_colors(g_no_of_captured_pins);
+
+                    plot_required = true;
+
+                    mini_map_redraw_required = true;
+#if USE_IR
+                    ir_flush();
+                    // last_ir_command = 0;
+#endif
+
+                    break;
+
+                case UIC_DOWN:
+                    writeString("decrease setting");
+
+                    switch (settings_state) {
+                        case SS_CHANNEL:
+                            set_channel(MAX(g_channel - 1, 0));
+                            break;
+
+                        case SS_PALETTE:
+                            set_palette(MAX(g_palette - 1, 0));
+                            break;
+
+                        case SS_FREQ:
+                            set_sample_frequency(MAX(g_sample_frequency - 1, 1));
+                            break;
+
+                        case SS_NO_OF_PINS:
+                            set_no_of_pins(MAX(g_no_of_pins_to_capture - 1, 1));
+                            break;
+
+                        case SS_PINS_BASE:
+                            set_pins_base(MAX(g_pins_base - 1, 0));
+                            break;
+
+                        case SS_TRIGGER_PIN_BASE:
+                            set_trigger_pin_base(MAX(g_trigger_pin_base - 1, 0));
+                            break;
+
+                        case SS_TRIGGER_TYPE:
+                            set_trigger_type(MAX(g_trigger_type - 1, 0));
+                            break;
+
+                        case SS_ZOOM:
+                            plot_required = set_mag(g_mag - 1);
+                            break;
+
+                    }
+                    break;
+
+                case UIC_UP:
+                    writeString("increase setting");
+
+                    switch (settings_state) {
+                        case SS_CHANNEL:
+                            set_channel(MIN(g_channel + 1, g_no_of_captured_pins - 1));
+                            break;
+
+                        case SS_PALETTE:
+                            set_palette(MIN(g_palette + 1, CT_COUNT - 1));
+                            break;
+
+                        case SS_FREQ:
+                            set_sample_frequency(g_sample_frequency + 1);
+                            break;
+
+                        case SS_NO_OF_PINS:
+                            set_no_of_pins(MIN(g_no_of_pins_to_capture + 1, MAX_NO_OF_CHANNELS));
+                            break;
+
+                        case SS_PINS_BASE:
+                            set_pins_base(MIN(g_pins_base + 1, MAX_BASE_PIN_NO));
+                            break;
+
+                        case SS_TRIGGER_PIN_BASE:
+                            set_trigger_pin_base(MIN(g_trigger_pin_base + 1, MAX_BASE_PIN_NO));
+                            break;
+
+                        case SS_TRIGGER_TYPE:
+                            set_trigger_type(MIN(g_trigger_type + 1, TT_COUNT - 1));
+                            break;
+
+                        case SS_ZOOM:
+                            plot_required = set_mag(g_mag + 1);
+                            break;
+
+                    }
+                    break;
+                /*
+                case UIC_0:
+
+
+                    logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, g_no_of_captured_pins, 5 * 4 * 16);
+
+                    logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, CAPTURE_TRIGGER_PIN, false);
+
+                    // each bit on a uart travels at 115200 bits per second
+                    // the clock goes at 125,000,000 hz (I think)
+
+                    // so if we want to take, say, 4 samples per bit then we need to sample at  4 * 115200 = 460800 bps
+                    // 125,000,000 / 460,800 = 271.267
+
+                    // The logic analyser should have started capturing as soon as it saw the
+                    // first transition. Wait until the last sample comes in from the DMA.
+
+                    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
+                    plot_required = true;
+                    break;
+                */
+
+                case UIC_TAB:
+                    writeString("next setting");
+
+                    set_settings_state((settings_state + 1) % SS_COUNT);
+                    // draw a line under, or something under the appropriate item in the toolbar
+                    // the one that now will respond to the up and down keys
+                    // uart_my_putcf("State: %d\n", settings_state);
+                    break;
+
+                case UIC_SHIFT_TAB:
+                    writeString("previous setting");
+
+                    if (settings_state <= 0) {
+                        set_settings_state(SS_COUNT - 1);
+                    } else {
+                        set_settings_state(settings_state - 1);
+                    }
+                    // uart_my_putcf("State: %d\n", settings_state);
+                    break;
+
+                case UIC_H:
+                    writeString("help");
+                    show_help_window();
+                    break;
+
+                case UIC_A:
+                    writeString("about");
+                    show_about_window();
+                    break;
+
+#if USE_DVI
+
+#if USE_VGA_CAPTURE
+
+                case UIC_V:
+                    switch (vga_capture_mode) {
+                        case VC_NONE:
+                            set_vga_capture(VC_VSYNC_AND_VSYNC_ON_CSYNC);
+                            writeString("capture VGA IN to DVI");
+                            break;
+
+                        case VC_VSYNC_AND_VSYNC_ON_CSYNC:
+                            set_vga_capture(VC_VSYNC_ON_CSYNC);
+                            writeString("mirror VGA OUT to DVI");
+                            break;
+
+                        case VC_VSYNC_ON_CSYNC:
+                            set_vga_capture(VC_NONE);
+                            writeString("display DVI test pattern");
+                            test_DVI_framebuf();
+                            break;
+                    }
+                    break;
+#endif
+
+#if USE_DVI_DEBUG
+                case UIC_D:
+                    writeString("test DVI");
+                    test_DVI_framebuf();
+                    break;
+
+                case UIC_R:
+
+                    print_dvi_regs();
+
+                    // writeString("reset DVI");
+                    // dvi_deinit();
+                    // sleep_ms(100) ;
+                    // dvi_init();
+                    // print_dvi_regs();
+
+                    writeString("reinit DVI");
+                    dvi_reinit();
+                    // sleep_ms(100) ;
+                    // dvi_init();
+                    print_dvi_regs();
+                    break;
+
+                case UIC_S:
+                    writeString("deinit DVI");
+                    dvi_deinit();
+                    break;
+#endif
+
+#endif
+
+            }
+        }
+
+        if ((plot_required) || (mini_map_redraw_required)) {
+
+            if (plot_required) {
+                plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, true);
+            }
+
+            if (mini_map_redraw_required) {
+                plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
+            }
+
+            // A brief nap
+            // sleep_ms(10);
+            // busy_wait_us(10000);
+        }
+
+    }
+}
+
+
+
 int main() {
 
 // hw_write_masked(
@@ -4274,13 +4668,13 @@ int main() {
     // uint buf_size_words = total_sample_bits / bits_packed_per_word(g_no_of_captured_pins);
 
     // As we know that BUF_SIZE_WORDS is a power of 2 we don't need to bother with bits_packed_per_word()
-    uint buf_size_words = BUF_SIZE_WORDS; // todo - replace buf_size_words with BUF_SIZE_WORDS
+    buf_size_words = BUF_SIZE_WORDS; // todo - replace buf_size_words with BUF_SIZE_WORDS
 
     // equivalent to: uint8_t array[210,000] 
-    uint32_t *capture_buf = malloc(buf_size_words * sizeof(uint32_t));
+    capture_buf = malloc(buf_size_words * sizeof(uint32_t));
     hard_assert(capture_buf);
 
-    uint total_sample_bits = buf_size_words * bits_packed_per_word(g_no_of_captured_pins);
+    total_sample_bits = buf_size_words * bits_packed_per_word(g_no_of_captured_pins);
 
     g_capture_n_samples = total_sample_bits / g_no_of_captured_pins;    
     
@@ -4303,15 +4697,19 @@ int main() {
 
     // Define PIO and State Machines for the trigger and capture logic.
     // Could make these more global to avoid lots of parameter passing - todo. 
+
+
+/*
 #if PICO_PIO_USE_GPIO_BASE 
     PIO pio = pio2;
 #else
     PIO pio = pio2;
 #endif
     uint sm = 3;
-
+*/
     // Claim a DMA channel for the pio state machine(s) used for capturing.
-    uint dma_chan = dma_claim_unused_channel(true);
+    dma_chan = dma_claim_unused_channel(true);
+
 
 #if ENABLE_GRAPHICS_DEMO
     // animation pause
@@ -4426,6 +4824,8 @@ int main() {
     // no need to initialise the ir PIO state machine here as it's done in `logic_analyser_arm()`
     // init_ir_rx(); 
 
+    
+/*
     logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, g_trigger_pin_base, g_trigger_type);
 
     get_plot_height(g_no_of_captured_pins);
@@ -4439,6 +4839,12 @@ int main() {
     plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
 
     draw_minimap_indicator();
+
+    */
+
+    // capture and plot
+    handle_command(UIC_C);
+
 
 #if USE_IR
     init_ir_rx(true);
@@ -4494,375 +4900,7 @@ int main() {
 #endif
 
         if (ui_command) {
-
-            bool plot_required = false;
-            bool mini_map_redraw_required = false;
-            if (showing_window) {
-                // if (ui_command == UIC_ESC) {
-                    // writeString("esc");
-                    close_window();
-                    plot_required = true;
-                // }
-
-            } else {
-
-
-                switch (ui_command) {
-
-#if ENABLE_GRAPHICS_DEMO
-                    case UIC_SPACEBAR:
-                        writeString("space");
-                        demo_paused = !demo_paused;
-                        break;
-#endif
-                    case UIC_CTRL_RIGHT:
-                    case UIC_CTRL_LEFT:
-                        writeString(ui_command == UIC_CTRL_RIGHT ? "next" : "previous");
-                        writeString(" edge");
-                        plot_required = set_scroll_x(find_transition(capture_buf, g_channel, g_scrollx, ui_command == UIC_CTRL_RIGHT));
-                        break;
-
-                    case UIC_HOME:
-                        writeString("scroll home");
-                        plot_required = set_scroll_x(0);
-                        break;
-
-                    case UIC_END:
-                        writeString("scroll end");
-                        plot_required = set_scroll_x(MAX(g_capture_n_samples - (mag_factor(SCREEN_WIDTH)), 0));
-                        break;
-
-                    case UIC_RIGHT:
-                        writeString("scroll right");
-                        int scroll_inc = 1;
-                        if (g_mag < 0) {
-                            scroll_inc = abs(g_mag) + 1;
-                        }
-                        plot_required = set_scroll_x(MIN(g_scrollx + scroll_inc, g_capture_n_samples));
-                        break;
-
-                    case UIC_LEFT:
-                        writeString("scroll left");
-                        int scroll_dec = 1;
-                        if (g_mag < 0) {
-                            scroll_dec = abs(g_mag) + 1;
-                        }
-                        plot_required = set_scroll_x(MAX(g_scrollx - scroll_dec, 0));
-                        break;
-
-                    case UIC_PAGE_UP:
-                        writeString("scroll left a page");
-                        plot_required = set_scroll_x(MAX(g_scrollx - mag_factor(SCREEN_WIDTH), 0));
-                        break;
-
-                    case UIC_PAGE_DOWN:
-                        writeString("scroll right a page");
-                        plot_required = set_scroll_x(MIN(g_scrollx + (mag_factor(SCREEN_WIDTH)), g_capture_n_samples));
-                        break;
-
-                    case UIC_MINUS:
-                        writeString("zoom out");
-                        plot_required = set_mag(g_mag - 1);
-                        break;
-
-                    case UIC_PLUS:
-                        writeString("zoom in");
-                        plot_required = set_mag(g_mag + 1);
-                        break;
-
-                    case UIC_EQUALS:
-                        writeString("no zoom");
-                        plot_required = set_mag(0);
-                        break;
-
-                    case UIC_M:
-                        writeString("measure");
-                        measure(capture_buf);
-                        break;
-
-                    case UIC_Z:
-                        writeString("zoom to fill");
-                        if (g_capture_n_samples >= SCREEN_WIDTH) {
-                            // we need to zoom out
-                            int factor = g_capture_n_samples / SCREEN_WIDTH;
-                            plot_required = set_mag(-(factor - 1));
-                        } else {
-                            // we need to zoom in
-                            int factor = SCREEN_WIDTH / g_capture_n_samples;
-                            plot_required = set_mag(factor - 1);
-                        }
-                        // set_scroll_x(0);
-                        break;
-
-                    case UIC_C:
-                        writeString("capture");
-                        // fillRect(0, PLOT_TOP, SCREEN_WIDTH, MINIMAP_BOTTOM - PLOT_TOP, BLACK);
-
-                        if (!logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, g_trigger_pin_base, g_trigger_type)) {
-                            writeString(" - failed to trigger");
-                        }
-
-                        fillRect(0, PLOT_TOP, SCREEN_WIDTH, MINIMAP_BOTTOM - PLOT_TOP, BLACK);
-
-
-                        // each bit on a uart travels at 115200 bits per second
-                        // the clock goes at 125,000,000 hz (I think)
-
-                        // so if we want to take, say, 4 samples per bit then we need to sample at  4 * 115200 = 460800 bps
-                        // 125,000,000 / 460,800 = 271.267
-
-                        // The logic analyser should have started capturing as soon as it saw the
-                        // first transition. Wait until the last sample comes in from the DMA.
-
-                        // before we plot, let's recalculate g_capture_n_samples as we may have changed the number of pins
-                        // to capture...
-
-                        // heres the code to reverse
-
-                        // uint total_sample_bits = g_capture_n_samples * g_no_of_pins;
-                        // total_sample_bits += bits_packed_per_word(g_no_of_pins) - 1;
-                        // uint buf_size_words = total_sample_bits / bits_packed_per_word(g_no_of_pins);
-
-                        // end of code to reverse
-
-                        uart_my_putcf("g_capture_n_samples before calc: %d\n", g_capture_n_samples);
-
-                        total_sample_bits = buf_size_words * bits_packed_per_word(g_no_of_captured_pins);
-                        uart_my_putcf("total_sample_bits: %d\n", total_sample_bits);
-
-                        // total_sample_bits -= bits_packed_per_word(g_no_of_pins) - 1; ***
-                        // uart_my_putcf("total_sample_bits: %d\n", total_sample_bits);
-
-                        g_capture_n_samples = total_sample_bits / g_no_of_captured_pins;
-                        uart_my_putcf("g_capture_n_samples after calc: %d\n", g_capture_n_samples);
-
-                        // it seems to work, but when not 4 - it throws the scaling out. for example the zoom to fill screen no
-                        // longer calculates correctly - pressing 'END' crashes the program. think I know why, but not now
-                        // actually it can't be quite right as the
-                        // strangely removing the line with the *** aove seems to have fixed it. Hmm...
-
-
-                        // plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
-
-                        set_scroll_x(0);
-
-                        get_plot_height(g_no_of_captured_pins);
-
-                        set_plot_line_colors(g_no_of_captured_pins);
-
-                        plot_required = true;
-
-                        mini_map_redraw_required = true;
-#if USE_IR
-                        ir_flush();
-                        // last_ir_command = 0;
-#endif
-
-                        break;
-
-                    case UIC_DOWN:
-                        writeString("decrease setting");
-
-                        switch (settings_state) {
-                            case SS_CHANNEL:
-                                set_channel(MAX(g_channel - 1, 0));
-                                break;
-
-                            case SS_PALETTE:
-                                set_palette(MAX(g_palette - 1, 0));
-                                break;
-
-                            case SS_FREQ:
-                                set_sample_frequency(MAX(g_sample_frequency - 1, 1));
-                                break;
-
-                            case SS_NO_OF_PINS:
-                                set_no_of_pins(MAX(g_no_of_pins_to_capture - 1, 1));
-                                break;
-
-                            case SS_PINS_BASE:
-                                set_pins_base(MAX(g_pins_base - 1, 0));
-                                break;
-
-                            case SS_TRIGGER_PIN_BASE:
-                                set_trigger_pin_base(MAX(g_trigger_pin_base - 1, 0));
-                                break;
-
-                            case SS_TRIGGER_TYPE:
-                                set_trigger_type(MAX(g_trigger_type - 1, 0));
-                                break;
-
-                            case SS_ZOOM:
-                                plot_required = set_mag(g_mag - 1);
-                                break;
-
-                        }
-                        break;
-
-                    case UIC_UP:
-                        writeString("increase setting");
-
-                        switch (settings_state) {
-                            case SS_CHANNEL:
-                                set_channel(MIN(g_channel + 1, g_no_of_captured_pins - 1));
-                                break;
-
-                            case SS_PALETTE:
-                                set_palette(MIN(g_palette + 1, CT_COUNT - 1));
-                                break;
-
-                            case SS_FREQ:
-                                set_sample_frequency(g_sample_frequency + 1);
-                                break;
-
-                            case SS_NO_OF_PINS:
-                                set_no_of_pins(MIN(g_no_of_pins_to_capture + 1, MAX_NO_OF_CHANNELS));
-                                break;
-
-                            case SS_PINS_BASE:
-                                set_pins_base(MIN(g_pins_base + 1, MAX_BASE_PIN_NO));
-                                break;
-
-                            case SS_TRIGGER_PIN_BASE:
-                                set_trigger_pin_base(MIN(g_trigger_pin_base + 1, MAX_BASE_PIN_NO));
-                                break;
-
-                            case SS_TRIGGER_TYPE:
-                                set_trigger_type(MIN(g_trigger_type + 1, TT_COUNT - 1));
-                                break;
-
-                            case SS_ZOOM:
-                                plot_required = set_mag(g_mag + 1);
-                                break;
-
-                        }
-                        break;
-                    /*
-                    case UIC_0:
-
-
-                        logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, g_no_of_captured_pins, 5 * 4 * 16);
-
-                        logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, CAPTURE_TRIGGER_PIN, false);
-
-                        // each bit on a uart travels at 115200 bits per second
-                        // the clock goes at 125,000,000 hz (I think)
-
-                        // so if we want to take, say, 4 samples per bit then we need to sample at  4 * 115200 = 460800 bps
-                        // 125,000,000 / 460,800 = 271.267
-
-                        // The logic analyser should have started capturing as soon as it saw the
-                        // first transition. Wait until the last sample comes in from the DMA.
-
-                        plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
-                        plot_required = true;
-                        break;
-                    */
-
-                    case UIC_TAB:
-                        writeString("next setting");
-
-                        set_settings_state((settings_state + 1) % SS_COUNT);
-                        // draw a line under, or something under the appropriate item in the toolbar
-                        // the one that now will respond to the up and down keys
-                        // uart_my_putcf("State: %d\n", settings_state);
-                        break;
-
-                    case UIC_SHIFT_TAB:
-                        writeString("previous setting");
-
-                        if (settings_state <= 0) {
-                            set_settings_state(SS_COUNT - 1);
-                        } else {
-                            set_settings_state(settings_state - 1);
-                        }
-                        // uart_my_putcf("State: %d\n", settings_state);
-                        break;
-
-                    case UIC_H:
-                        writeString("help");
-                        show_help_window();
-                        break;
-
-                    case UIC_A:
-                        writeString("about");
-                        show_about_window();
-                        break;
-
-#if USE_DVI
-
-#if USE_VGA_CAPTURE
-
-                    case UIC_V:
-                        switch (vga_capture_mode) {
-                            case VC_NONE:
-                                set_vga_capture(VC_VSYNC_AND_VSYNC_ON_CSYNC);
-                                writeString("capture VGA IN to DVI");
-                                break;
-
-                            case VC_VSYNC_AND_VSYNC_ON_CSYNC:
-                                set_vga_capture(VC_VSYNC_ON_CSYNC);
-                                writeString("mirror VGA OUT to DVI");
-                                break;
-
-                            case VC_VSYNC_ON_CSYNC:
-                                set_vga_capture(VC_NONE);
-                                writeString("display DVI test pattern");
-                                test_DVI_framebuf();
-                                break;
-                        }
-                        break;
-#endif
-
-    #if USE_DVI_DEBUG
-                    case UIC_D:
-                        writeString("test DVI");
-                        test_DVI_framebuf();
-                        break;
-
-                    case UIC_R:
-
-                        print_dvi_regs();
-
-                        // writeString("reset DVI");
-                        // dvi_deinit();
-                        // sleep_ms(100) ;
-                        // dvi_init();
-                        // print_dvi_regs();
-
-                        writeString("reinit DVI");
-                        dvi_reinit();
-                        // sleep_ms(100) ;
-                        // dvi_init();
-                        print_dvi_regs();
-                        break;
-
-                    case UIC_S:
-                        writeString("deinit DVI");
-                        dvi_deinit();
-                        break;
-    #endif
-
-#endif
-
-                }
-            }
-
-            if ((plot_required) || (mini_map_redraw_required)) {
-
-                if (plot_required) {
-                    plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, true);
-                }
-
-                if (mini_map_redraw_required) {
-                    plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
-                }
-
-                // A brief nap
-                // sleep_ms(10);
-                // busy_wait_us(10000);
-            }
-
+            handle_command(ui_command);
         } else {
 
 #if ENABLE_GRAPHICS_DEMO
