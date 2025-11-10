@@ -526,9 +526,10 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 
 #elif SETTINGS == 1
 
-#define CAPTURE_PIN_BASE 0 // HSYNC
 
 #if USE_GPIO_0_47
+
+#define CAPTURE_PIN_BASE 0 // HSYNC
 
 #define CAPTURE_PIN_COUNT 27 // GPIO0 - GPIO26
 #define CAPTURE_TRIGGER_PIN_BASE 0 // one of the keybord row drivers
@@ -537,12 +538,24 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 
 #else
 
-#define CAPTURE_PIN_COUNT 8 // HSYNC, VSYNC and BBGGRR (blue, green, red)
 
 #if USE_CSYNC
+#if USE_VGA_CAPTURE
+#define CAPTURE_PIN_BASE 10 // HSYNC
+#define CAPTURE_PIN_COUNT 10 // CSYNC, 1-bit colour and 8 DVI
+#define CAPTURE_TRIGGER_PIN_BASE 10 // HSYNC_CSYNC
+#define CAPTUTRE_TRIGGER_TYPE TT_VGA_CSYNC
+
+#else
+#define CAPTURE_PIN_BASE 0 // HSYNC
+#define CAPTURE_PIN_COUNT 8 // HSYNC, VSYNC and BBGGRR (blue, green, red)
 #define CAPTURE_TRIGGER_PIN_BASE 1 // HSYNC_CSYNC
 #define CAPTUTRE_TRIGGER_TYPE TT_VGA_CSYNC
+#endif
+
 #else
+#define CAPTURE_PIN_BASE 0 // HSYNC
+#define CAPTURE_PIN_COUNT 8 // HSYNC, VSYNC and BBGGRR (blue, green, red)
 #define CAPTURE_TRIGGER_PIN_BASE 0 // VSYNC
 #define CAPTUTRE_TRIGGER_TYPE TT_VGA_VSYNC
 #endif
@@ -1679,7 +1692,11 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
         int32_t value;
     };
 
-    struct PulseWidth pws[64];
+    // Buffer must be large enough to store a screen width's worth of pulses that are 1 sample wide.
+    // As font is 5px (not 8px) and a vertical line is 1px wide, it must be large enough to hold
+    // 640 / 6 = 106.67 -> 107 pulses
+    #define MAX_1_SAMPLE_WIDE_PULSES ((640 / 6) + 1) 
+    struct PulseWidth pws[MAX_1_SAMPLE_WIDE_PULSES];
     uint8_t no_of_pws;
 
     // 20
