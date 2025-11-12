@@ -398,8 +398,13 @@ bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
         #endif
 
     #else
+
+#if USE_CSYNC
+        bi_decl(bi_1pin_with_name(1, "VGA Out - CSYNC"));
+#else
         bi_decl(bi_1pin_with_name(0, "VGA Out - VSYNC"));
-        bi_decl(bi_1pin_with_name(1, "VGA Out - HSYNC / CSYNC"));
+        bi_decl(bi_1pin_with_name(1, "VGA Out - HSYNC"));
+#endif
         bi_decl(bi_1pin_with_name(2, "VGA Out - Dark Blue"));
         bi_decl(bi_1pin_with_name(3, "VGA Out - Light Blue"));
         bi_decl(bi_1pin_with_name(4, "VGA Out - Dark Green"));
@@ -475,6 +480,7 @@ enum SETTINGS_STATES {SS_CHANNEL, SS_PALETTE, SS_ZOOM, SS_FREQ, SS_PINS_BASE, SS
 
 uint8_t settings_state = SS_CHANNEL;
 
+/*
 // Timer interrupt
 bool repeating_timer_callback(struct repeating_timer *t) {
     time_accum += 1 ;
@@ -489,6 +495,7 @@ bool repeating_timer_callback(struct repeating_timer *t) {
 
     return true;
 }
+*/
 
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
@@ -4814,10 +4821,12 @@ int main() {
     writeString(start_help_text);
     uart_my_puts(start_help_text);
 
+    /*
     // Setup a 1Hz timer
     struct repeating_timer timer;
     add_repeating_timer_ms(-1000, repeating_timer_callback, NULL, &timer);
-
+    */
+   
     // Wait for the pios to get warmed up. Probably not necessary.
     sleep_ms(10);
 
@@ -4944,13 +4953,15 @@ int main() {
 
 #if !USE_DVI
             sleep_ms(10); // testing to see if this still randomly crashes the hstx-dvi (when using it)
-#endif
             // NB sleep_ms, which trys to use the arm's wfe instruction, seems to be the thing
             // that causes the hstx-dvi to fall over.
 
+            // Calling sleep_ms() with 'PICO_TIME_DEFAULT_ALARM_POOL_DISABLED=1' (defined using target_compile_definitions())
+            // in CMakeLists.txt also prevents the crashing, but defeats the purpose of trying to save power.
+
             // uart_putc(UART_ID, 'B');
+#endif
+
         }
-
-   }
-
+    }
 }
