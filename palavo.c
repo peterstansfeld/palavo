@@ -3069,7 +3069,13 @@ char* help_strings =
     "m to measure VGA timings\n"
     "h to show this help window\n"
     "a to show the about window\n"
+
+#if ENABLE_GRAPHICS_DEMO
     "SPACE to play / pause graphics demo\n"
+#else
+    "\n"
+#endif
+
 #if USE_DVI
     "v to cycle DVI modes: mirror VGA out -> test -> VGA in\n"
 #else
@@ -4137,11 +4143,13 @@ void handle_command(uint ui_command) {
                     break;
 
                 case UIC_C:
-                    writeString("capture");
+                    writeString("capturing... ");
                     // fillRect(0, PLOT_TOP, SCREEN_WIDTH, MINIMAP_BOTTOM - PLOT_TOP, BLACK);
 
                     if (!logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, g_trigger_pin_base, g_trigger_type)) {
-                        writeString(" - failed to trigger");
+                        writeString("failed to trigger");
+                    } else {
+                        writeString("done");
                     }
 
                     fillRect(0, PLOT_TOP, SCREEN_WIDTH, MINIMAP_BOTTOM - PLOT_TOP, BLACK);
@@ -4818,6 +4826,14 @@ int main() {
 
 
     clear_statusbar_hint(); // set the cursor etc.
+    // Capture and plot
+    handle_command(UIC_C);
+
+    // Delay to see whether the capture suceeded or not
+    // sleep_ms(1000);
+
+    // Show help message
+    clear_statusbar_hint(); // set the cursor etc.
     writeString(start_help_text);
     uart_my_puts(start_help_text);
 
@@ -4828,7 +4844,7 @@ int main() {
     */
    
     // Wait for the pios to get warmed up. Probably not necessary.
-    sleep_ms(10);
+    // sleep_ms(10);
 
     // no need to initialise the ir PIO state machine here as it's done in `logic_analyser_arm()`
     // init_ir_rx(); 
@@ -4850,9 +4866,6 @@ int main() {
     draw_minimap_indicator();
 
     */
-
-    // capture and plot
-    handle_command(UIC_C);
 
 
 #if USE_IR

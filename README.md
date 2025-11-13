@@ -24,7 +24,7 @@ There are a number of configurations for Palavo, which can use either the A vari
 At its simplest, a Raspberry Pi Pico 2 and a few resistors can be used:
 
 ```
-      VGA_Out_VSYNC  GP0  1                40 VBUS
+      VGA_Out_VSYNC  GP0  1       USB      40 VBUS
 VGA_Out_HSYNC_CSYNC  GP1  2                39 VSYS
                      GND  3                38 GND
   VGA_Out_Dark_Blue  GP2  4                37 3V3 EN
@@ -34,10 +34,10 @@ VGA_Out_Light_Green  GP5  7                34 GP28
                      GND  8                33 ADC GND
    VGA_Out_Dark_Red  GP6  9                32 GP27
   VGA_Out_Light_Red  GP7 10     PICO 2     31 GP26
-          Serial_TX  GP8 11                30 RUN
-          Serial_RX  GP9 12                29 GP22
+         Serial_TX*  GP8 11                30 RUN
+         Serial_RX*  GP9 12                29 GP22
                      GND 13                28 GND
-      Infra_Red_RX  GP10 14                27 GP21
+     Infra_Red_RX** GP10 14                27 GP21
                     GP11 15                26 GP20
                     GP12 16                25 GP19
                     GP13 17                24 GP18
@@ -45,6 +45,10 @@ VGA_Out_Light_Green  GP5  7                34 GP28
                     GP14 19                22 GP17
                     GP15 20                21 GP16
 ```
+
+
+/* USB can be used instead of UART serial comms.
+/** Optional
 
 The VGA_Out_signals need to be fed into a resistor network to provide the voltages for the Red, Green, and Blue colour pins on a VGA socket or cable that's attached to a VGA monitor:
 
@@ -61,7 +65,7 @@ VGA_Out_Light Green  --470R--  2 Green
   VGA_Out_Light Red  --470R--  1 Red
 ```
 
-The Serial_RX and Serial_TX can be connected to a PC via a 3.3V logic level UART to USB serial adapter. I use [Raspberry Pi's Debug Probe](https://www.raspberrypi.com/documentation/microcontrollers/debug-probe.html) as it can also be used to program and debug the Pico via its Debug interface.
+If not using USB for serial comms, Serial_RX and Serial_TX can be connected to a PC via a 3.3V logic level UART to USB serial adapter. I use [Raspberry Pi's Debug Probe](https://www.raspberrypi.com/documentation/microcontrollers/debug-probe.html) as it can also be used to program and debug the Pico via its Debug interface.
 
 Alternatively the Serial_RX and Serial_TX can be connected to a keyboard to serial terminal adapter, which is a Pico 2 in USB host mode with a keyboard attached. The details for this can be found in this repository.
 
@@ -74,7 +78,7 @@ There may be a simpler way, using Raspberry Pi's Pico Visual Studio Code Extensi
 
 Follow the instructions in Appendix C: Manual toolchain setup of [Getting started with Raspberry Pi Pico-series](https://datasheets.raspberrypi.com/pico/getting-started-with-pico.pdf).
 
-Clone this repository (Palavo) into a suitable location on your PC:
+Clone this repository (palavo) into a suitable location on your PC:
 
 `$ https://github.com/peterstansfeld/palavo.git`
 
@@ -165,7 +169,8 @@ z to zoom to fit all the samples on one page
 m to measure VGA timings (currently broken todo)
 h to show this help window  
 a to show the about window  
-SPACE to play / pause graphics demo (remove todo) 
+
+
 Press any key to close this window  
 ```
 
@@ -181,7 +186,7 @@ Hopefully, the above instructions are clear enough to be able to get started usi
 ### Hardware
 
 ```
-      VGA_Out_VSYNC  GP0  1                40 VBUS
+      VGA_Out_VSYNC  GP0  1       USB      40 VBUS
 VGA_Out_HSYNC_CSYNC  GP1  2                39 VSYS
                      GND  3                38 GND
   VGA_Out_Dark_Blue  GP2  4                37 3V3 EN
@@ -191,10 +196,10 @@ VGA_Out_Light_Green  GP5  7                34 GP28
                      GND  8                33 ADC GND
    VGA_Out_Dark_Red  GP6  9                32 GP27
   VGA_Out_Light_Red  GP7 10     PICO 2     31 GP26
-          Serial_TX  GP8 11                30 RUN
-          Serial_RX  GP9 12                29 GP22
+         Serial_TX*  GP8 11                30 RUN
+         Serial_RX*  GP9 12                29 GP22
                      GND 13                28 GND
-      Infra_Red_RX  GP10 14                27 GP21
+     Infra_Red_RX*  GP10 14                27 GP21
                     GP11 15                26 GP20
            DVI_D0+  GP12 16                25 GP19  DVI_D2+
            DVI_D0-  GP13 17                24 GP18  DVI_D2-
@@ -202,10 +207,11 @@ VGA_Out_Light_Green  GP5  7                34 GP28
            DVI_CK+  GP14 19                22 GP17  DVI_D1+
            DVI_CK-  GP15 20                21 GP16  DVI_D1-
 ```
+/* Optional
 
 In addition to the previous configuration's hardware, the DVI pins (GP12-GP19) should be connected to a DVI monitor via a [Pico DVI Sock](https://github.com/Wren6991/Pico-DVI-Sock) and an HDMI-shaped cable. Originally designed by Raspberry Pi's Luke Wren, Adafruit now make their own version called the [DVI Sock for Pico](https://www.adafruit.com/product/5957). There are other products, such as the [PiCowBell HSTX DVI Output for Pico](https://www.adafruit.com/product/6363), that could be used instead.
 
-With this setup the VGA_Out output is mirrored to the DVI pins.
+With this setup the VGA_Out output is mirrored to the DVI output.
 
 
 ### Firmware
@@ -251,7 +257,7 @@ This is great, but it doesn't leave many pins free to capture external input sig
 If we use a second Pico 2, and change the VGA_Out\*s to VGA_In\*s we can to make a VGA (6-bit logic level) - DVI Converter. If we also lose, or move, the Infra_Red_RX we can squeeze in VGA_Out_CSYNC and VGA_Out_RGB to provide a monochrome VGA output for testing purposes.
 
 ```
-       VGA_In_VSYNC  GP0  1                40 VBUS
+       VGA_In_VSYNC  GP0  1       USB      40 VBUS
  VGA_In_HSYNC_CSYNC  GP1  2                39 VSYS
                      GND  3                38 GND
    VGA_In_Dark_Blue  GP2  4                37 3V3 EN
@@ -291,7 +297,7 @@ Repeat the rest of the previous build process, only use this CMAKE command inste
 
 Something fun to do here is get Hunter Adams' [VGA_Graphics_Primitives](https://github.com/vha3/Hunter-Adams-RP2040-Demos/tree/master/VGA_Graphics/VGA_Graphics_Primitives) example working on a a Pico or Pico 2:
 
-                     GP0  1                40 VBUS
+                     GP0  1       USB      40 VBUS
                      GP1  2                39 VSYS
                      GND  3                38 GND
                      GP2  4                37 3V3 EN
@@ -341,7 +347,7 @@ The trouble with the original configuration (Configuration 0) is that we're usin
 ### Hardware
 
 ```
-                       GP0  1                  60 VBUS
+                       GP0  1       USB        60 VBUS
                        GP1  2                  59 VSYS
                        GND  3                  58 GND
                        GP2  4                  57 3V3 EN
@@ -414,32 +420,33 @@ What if we wanted to capture 32 contiguous channels? Unfortunately, it's not pos
  G 0                           USB                          GND G
  G 1  VGA_Out_CSYNC                                          3V G
  G 2  VGA_Out_Dark_Blue                                      5V G
- G 3  VGA_Out_Light_Blue  -------------------               BAT G
- G 4  VGA_Out_Dark_Green                     |             BOOT G
- G 5  VGA_Out_Light_Green                    |              RST G
- G 6  VGA_Out_Dark_Red                       |              CLK G
- G 7  VGA_Out_Light_Red                      |               IO G
- G 8  Serial_TX   |                          |               EN G
- G 9  Serial_RX   |                          |         BAT STAT G
- G 10 Infra_Red_RX|                          |               47 G
- G 11             |      RP2350 Stamp XL     |               46 G
- G 12             |                          |               45 G
- G 13             |                          |               44 G
- G 14             |                          |               43 G
- G 15             |                          |               42 G
- G 16             |                          |               41 G
- G 17             |                          |               40 G
- G 18             |                          |               39 G
- G 19             |                          |               38 G
- G 20              ---------------------------               37 G
- G 21              RP2xxx Stamp Carrier Basic                36 G
+ G 3  VGA_Out_Light_Blue ---------------------               BAT G
+ G 4  VGA_Out_Dark_Green                      |             BOOT G
+ G 5  VGA_Out_Light_Green                     |              RST G
+ G 6  VGA_Out_Dark_Red                        |              CLK G
+ G 7  VGA_Out_Light_Red                       |               IO G
+ G 8  Serial_TX*   |                          |               EN G
+ G 9  Serial_RX*   |                          |         BAT STAT G
+ G 10 Infra_Red_RX*|                          |               47 G
+ G 11              |      RP2350 Stamp XL     |               46 G
+ G 12              |                          |               45 G
+ G 13              |                          |               44 G
+ G 14              |                          |               43 G
+ G 15              |                          |               42 G
+ G 16              |                          |               41 G
+ G 17              |                          |               40 G
+ G 18              |                          |               39 G
+ G 19              |                          |               38 G
+ G 20               --------------------------                37 G
+ G 21               RP2xxx Stamp Carrier Basic                36 G
 
       22  23  24  25  26  27  28  29  30  31  32  33  34  35
       G   G   G   G   G   G   G   G   G   G   G   G   G   G
 
 ```
+/* Optional
 
-As you can see the GPIOs GP11 to GP47 (37 GPIOs in total) are free to use and they are conveniently and contiguously located. 
+As you can see the GPIOs GP11 to GP47 (37 GPIOs in total) are free to use and they are conveniently and contiguously located. And if you decide to use USB comms instead of UART comms and GPIOs 8, 9 and 10 would also be free to use.
 
 
 
@@ -506,7 +513,7 @@ As you can see the GPIOs GP11 to GP47 (37 GPIOs in total) are free to use and th
 
 
 ```
-                                                                             GP0  1                  60 VBUS
+                                                                             GP0  1       USB        60 VBUS
                                                                              GP1  2                  59 VSYS
                                                                              GND  3                  58 GND
                                                                              GP2  4                  57 3V3 EN
@@ -539,7 +546,7 @@ As you can see the GPIOs GP11 to GP47 (37 GPIOs in total) are free to use and th
 
 
 
-                                                           VGA_In_Dark Blue  GP0  1                  40 VBUS
+                                                           VGA_In_Dark Blue  GP0  1       USB        40 VBUS
                                                           VGA_In_Light Blue  GP1  2                  39 VSYS
                                                                              GND  3                  38 GND
                                                           VGA_In_Dark_Green  GP2  4                  37 3V3 EN
@@ -559,11 +566,7 @@ As you can see the GPIOs GP11 to GP47 (37 GPIOs in total) are free to use and th
                                                                             GND  18                  23 GND
                                                                    DVI_CK+  GP14 19                  22 GP17  DVI_D1+
                                                                    DVI_CK-  GP15 20                  21 GP16  DVI_D1-
-````
-
-
-
-
+```
 
 
 
@@ -581,7 +584,7 @@ Everything from here is stuff I may use and don't want to delete just yet
 ## Pinout for Raspberry Pi Pico 2
 
 ```
-   VGA_In_Dark Blue  GP0  1                  40 VBUS
+   VGA_In_Dark Blue  GP0  1       USB        40 VBUS
   VGA_In_Light Blue  GP1  2                  39 VSYS
                      GND  3                  38 GND
   VGA_In_Dark Green  GP2  4                  37 3V3 EN
@@ -606,7 +609,7 @@ VGA_Out_Light Green  GP9 12                  29 GP22  VGA_Out_CSYNC
 ## Pinout for Pimoroni Pico LiPo 2 W XL
 
 ```
-                       GP0  1                  60 VBUS
+                       GP0  1       USB        60 VBUS
                        GP1  2                  59 VSYS
                        GND  3                  58 GND
                        GP2  4                  57 3V3 EN
@@ -637,6 +640,8 @@ VGA_Out_Light Green  GP9 12                  29 GP22  VGA_Out_CSYNC
     VGA_Out_Dark Red  GP36 29                  31 GP39  Serial RX
    VGA_Out_Light Red  GP37 30                  31 GP38  Serial TX
 ```
+
+`hello`
 
 ## VGA 15-way Socket Wiring 
 
@@ -957,7 +962,7 @@ Call Stack (most recent call first):
       G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G   G
 ```
 ```
-      VGA_Out_VSYNC  GP0  1                40 VBUS
+      VGA_Out_VSYNC  GP0  1       USB      40 VBUS
 VGA_Out_HSYNC_CSYNC  GP1  2                39 VSYS
                      GND  3                38 GND
   VGA_Out_Dark_Blue  GP2  4                37 3V3 EN
@@ -982,7 +987,7 @@ To open a new terminal window, enter:
 
 
 ```
-   VGA_In_Dark_Blue  GP0  1                40 VBUS
+   VGA_In_Dark_Blue  GP0  1       USB      40 VBUS
   VGA_In_Light_Blue  GP1  2                39 VSYS
                      GND  3                38 GND
   VGA_In_Dark_Green  GP2  4                37 3V3 EN
@@ -1093,4 +1098,50 @@ Program Information
  target chip:   RP2350
  image type:    ARM Secure
 
-      
+pico2 config29      
+
+Program Information
+ name:                palavo
+ web site:            https://github.com/peterstansfeld/palavo
+ description:         PIO-Assisted Logic Analyser with VGA Output
+ features:            VGA input
+                      DVI output
+                      UART stdin / stdout
+ binary start:        0x10000000
+ binary end:          0x1000bc14
+ target chip:         RP2350
+ image type:          ARM Secure
+
+
+solder_party stamp
+
+Program Information
+ name:                palavo
+ web site:            https://github.com/peterstansfeld/palavo
+ description:         PIO-Assisted Logic Analyser with VGA Output
+ features:            Infra-red control
+                      USB stdin / stdout
+ binary start:        0x10000000
+ binary end:          0x1000e330
+ target chip:         RP2350
+ image type:          ARM Securepalavo
+
+
+
+To build and install `pioasm` so that it's not downloaded and built on each `make` of a new pico SDK project build folder, I followed [these instructions](https://forums.raspberrypi.com/viewtopic.php?p=2329581&hilit=pioasm+keeps+building#p2329581):
+
+```
+cd ~/pico/pico-sdk/tools/pioasm
+mkdir build
+cd build
+cmake -DPIOASM_VERSION_STRING="2.2.0" ..
+make
+sudo make install
+`sudo ln -s ~/pico/pico-sdk/tools/pioasm/build/pioasm /usr/local/bin/pioasm
+```
+
+Although, the last instruction reported this error:
+
+`ln: failed to create symbolic link '/usr/local/bin/pioasm': File exists`
+
+Thanks, hippy (the person who shared the instructions).
