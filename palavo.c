@@ -134,7 +134,7 @@
         // #define PICO_PIO_USE_GPIO_BASE 1
 
 // config0
-        #define PALAVO_CONFIG 0
+        #define PALAVO_CONFIG 29
         #define PICO_PIO_USE_GPIO_BASE 0
 
     #endif
@@ -3072,8 +3072,6 @@ char* help_strings =
 
 #if ENABLE_GRAPHICS_DEMO
     "SPACE to play / pause graphics demo\n"
-#else
-    "\n"
 #endif
 
 #if USE_DVI
@@ -3081,6 +3079,11 @@ char* help_strings =
 #else
     "\n"
 #endif
+
+#if !ENABLE_GRAPHICS_DEMO
+    "\n"
+#endif
+
     "\n";
 
 char* press_any_key_string = 
@@ -3389,16 +3392,13 @@ char* about_strings_title =
     "Developed by Peter Stansfeld.\n"
     "\n"
     "\n"
-    // "Inspired by and using code from Hunter Adams's\n"
-    // "Graphics Primitives demo with Bruce Land's 4-bit mod\n"
-    // "and Raspberry Pi's Logic Analyser example for the Pico.\n";
-
     "Inspired by and using code from:\n"
     "\n"
     "* Raspberry Pi's Logic Analyser example for the Pico.\n"
     "\n"
-    "* Hunter Adams's Graphics Primitives demo with Bruce\n"
-    "  Land's 4-bit mod.\n"
+    "* Hunter Adams's VGA Graphics Driver for RP2040 with\n"
+    "  Bruce Land's 4-bit mod.\n"
+    // "vha3@cornell.edu\n"
     "\n"
     "\n";
 
@@ -3406,8 +3406,6 @@ char* about_strings_title =
     "Board: ";
 
 
-    // "vha3@cornell.edu\n"
-    // "4-bit mod by Bruce Land\n";
 
 void show_about_window() {
     for (int y = 0; y <= SCREEN_HEIGHT; y++) {
@@ -3761,8 +3759,8 @@ void init_pio_vga_detect_vsync_on_csync() {
         my_pio_set_gpio_base(vga_capture_pio, 16);
 #endif
 
-        vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
-        vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
+        vga_capture_offset = pio_add_program(vga_capture_pio, &vga_1bit_capture_program);
+        vga_1bit_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
 
         vga_detect_vsync_on_csync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_on_csync_program);
         vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, VGA_OUT_CSYNC_PIN);
@@ -3788,10 +3786,12 @@ void deinit_vga_capture() {
 
             // and free it
             pio_remove_program(vga_capture_pio, &vga_detect_vsync_program, vga_detect_vsync_offset);
+            pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
+        } else {
+            pio_remove_program(vga_capture_pio, &vga_1bit_capture_program, vga_capture_offset);
         }
 
-        // free the remaining state machines
-        pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
+        // free the remaining state machine
         pio_remove_program(vga_capture_pio, &vga_detect_vsync_on_csync_program, vga_detect_vsync_on_csync_offset);
 
         vga_sync_detect_interrupt_set_enabled(false);
