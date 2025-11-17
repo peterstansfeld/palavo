@@ -134,7 +134,7 @@
         // #define PICO_PIO_USE_GPIO_BASE 1
 
 // config0
-        #define PALAVO_CONFIG 29
+        #define PALAVO_CONFIG 18
         #define PICO_PIO_USE_GPIO_BASE 0
 
     #endif
@@ -197,6 +197,15 @@
     #define USE_CSYNC 1
 
     #pragma message "Using CSYNC instead of VSYNC and HSYNC"
+
+#endif
+
+
+#if (PALAVO_CONFIG & (1 << PC_BIT_USE_USB_STDIO))
+
+    #define USE_STDIO_USB 1
+
+    #pragma message "Using USB STDIO instead of UART STDIO"
 
 #endif
 
@@ -298,7 +307,7 @@
     #endif
 
     // Make every GPIO an input except UART_TX_PIN and any reserved pins. 
-    #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~(PICO_RESERVED_GPIO_0_31) | (1 << UART_TX_PIN))
+    #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~((PICO_RESERVED_GPIO_0_31) | (1 << UART_TX_PIN) | (1 << UART_RX_PIN)))
 
     #if PICO_PIO_USE_GPIO_BASE
     #define GPIO_INPUT_MASK_32_47 (0xffff)
@@ -335,7 +344,7 @@
     #endif
 
     // #define GPIO_INPUT_MASK ((1 << VGA_IN_VSYNC_PIN) | (1 << VGA_IN_HSYNC_CSYNC_PIN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
-    #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~((PICO_RESERVED_GPIO_0_31) | (1 << UART_TX_PIN)))
+    #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~((PICO_RESERVED_GPIO_0_31) | (1 << UART_TX_PIN) | (1 << UART_RX_PIN)))
 
     #if PICO_PIO_USE_GPIO_BASE
     #define GPIO_INPUT_MASK_32_47 (0xffff)
@@ -415,16 +424,19 @@ bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
 
 #endif
 
-#ifdef PICO_STDIO_UART
 
-#ifdef UART_TX_PIN
-    bi_decl(bi_1pin_with_name(UART_TX_PIN, "UART TX"));
-#endif
+#if USE_STDIO_USB
+
+#else
+
+    #ifdef PICO_DEFAULT_UART_TX_PIN
+    bi_decl(bi_1pin_with_name(PICO_DEFAULT_UART_TX_PIN, "UART TX"));
+    #endif
 
 
-#ifdef UART_RX_PIN
-    bi_decl(bi_1pin_with_name(UART_RX_PIN, "UART RX"));
-#endif
+    #ifdef PICO_DEFAULT_UART_RX_PIN
+    bi_decl(bi_1pin_with_name(PICO_DEFAULT_UART_RX_PIN, "UART RX"));
+    #endif
 
 #endif
 
@@ -536,12 +548,19 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 
 #if USE_GPIO_0_47
 
-#define CAPTURE_PIN_BASE 0 // HSYNC
+// #define CAPTURE_PIN_BASE 0 // HSYNC
 
-#define CAPTURE_PIN_COUNT 27 // GPIO0 - GPIO26
-#define CAPTURE_TRIGGER_PIN_BASE 0 // one of the keybord row drivers
-#define CAPTURE_SAMPLE_FREQ_DIVISOR 12 // should capture two row-driving sequences
-#define CAPTUTRE_TRIGGER_TYPE TT_FALLING_EDGE // 
+// #define CAPTURE_PIN_COUNT 27 // GPIO0 - GPIO26
+// #define CAPTURE_TRIGGER_PIN_BASE 0 // one of the keybord row drivers
+// #define CAPTURE_SAMPLE_FREQ_DIVISOR 12 // should capture two row-driving sequences
+// #define CAPTUTRE_TRIGGER_TYPE TT_FALLING_EDGE // 
+
+#define CAPTURE_PIN_BASE 30 // CSYNC - 1
+
+#define CAPTURE_PIN_COUNT 8 // GPIO30 - GPIO37
+#define CAPTURE_TRIGGER_PIN_BASE 31 // CSYNC
+#define CAPTURE_SAMPLE_FREQ_DIVISOR 6 //
+#define CAPTUTRE_TRIGGER_TYPE TT_VGA_CSYNC // 
 
 #else
 
@@ -958,6 +977,9 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     PIO capture_pio = pio;
     uint capture_sm = sm;
 
+    uint wait_gpio_pin_to_be_high = pio_encode_wait_gpio(1, trigger_pin);
+    uint wait_gpio_pin_to_be_low = pio_encode_wait_gpio(0, trigger_pin);
+
     uart_my_puts("\nArming trigger...\n");
 
     // Remove the ir rx - actually, we dont really need to because it's always using GPIO_BASE 16.
@@ -1063,13 +1085,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
         true                // Start immediately
     );
 
-    // Wait for a rising edge on VSYNC, which involves:
-    // 1. Waiting until VSYNC is at the opposite level of the trigger level.
-
     bool triggered = false; // assume fail
-
-
-// enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_VSYNC, TT_VGA_RGB, TT_VGA_VFRONT_PORCH, TT_VGA_CSYNC, TT_COUNT};
 
     switch (trigger_type) {
 
@@ -1078,22 +1094,22 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
             break;
 
         case TT_LOW_LEVEL:
-            triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(0, trigger_pin), TRIGGER_TIMEOUT_US);
+            triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, wait_gpio_pin_to_be_low, TRIGGER_TIMEOUT_US);
             break;
 
         case TT_HIGH_LEVEL:
-            triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin), TRIGGER_TIMEOUT_US);
+            triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, wait_gpio_pin_to_be_high, TRIGGER_TIMEOUT_US);
             break;
 
         case TT_RISING_EDGE:
-            if (pio_sm_exec_timeout_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(0, trigger_pin), TRIGGER_TIMEOUT_US)) {
-                triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin), TRIGGER_TIMEOUT_US);
+            if (pio_sm_exec_timeout_us(trigger_pio, trigger_sm, wait_gpio_pin_to_be_low, TRIGGER_TIMEOUT_US)) {
+                triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, wait_gpio_pin_to_be_high, TRIGGER_TIMEOUT_US);
             }
             break;
 
         case TT_FALLING_EDGE:
-            if (pio_sm_exec_timeout_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin), TRIGGER_TIMEOUT_US)) {
-                triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(0, trigger_pin), TRIGGER_TIMEOUT_US);
+            if (pio_sm_exec_timeout_us(trigger_pio, trigger_sm, wait_gpio_pin_to_be_high, TRIGGER_TIMEOUT_US)) {
+                triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, wait_gpio_pin_to_be_low, TRIGGER_TIMEOUT_US);
             }
             break;
 
@@ -1102,9 +1118,9 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
             bool trigger_pin_state = gpio_get(trigger_pin);
 
             // wait for it to change to the opposite state
-            triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(!trigger_pin_state, trigger_pin), TRIGGER_TIMEOUT_US);
+            uint wait_gpio_pin_to_change = trigger_pin_state ? wait_gpio_pin_to_be_low : wait_gpio_pin_to_be_high;
+            triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, wait_gpio_pin_to_change, TRIGGER_TIMEOUT_US);
             break;
-
 
         case TT_VGA_VSYNC:
         case TT_VGA_RGB:
@@ -1125,15 +1141,15 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
 
             uint32_t expiry_time = time_us_32() + TRIGGER_TIMEOUT_US;
 
-            if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin), expiry_time)) {
+            if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, wait_gpio_pin_to_be_high, expiry_time)) {
                 // VSYNC is high
-                if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(0, trigger_pin), expiry_time)) {
+                if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, wait_gpio_pin_to_be_low, expiry_time)) {
                     // VSYNC is low
                     triggered = true; // assume pass
                     // Wait for x HSYNC pulses before starting the capture
                     for (int i = 0; i < x; i++) {
-                        if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin + 1), expiry_time)) {
-                            if (!pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(0, trigger_pin + 1), expiry_time)) {
+                        if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, wait_gpio_pin_to_be_high, expiry_time)) {
+                            if (!pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, wait_gpio_pin_to_be_low, expiry_time)) {
                                 triggered = false;
                                 break;
                             }
@@ -1153,23 +1169,6 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
         case TT_VGA_CSYNC:
         case TT_VGA_CRGB:
         case TT_VGA_CVFRONT_PORCH:
-
-            // int x = 1; // number of pulses 
-            // switch (trigger_type) {
-            //     case TT_VGA_VSYNC:
-            //         x = 524; // capture just before the next VSYNC pulse
-            //         break;
-            //     case TT_VGA_RGB:
-            //         x = 34; // capture just before the active phase
-            //         break;
-            //     case TT_VGA_VFRONT_PORCH:
-            //         x = 480 + 33 + 2 - 1; // capture just before the vertical front porch phase
-            //         break;
-            // }
-
-            // int x = 524; // number of pulses 
-
-            // uint32_t expiry_time = time_us_32() + TRIGGER_TIMEOUT_US;
 
             x = 1; // number of pulses 
 
@@ -1191,29 +1190,33 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
             // if we get a low pulse on CSYNC that is greater than 96 clks / 25 MHz = 3.84 us then
             // chances are we have a "VSYNC" signal on CSYNC. It must also be less than 704 cls / 25 MHz = 28.16
 
-            if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin), expiry_time)) {
+            if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, wait_gpio_pin_to_be_high, expiry_time)) {
                 // CSYNC is high
                 // wait for CSYNC to go low
                 while (1) {
-                    if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(0, trigger_pin), expiry_time)) {
+                    if (!triggered && (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, wait_gpio_pin_to_be_low, expiry_time))) {
                         // CSYNC is low
                         uint32_t csync_pulse_low_start_time = time_us_32();
 
                         // wait for CSYNC to go high again
-                        if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin), expiry_time)) {
+                        if (!triggered && (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, wait_gpio_pin_to_be_high, expiry_time))) {
                             // CSYNC is high again
 
                             uint32_t csync_pulse_low_duration = time_us_32() - csync_pulse_low_start_time;
                             
-                            // csync_pulse_low_duration should be between 
-                            
-                            #define CSYNC_WIDTH_IN_MS 4
-                            
                             // 3 fails - good
                             // 4, 5, 10, 25, 27, 28 works
                             // 29, 30, 35, 50, 100 fails - good
-                            if (csync_pulse_low_duration > CSYNC_WIDTH_IN_MS) {
+
+                            // csync_pulse_low_duration should be between 
+
+                            #define MIN_CSYNC_WIDTH_uS 25
+                            #define MAX_CSYNC_WIDTH_uS 27
+
+                            if ((csync_pulse_low_duration >= MIN_CSYNC_WIDTH_uS) && (csync_pulse_low_duration <= MAX_CSYNC_WIDTH_uS)) {
                                 triggered = true; // assume pass
+                                // uart_my_putuif("csync_pulse_low_duration: %d\n", csync_pulse_low_duration);
+                                // this yielded a consistant value of 26 when a valid CSYNC was detected
                                 break;
                             }
                         } else {
@@ -1228,8 +1231,8 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
                     // triggered = true; // assume pass
                     // Wait for x CSYNC (HSYNC) pulses before starting the capture
                     for (int i = 0; i < x; i++) {
-                        if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(1, trigger_pin), expiry_time)) {
-                            if (!pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, pio_encode_wait_gpio(0, trigger_pin), expiry_time)) {
+                        if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, wait_gpio_pin_to_be_high, expiry_time)) {
+                            if (!pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, wait_gpio_pin_to_be_low, expiry_time)) {
                                 triggered = false;
                                 break;
                             }
@@ -4465,32 +4468,12 @@ int main() {
 #endif
 
 
-#if USE_GPIO_0_47
-
-    uart_init(UART_ID, BAUD_RATE);
-
-    gpio_set_function(UART_TX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_TX_PIN));
-    gpio_set_function(UART_RX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_RX_PIN));
-
-    // gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
-    // gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
-#else
-
-    // todo - we can probably and should use the code below (in the #else), which is from the SDK docs
-
 #if !USE_STDIO_UART
     uart_init(UART_ID, BAUD_RATE);
-#endif
-    // Set the TX and RX pins by using the function select on the GPIO
-    // Set datasheet for more information on function select
-    // gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
-    // gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
     gpio_set_function(UART_TX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_TX_PIN));
     gpio_set_function(UART_RX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_RX_PIN));
-
-    // gpio_set_function(LED_PIN, GPIO_FUNC_UART);
-
 #endif
+
 
 #if USE_LED_AS_IR_DEBUG
 

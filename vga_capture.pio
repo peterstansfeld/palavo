@@ -208,11 +208,9 @@ static inline void vga_capture_program_init(PIO pio, uint sm, uint offset, uint 
 
 
 .program vga_1bit_capture
-;.side_set 1 opt                     ; one sideset pin - the Pico's LED
 
 ; 1. Wait to be flagged by another state machine that an HSYNC has been detected
 ; 2. Wait for 48 * 6 = 288 cycles (@150 MHz) plus 3 more to be in the middle of the
-;//    first pixel and sample the RRGGBB pins
 ;    first pixel and sample the single RGB pin
 ; 3. Keep sampling every 6 cycles until a whole line (640 pixels) has been sampled
 ; 4. Jump to step 1
@@ -231,16 +229,17 @@ delay_loop:
     jmp x-- delay_loop [8]          ; 32 * 9 = 288 + (1 + 1 + 1 (from above)) = 291 clks
 
 sample_rgb_pin:
-    ; in pins, 6 [4]                  ; grab the pixel data
-
     jmp pin rgb_pin_high
 rgb_pin_low:
     set x, 0                        ; load x with black
     jmp auto_push_pixel
 
 rgb_pin_high:
-    set x, 0b001100 [1]             ; load x with a RRGGBB value - in this case bright green
+    set x, 0b001100 [1]             ; load x with a RRGGBB value - in this case light green
 
+    ; set x, 0b001110                 ; load x with the inverse of a RRGGBB value and...
+    ; mov x, !x                       ; ... invert it, int his case: a sort of raspberry
+    
 auto_push_pixel:
     in x, 6 [1]                     ; push 6 bits of pixel data (if auto-push enabled)
     jmp y-- sample_rgb_pin          ; repeat 639 more times  
