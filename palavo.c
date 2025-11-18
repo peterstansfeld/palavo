@@ -18,6 +18,9 @@
  *
  */
 
+// Use core 1 for the DVI output (initialisation and interrupt service routine)
+#define USE_MULTI_CORE 1
+
 #define USE_STDIO_UART 1
 
 #include "hardware/clocks.h"
@@ -106,31 +109,31 @@
     #elif (BOARD_TYPE == 2)
 
         // #pragma message "Building Palavo for PIMORONI_PICO_LIPO2XL_W_RP2350"
-        #define PALAVO_CONFIG (1 << PC_BIT_USE_GPIO_0_47)
+        #define PALAVO_CONFIG (1 << PC_BIT_USE_GPIO_31_47)
 
     #elif (BOARD_TYPE == 3)
 
         // #pragma message "Building Palavo for SOLDERPARTY_RP2350_STAMP_XL"
         #define PALAVO_CONFIG (1 << PC_BIT_USE_DVI)
-        // #define PALAVO_CONFIG (1 << PC_BIT_USE_GPIO_0_47)
+        // #define PALAVO_CONFIG (1 << PC_BIT_USE_GPIO_31_47)
 
     #else
 
         // This is a default palavo config for colour syntax whilst developing only.
         // #define PALAVO_CONFIG 0
         // #define PALAVO_CONFIG (1 << PC_BIT_USE_DVI)
-        // #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (1 << PC_BIT_USE_GPIO_0_47))
+        // #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (1 << PC_BIT_USE_GPIO_31_47))
         #error "Please specify a supported board, or define a PALAVO_CONFIG (See README.md)."
         // #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (1 << PC_BIT_USE_VGA_IN_TO_DVI))
 
-        // #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (1 << PC_BIT_USE_GPIO_0_47))
+        // #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (1 << PC_BIT_USE_GPIO_31_47))
 
 // config13
-        // #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (0 << PC_BIT_USE_GPIO_0_47) | (1 << PC_BIT_USE_VGA_IN_TO_DVI) | (1 << PC_BIT_USE_NEW_IO_MAPPING))
+        // #define PALAVO_CONFIG ((1 << PC_BIT_USE_DVI) | (0 << PC_BIT_USE_GPIO_31_47) | (1 << PC_BIT_USE_VGA_IN_TO_DVI) | (1 << PC_BIT_USE_NEW_IO_MAPPING))
         // #define PICO_PIO_USE_GPIO_BASE 0
 
 // config2
-        // #define PALAVO_CONFIG (1 << PC_BIT_USE_GPIO_0_47)
+        // #define PALAVO_CONFIG (1 << PC_BIT_USE_GPIO_31_47)
         // #define PICO_PIO_USE_GPIO_BASE 1
 
 // config0
@@ -163,7 +166,7 @@
 #endif
 
 
-#if (PALAVO_CONFIG & (1 << PC_BIT_USE_GPIO_0_47))
+#if (PALAVO_CONFIG & (1 << PC_BIT_USE_GPIO_31_47))
 
     #define USE_GPIO_0_47 1
 
@@ -179,15 +182,16 @@
 
 #endif
 
-#if (PALAVO_CONFIG & (1 << PC_BIT_USE_NEW_IO_MAPPING))
+#if (PALAVO_CONFIG & (1 << PC_BIT_USE_IR))
 
-    #define USE_NEW_IO_MAPPING 1
+    // #define USE_NEW_IO_MAPPING 1
+    #define USE_IR 1
 
-    #pragma message "Using new IO mapping"
+    #pragma message "Using Infra-red Remote Control"
 
-    #if (!(PALAVO_CONFIG & (1 << PC_BIT_USE_CSYNC)))
-        #error "VGA Output must use CSYNC."
-    #endif
+    // #if (!(PALAVO_CONFIG & (1 << PC_BIT_USE_CSYNC)))
+    //     #error "VGA Output must use CSYNC."
+    // #endif
 
 #endif
 
@@ -233,7 +237,7 @@
     #define UART_TX_PIN 38
     #define UART_RX_PIN 39
 
-    #define USE_IR 1
+    // #define USE_IR 1
 
     #if USE_IR
         #define IR_RX_PIN 46
@@ -274,9 +278,6 @@
 
 #else
 
-    #if USE_NEW_IO_MAPPING
-
-
     // #define VGA_IN_HSYNC_CSYNC_PIN 26
     #define VGA_IN_VSYNC_PIN 0
     #define VGA_IN_HSYNC_CSYNC_PIN 1
@@ -310,44 +311,6 @@
     #define GPIO_INPUT_MASK_32_47 (0xffff)
     #endif
 
-    #else
-
-    
-    #define VGA_OUT_CSYNC_PIN 1
-    #define VGA_OUT_RGB_BASE_PIN 2
-    #define VGA_OUT_RGB_PIN_COUNT 6
-
-    #define UART_TX_PIN 8
-    #define UART_RX_PIN 9
-    
-    // #define USE_DVI 1
-    // #define USE_VGA_CAPTURE 1
-    #define LED_PIN PICO_DEFAULT_LED_PIN
-
-    #define USE_LED_AS_IR_DEBUG 0
-
-    #if USE_DVI
-
-    #define VGA_IN_HSYNC_CSYNC_PIN 26
-    #define VGA_IN_VSYNC_PIN 27
-    #define VGA_IN_RGB_BASE_PIN 0
- 
-    #endif
-
-    #define USE_IR 1
-
-    #if USE_IR
-    #define IR_RX_PIN 10
-    #endif
-
-    // #define GPIO_INPUT_MASK ((1 << VGA_IN_VSYNC_PIN) | (1 << VGA_IN_HSYNC_CSYNC_PIN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
-    #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~((PICO_RESERVED_GPIO_0_31) | (1 << UART_TX_PIN) | (1 << UART_RX_PIN)))
-
-    #if PICO_PIO_USE_GPIO_BASE
-    #define GPIO_INPUT_MASK_32_47 (0xffff)
-    #endif
-
-    #endif
 #endif
 
 
@@ -381,61 +344,37 @@ bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
 #else
     // using GPIO 0..7 for either VGA In or for VGA Out
 
-    #if USE_NEW_IO_MAPPING
-        bi_decl(bi_program_feature("VGA input"));
+    bi_decl(bi_program_feature("VGA input"));
 
-        bi_decl(bi_1pin_with_name(0, "VGA In - VSYNC"));
-        bi_decl(bi_1pin_with_name(1, "VGA In - HSYNC / CSYNC"));
-        bi_decl(bi_1pin_with_name(2, "VGA In - Dark Blue"));
-        bi_decl(bi_1pin_with_name(3, "VGA In - Light Blue"));
-        bi_decl(bi_1pin_with_name(4, "VGA In - Dark Green"));
-        bi_decl(bi_1pin_with_name(5, "VGA In - Light Green"));
-        bi_decl(bi_1pin_with_name(6, "VGA In - Dark Red"));
-        bi_decl(bi_1pin_with_name(7, "VGA In - Light Red"));
+    bi_decl(bi_1pin_with_name(0, "VGA In - VSYNC"));
+    bi_decl(bi_1pin_with_name(1, "VGA In - HSYNC / CSYNC"));
+    bi_decl(bi_1pin_with_name(2, "VGA In - Dark Blue"));
+    bi_decl(bi_1pin_with_name(3, "VGA In - Light Blue"));
+    bi_decl(bi_1pin_with_name(4, "VGA In - Dark Green"));
+    bi_decl(bi_1pin_with_name(5, "VGA In - Light Green"));
+    bi_decl(bi_1pin_with_name(6, "VGA In - Dark Red"));
+    bi_decl(bi_1pin_with_name(7, "VGA In - Light Red"));
 
+    #ifdef VGA_OUT_CSYNC_PIN
+        bi_decl(bi_1pin_with_name(VGA_OUT_CSYNC_PIN, "VGA Out - CSYNC"));
+    #endif
 
-        #ifdef VGA_OUT_CSYNC_PIN
-            bi_decl(bi_1pin_with_name(VGA_OUT_CSYNC_PIN, "VGA Out - CSYNC"));
-        #endif
-
-
-        #ifdef VGA_OUT_RGB_BASE_PIN
-            bi_decl(bi_1pin_with_name(VGA_OUT_RGB_BASE_PIN, "VGA Out - RGB"));
-        #endif
-
-    #else
-
-#if USE_CSYNC
-        bi_decl(bi_1pin_with_name(1, "VGA Out - CSYNC"));
-#else
-        bi_decl(bi_1pin_with_name(0, "VGA Out - VSYNC"));
-        bi_decl(bi_1pin_with_name(1, "VGA Out - HSYNC"));
-#endif
-        bi_decl(bi_1pin_with_name(2, "VGA Out - Dark Blue"));
-        bi_decl(bi_1pin_with_name(3, "VGA Out - Light Blue"));
-        bi_decl(bi_1pin_with_name(4, "VGA Out - Dark Green"));
-        bi_decl(bi_1pin_with_name(5, "VGA Out - Light Green"));
-        bi_decl(bi_1pin_with_name(6, "VGA Out - Dark Red"));
-        bi_decl(bi_1pin_with_name(7, "VGA Out - Light Red"));
+    #ifdef VGA_OUT_RGB_BASE_PIN
+        bi_decl(bi_1pin_with_name(VGA_OUT_RGB_BASE_PIN, "VGA Out - RGB"));
     #endif
 
 #endif
 
+#if USE_DVI 
 
-#if USE_STDIO_USB
+    #if USE_MULTI_CORE
 
-#else
+#include "pico/multicore.h"
 
-    #ifdef PICO_DEFAULT_UART_TX_PIN
-    bi_decl(bi_1pin_with_name(PICO_DEFAULT_UART_TX_PIN, "UART TX"));
-    #endif
-
-
-    #ifdef PICO_DEFAULT_UART_RX_PIN
-    bi_decl(bi_1pin_with_name(PICO_DEFAULT_UART_RX_PIN, "UART RX"));
     #endif
 
 #endif
+
 
 
 #ifdef IR_RX_PIN
@@ -4433,6 +4372,28 @@ void handle_command(uint ui_command) {
 }
 
 
+#if USE_MULTI_CORE
+
+    #if USE_DVI
+
+#define FLAG_VALUE 123
+
+void core1_main() { 
+    dvi_init();
+    // dvi_testbars();
+
+    multicore_fifo_push_blocking(FLAG_VALUE);
+
+    while (true) {
+        tight_loop_contents();
+        // sleep_ms(10); // testing to see if this still randomly crashes the hstx-dvi now that it's on core 1 - it does
+    }
+}
+
+    #endif
+
+#endif
+
 
 int main() {
 
@@ -4603,12 +4564,40 @@ int main() {
 
     // sleep_ms(100) ;
 
+ #if USE_MULTI_CORE
+
+    // for some reason we need a delay here - either from the USB connecting to the host 
+
+    #if !USE_STDIO_USB
+
+    // sleep_ms(2000); // if using DVI this seems to be required
+    // sleep_ms(1000); // if using DVI this seems to be required
+    sleep_ms(1); // if using DVI this seems to be required ??? needs to empty the UART perhaps?
+    
+    #endif
+
+    multicore_launch_core1(core1_main);
+
+
+    // wait for core 1 to acknowledge that it's initialised the DVI output
+    if (multicore_fifo_pop_blocking()) {   
+        uart_my_puts("DVI initialised\n");
+    }
+
+    // show the test bars
+    dvi_testbars();
+    sleep_ms(500); 
+
+#else
+
     sleep_ms(1000); // if using DVI this seems to be required
                     // doesn't like powering up (versus reset).
 
     dvi_init();
 
     dvi_testbars();
+
+#endif
 
     // print_dvi_regs();
 
@@ -4971,6 +4960,13 @@ int main() {
             // in CMakeLists.txt also prevents the crashing, but defeats the purpose of trying to save power.
 
             // uart_putc(UART_ID, 'B');
+
+#else
+
+    #if USE_MULTI_CORE
+            sleep_ms(10); // testing to see if this still randomly crashes the hstx-dvi now that it's on core 1 - it doesn't
+    #endif
+
 #endif
 
         }

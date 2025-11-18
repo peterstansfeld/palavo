@@ -44,7 +44,7 @@ if (DEFINED PALAVO_CONFIG)
         message(STATUS "PALAVO_CONFIG.0 is 1")
     endif()
     if (PC_BIT1)
-        # PC_BIT_USE_GPIO_0_47 
+        # PC_BIT_USE_GPIO_31_47 
         message(STATUS "PALAVO_CONFIG.1 is 1")
     endif()
     if (PC_BIT2)
@@ -52,7 +52,7 @@ if (DEFINED PALAVO_CONFIG)
         message(STATUS "PALAVO_CONFIG.2 is 1")
     endif()
     if (PC_BIT3)
-        # PC_BIT_USE_NEW_IO_MAPPING
+        # PC_BIT_USE_IR
         message(STATUS "PALAVO_CONFIG.3 is 1")
     endif()
     if (PC_BIT4)
@@ -87,6 +87,13 @@ target_compile_definitions(palavo PRIVATE
 
 # must match with executable name
 target_link_libraries(palavo PRIVATE pico_stdlib hardware_pio hardware_dma hardware_irq hardware_clocks)
+
+if (PC_BIT0)
+    # If we're using DVI we run it on the second core, otherwise
+    # it can fall over, especially if we're using USB STDIO.
+    target_link_libraries(palavo PRIVATE pico_multicore)
+endif()
+
 
 # must match with executable name
 pico_add_extra_outputs(palavo)

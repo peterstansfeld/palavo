@@ -987,7 +987,7 @@ void dvi_init_hstx_regs() {
 
 void dvi_init_hstx_gpio() {
     for (int i = 12; i <= 19; ++i) {
-        gpio_set_function(i, 0); // HSTX
+        gpio_set_function(i, GPIO_FUNC_HSTX);
     }
 }
 
