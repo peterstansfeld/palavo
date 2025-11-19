@@ -19,6 +19,14 @@
  */
 
 // Use core 1 for the DVI output (initialisation and interrupt service routine)
+
+#define VERSION_MAJOR 1
+#define VERSION_MINOR 0
+#define VERSION_PATCH 0
+
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+
 #define USE_MULTI_CORE 1
 
 #define USE_STDIO_UART 1
@@ -234,10 +242,10 @@
 
     #define USE_LED_AS_IR_DEBUG 0
 
+#if !USE_STDIO_USB
     #define UART_TX_PIN 38
     #define UART_RX_PIN 39
-
-    // #define USE_IR 1
+#endif
 
     #if USE_IR
         #define IR_RX_PIN 46
@@ -272,8 +280,15 @@
     #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~PICO_RESERVED_GPIO_0_31)
 
     #if PICO_PIO_USE_GPIO_BASE
+
+#if !USE_STDIO_USB
     #define PICO_RESERVED_GPIO_32_47 ((1 << (UART_TX_PIN - 32)) | (1 << (UART_RX_PIN - 32)))
+#else
+    #define PICO_RESERVED_GPIO_32_47 0
+#endif
+
     #define GPIO_INPUT_MASK_32_47 (0xffff & ~PICO_RESERVED_GPIO_32_47)
+
     #endif
 
 #else
@@ -290,22 +305,26 @@
 
     #define USE_LED_AS_IR_DEBUG 0
 
+#if !USE_STDIO_USB
     #define UART_TX_PIN 8
     #define UART_RX_PIN 9
     // #define CSYNC 22
+#endif
 
     #define VGA_OUT_CSYNC_PIN 10
     #define VGA_OUT_RGB_BASE_PIN 11
     #define VGA_OUT_RGB_PIN_COUNT 1
 
-    // #define USE_IR 1
-
     #if USE_IR
     #define IR_RX_PIN 10
     #endif
 
-    // Make every GPIO an input except UART_TX_PIN and any reserved pins. 
+#if !USE_STDIO_USB
+    // Make every GPIO an input except UART pins and any reserved pins
     #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~((PICO_RESERVED_GPIO_0_31) | (1 << UART_TX_PIN) | (1 << UART_RX_PIN)))
+#else
+    #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~PICO_RESERVED_GPIO_0_31)
+#endif
 
     #if PICO_PIO_USE_GPIO_BASE
     #define GPIO_INPUT_MASK_32_47 (0xffff)
@@ -313,10 +332,17 @@
 
 #endif
 
+// The following line doesn't seem to work...
+// bi_decl(bi_program_name("palavo " STR(VERSION_MAJOR) "." STR(VERSION_MINOR) "." STR(VERSION_PATCH)));
+
+// ... so, maybe make it a feature?...
+// bi_decl(bi_program_feature("Version: " STR(VERSION_MAJOR) "." STR(VERSION_MINOR) "." STR(VERSION_PATCH)));
 
 bi_decl(bi_program_description("PIO-Assisted Logic Analyser with VGA Output"));
 bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
 
+// Maybe make this a feature?...
+// bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
 
 #if USE_DVI
     bi_decl(bi_program_feature("DVI output"));
@@ -3331,7 +3357,7 @@ char* name_string = "PALAVO";
 
 char* about_strings_title =
     "PIO-Assisted Logic Analyser with VGA Output\n"
-    "Version: 0.0.1\n"
+    "Version: " STR(VERSION_MAJOR) "." STR(VERSION_MINOR) "." STR(VERSION_PATCH) "\n"
     "\n"
     "Developed by Peter Stansfeld.\n"
     "\n"
