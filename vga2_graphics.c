@@ -189,7 +189,7 @@ void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour, ui
 void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
     // Choose which PIO instance to use (there are two instances (three for rp2350), each with 4 state machines)
 
-    PIO pio_2 = pio1;
+    PIO vga_out_pio = pio1;
 
     // Our assembled program needs to be loaded into this PIO's instruction
     // memory. This SDK function will find a location (offset) in the
@@ -202,10 +202,10 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
     // The program name comes from the .program part of the pio file
     // and is of the form <program name_program>
 
-    // uint hsync2_offset = pio_add_program(pio_2, &hsync2_program);
-    // uint vsync2_offset = pio_add_program(pio_2, &vsync2_program);
-    // uint rgb3_offset = pio_add_program(pio_2, &rgb3_program);
-    // uint hsync3_offset = pio_add_program(pio_2, &hsync3_program);
+    // uint hsync2_offset = pio_add_program(vga_out_pio, &hsync2_program);
+    // uint vsync2_offset = pio_add_program(vga_out_pio, &vsync2_program);
+    // uint rgb3_offset = pio_add_program(vga_out_pio, &rgb3_program);
+    // uint hsync3_offset = pio_add_program(vga_out_pio, &hsync3_program);
 
     // Manually select a few state machines from pio instance pio0.
 
@@ -231,15 +231,15 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
 #endif
 
 #if SYS_CLK_KHZ == 125000u
-    uint rgb5_offset = pio_add_program(pio_2, &rgb5_program);
+    uint rgb5_offset = pio_add_program(vga_out_pio, &rgb5_program);
 #elif SYS_CLK_KHZ == 150000u
-    // uint rgb5_offset = pio_add_program(pio_2, &rgb5_150_mhz_program);
-    uint rgb5_offset = pio_add_program(pio_2, &rgb5_150_mhz_rp235x_program);
+    // uint rgb5_offset = pio_add_program(vga_out_pio, &rgb5_150_mhz_program);
+    uint rgb5_offset = pio_add_program(vga_out_pio, &rgb5_150_mhz_rp235x_program);
 #elif SYS_CLK_KHZ == 250000u
-    uint rgb5_offset = pio_add_program(pio_2, &rgb5_250_mhz_program);
+    uint rgb5_offset = pio_add_program(vga_out_pio, &rgb5_250_mhz_program);
 #endif
 
-    uint hsync5_offset = pio_add_program(pio_2, &hsync5_program);
+    uint hsync5_offset = pio_add_program(vga_out_pio, &hsync5_program);
 
     // Call the initialization functions that are defined within each PIO file.
     // Why not create these programs here? By putting the initialization function in
@@ -247,26 +247,26 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
     // is consolidated in one place. Here in the C, we then just import and use it.
     
 #if USE_HSYNC_AND_VSYNC
-      // hsync5_program_init(pio_2, hsync5_sm, hsync5_offset, HSYNC2, 2);
-      hsync5_program_init(pio_2, hsync5_sm, hsync5_offset, 0 /*VSYNC*/, 2);
+      // hsync5_program_init(vga_out_pio, hsync5_sm, hsync5_offset, HSYNC2, 2);
+      hsync5_program_init(vga_out_pio, hsync5_sm, hsync5_offset, 0 /*VSYNC*/, 2);
 #endif
 
 
 #if USE_CSYNC
 
     // Initialise a second copy of hvsync which we'll call csync and use to test csync
-    // uint csync_offset = pio_add_program(pio_2, &hsync5_program);
-    hsync5_program_init(pio_2, csync_sm, hsync5_offset, csync_pin, 1);
+    // uint csync_offset = pio_add_program(vga_out_pio, &hsync5_program);
+    hsync5_program_init(vga_out_pio, csync_sm, hsync5_offset, csync_pin, 1);
 
 #endif
 // todo - tidy these GPIO pin definitions below
 
 #if SYS_CLK_KHZ == 125000u
-      rgb5_program_init(pio_2, rgb5_sm, rgb5_offset, rgb_base_pin, rgb_pin_count);
+      rgb5_program_init(vga_out_pio, rgb5_sm, rgb5_offset, rgb_base_pin, rgb_pin_count);
 #elif SYS_CLK_KHZ == 150000u
-    rgb5_150_mhz_rp235x_program_init(pio_2, rgb5_sm, rgb5_offset, rgb_base_pin, rgb_pin_count);
+    rgb5_150_mhz_rp235x_program_init(vga_out_pio, rgb5_sm, rgb5_offset, rgb_base_pin, rgb_pin_count);
 #elif SYS_CLK_KHZ == 250000u
-      rgb5_250_mhz_program_init(pio_2, rgb5_250_mhz_sm, rgb5_offset, LO_GRN);
+      rgb5_250_mhz_program_init(vga_out_pio, rgb5_250_mhz_sm, rgb5_offset, LO_GRN);
 #endif
 
 #ifdef PICO_PLATFORM
@@ -284,7 +284,7 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
 
 
 
-    // hsync3_program_init(pio_2, hsync3_sm, hsync3_offset, HI_GRN2);
+    // hsync3_program_init(vga_out_pio, hsync3_sm, hsync3_offset, HI_GRN2);
 
 
     /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -306,14 +306,14 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
     channel_config_set_read_increment(&c0, true);                        // yes read incrementing
     channel_config_set_write_increment(&c0, false);                      // no write incrementing
 
-    channel_config_set_dreq(&c0, pio_get_dreq(pio_2, rgb5_sm, true));     // rgb5_sm tx FIFO pacing
+    channel_config_set_dreq(&c0, pio_get_dreq(vga_out_pio, rgb5_sm, true));     // rgb5_sm tx FIFO pacing
 
     channel_config_set_chain_to(&c0, rgb_test_chan_1);                        // chain to other channel
 
      dma_channel_configure(
         rgb_test_chan_0,                 // Channel to be configured
         &c0,                        // The configuration we just created
-        &pio_2->txf[rgb5_sm],          // write address (RGB PIO TX FIFO)
+        &vga_out_pio->txf[rgb5_sm], // write address (RGB PIO TX FIFO)
         &vga_1bit_data_array,       // The initial read address (pixel color array)
         TXCOUNT_2,                  // Number of transfers; in this case each is 4 byte.
         false                       // Don't start immediately.
@@ -369,7 +369,7 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
 
     // channel_config_set_dreq(&c0, DREQ_PIO1_TX0) ;                        // DREQ_PIO1_TX0 pacing (FIFO)
 
-    channel_config_set_dreq(&c0, pio_get_dreq(pio_2, hsync5_sm, true));     // hsync5_sm tx FIFO pacing
+    channel_config_set_dreq(&c0, pio_get_dreq(vga_out_pio, hsync5_sm, true));     // hsync5_sm tx FIFO pacing
 
 #ifndef USE_RING_BUF
     channel_config_set_chain_to(&c0, sync_test_chan_1);                  // chain to other channel
@@ -378,7 +378,7 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
      dma_channel_configure(
         sync_test_chan_0,           // Channel to be configured
         &c0,                        // The configuration we just created
-        &pio_2->txf[hsync5_sm],     // write address (RGB PIO TX FIFO)
+        &vga_out_pio->txf[hsync5_sm], // write address (RGB PIO TX FIFO)
         &sync_buffer,               // The initial read address (pixel color array)
 
 #ifdef USE_RING_BUF
@@ -446,7 +446,7 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
 
     // channel_config_set_dreq(&c0, DREQ_PIO1_TX0) ;                        // DREQ_PIO1_TX0 pacing (FIFO)
 
-    channel_config_set_dreq(&c0, pio_get_dreq(pio_2, csync_sm, true));     // hsync5_sm tx FIFO pacing
+    channel_config_set_dreq(&c0, pio_get_dreq(vga_out_pio, csync_sm, true));     // hsync5_sm tx FIFO pacing
 
 #ifndef USE_RING_BUF
     channel_config_set_chain_to(&c0, csync_dms_chan_1);                  // chain to other channel
@@ -455,7 +455,7 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
      dma_channel_configure(
         csync_dma_chan0,           // Channel to be configured
         &c0,                        // The configuration we just created
-        &pio_2->txf[csync_sm],      // write address (RGB PIO TX FIFO)
+        &vga_out_pio->txf[csync_sm], // write address (RGB PIO TX FIFO)
         &csync_buffer,               // The initial read address (pixel color array)
 
 #ifdef USE_RING_BUF
@@ -676,29 +676,29 @@ for (int y = 0; y < NO_OF_LINES; y++) {
     // pio_sm_put_blocking(pio, vsync_sm, V_ACTIVE);
     // pio_sm_put_blocking(pio, rgb_sm, RGB_ACTIVE);
 
-    // pio_sm_put_blocking(pio_2, hsync2_sm, H_ACTIVE);
+    // pio_sm_put_blocking(vga_out_pio, hsync2_sm, H_ACTIVE);
 
-    // pio_sm_put_blocking(pio_2, vsync2_sm, V_ACTIVE);
+    // pio_sm_put_blocking(vga_out_pio, vsync2_sm, V_ACTIVE);
 
     // tempted to move this lot to their respective .pio files in the initialisation function 
     // try one at a time to see if that works... It does, now try all of them (for hsync3)...
     
     /*
-    pio_sm_put_blocking(pio_2, hsync3_sm, V_ACTIVE);
+    pio_sm_put_blocking(vga_out_pio, hsync3_sm, V_ACTIVE);
 
-    pio_sm_exec(pio_2, hsync3_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
-    // pio_sm_exec(pio_2, hsync3_sm, pio_encode_mov(pio_isr, pio_osr)); // this fails for some reason!!!
-    pio_sm_exec(pio_2, hsync3_sm, pio_encode_mov(pio_y, pio_osr)); // isr = V_ACTIVE
-    pio_sm_exec(pio_2, hsync3_sm, pio_encode_mov(pio_isr, pio_y)); // isr = V_ACTIVE
-    pio_sm_exec(pio_2, hsync3_sm, pio_encode_out(pio_null, 32)); // isr = V_ACTIVE
+    pio_sm_exec(vga_out_pio, hsync3_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
+    // pio_sm_exec(vga_out_pio, hsync3_sm, pio_encode_mov(pio_isr, pio_osr)); // this fails for some reason!!!
+    pio_sm_exec(vga_out_pio, hsync3_sm, pio_encode_mov(pio_y, pio_osr)); // isr = V_ACTIVE
+    pio_sm_exec(vga_out_pio, hsync3_sm, pio_encode_mov(pio_isr, pio_y)); // isr = V_ACTIVE
+    pio_sm_exec(vga_out_pio, hsync3_sm, pio_encode_out(pio_null, 32)); // isr = V_ACTIVE
   */
 
   // great. that all worked, now try rgb2...
    
 
    /*
-    pio_sm_put_blocking(pio_2, rgb2_sm, RGB_ACTIVE); // value to store in isr as a horizontal pixel pair counter
-    pio_sm_put_blocking(pio_2, rgb2_sm, 480 - 1); //value to store in y as line counter
+    pio_sm_put_blocking(vga_out_pio, rgb2_sm, RGB_ACTIVE); // value to store in isr as a horizontal pixel pair counter
+    pio_sm_put_blocking(vga_out_pio, rgb2_sm, 480 - 1); //value to store in y as line counter
     */
 
 
@@ -709,19 +709,19 @@ for (int y = 0; y < NO_OF_LINES; y++) {
     // pio_sm_exec(pio, hsync2_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
 
 
-   //pio_sm_exec(pio_2, vsync2_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
+   //pio_sm_exec(vga_out_pio, vsync2_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
 
     // these pio_sm_exec instructions save three pio instructions
     // pio_sm_exec(pio, rgb_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
 
-    // pio_sm_exec(pio_2, rgb2_sm, pio_encode_out(pio_isr, 32)); // store osr in isr a a loop counter
+    // pio_sm_exec(vga_out_pio, rgb2_sm, pio_encode_out(pio_isr, 32)); // store osr in isr a a loop counter
   
    /*
-    pio_sm_exec(pio_2, rgb2_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
-    pio_sm_exec(pio_2, rgb2_sm, pio_encode_out(pio_isr, 32)); // trigger auto-pull
+    pio_sm_exec(vga_out_pio, rgb2_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
+    pio_sm_exec(vga_out_pio, rgb2_sm, pio_encode_out(pio_isr, 32)); // trigger auto-pull
 
-    pio_sm_exec(pio_2, rgb2_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
-    pio_sm_exec(pio_2, rgb2_sm, pio_encode_out(pio_y, 32)); // trigger auto-pull
+    pio_sm_exec(vga_out_pio, rgb2_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
+    pio_sm_exec(vga_out_pio, rgb2_sm, pio_encode_out(pio_y, 32)); // trigger auto-pull
     */
 
      // great. that all worked too.
@@ -733,15 +733,15 @@ for (int y = 0; y < NO_OF_LINES; y++) {
     // auto-pull once the dma is enabled. 
     // pio_sm_exec(pio, rgb_sm, pio_encode_out(pio_y, 32)); // trigger auto-pull
 
-    // pio_sm_put_blocking(pio_2, hsync2_sm, H_ACTIVE);  // don't think we need this    
-    // pio_sm_put_blocking(pio_2, vsync2_sm, V_ACTIVE);
-    // pio_sm_put_blocking(pio_2, rgb2_sm, RGB_ACTIVE); // will need this. no, they've been moved in .pio
+    // pio_sm_put_blocking(vga_out_pio, hsync2_sm, H_ACTIVE);  // don't think we need this    
+    // pio_sm_put_blocking(vga_out_pio, vsync2_sm, V_ACTIVE);
+    // pio_sm_put_blocking(vga_out_pio, rgb2_sm, RGB_ACTIVE); // will need this. no, they've been moved in .pio
 
 
-    // pio_sm_exec(pio_2, vsync2_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
+    // pio_sm_exec(vga_out_pio, vsync2_sm, pio_encode_pull(false, true)); // (IfE = 0, Blk = 1)
 
-    // pio_sm_exec(pio_2, rgb2_sm, pio_encode_pull(false, true)); // will need this.  no, they've been moved in .pio
-    // pio_sm_exec(pio_2, rgb2_sm, pio_encode_out(pio_y, 32)); // // will need this. no, they've been moved in .pio
+    // pio_sm_exec(vga_out_pio, rgb2_sm, pio_encode_pull(false, true)); // will need this.  no, they've been moved in .pio
+    // pio_sm_exec(vga_out_pio, rgb2_sm, pio_encode_out(pio_y, 32)); // // will need this. no, they've been moved in .pio
 
     // Start the two pio machine IN SYNC
     // Note that the RGB state machine is running at full speed,
@@ -750,13 +750,13 @@ for (int y = 0; y < NO_OF_LINES; y++) {
 
 
 #if !USE_CSYNC
-    pio_enable_sm_mask_in_sync(pio_2, ((1u << hsync5_sm) | (1u << rgb5_sm)));
+    pio_enable_sm_mask_in_sync(vga_out_pio, ((1u << hsync5_sm) | (1u << rgb5_sm)));
 #else
 
 #if USE_HSYNC_AND_VSYNC
-    pio_enable_sm_mask_in_sync(pio_2, ((1u << hsync5_sm) | (1u << rgb5_sm) | (1u << csync_sm)));
+    pio_enable_sm_mask_in_sync(vga_out_pio, ((1u << hsync5_sm) | (1u << rgb5_sm) | (1u << csync_sm)));
 #else
-    pio_enable_sm_mask_in_sync(pio_2, ((1u << rgb5_sm) | (1u << csync_sm)));
+    pio_enable_sm_mask_in_sync(vga_out_pio, ((1u << rgb5_sm) | (1u << csync_sm)));
 #endif
 
 

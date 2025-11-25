@@ -1047,7 +1047,15 @@ void clear_previous_edges() {
 
 #if USE_IR
 
+    #if PICO_RP2040
+    
+    PIO ir_rx_pio = pio0;
+    
+    #else
+    
     PIO ir_rx_pio = pio2;
+
+    #endif
 
 uint ir_rx_sm = 0;
 
@@ -4192,12 +4200,17 @@ uint total_sample_bits;
 
 // #if PICO_PIO_USE_GPIO_BASE
 #if PICO_RP2040
-    PIO pio = pio0;
+
+    PIO capture_pio = pio0;
+
 #else
+
     // PICO_2350
-    PIO pio = pio2;
+    PIO capture_pio = pio2;
+
 #endif
-    uint sm = 3;
+
+    uint capture_sm = 3;
 
     // Claim a DMA channel for the pio state machine(s) used for capturing.
     uint dma_chan;
@@ -4309,7 +4322,7 @@ void handle_command(uint ui_command) {
                     writeString("capturing... ");
                     // fillRect(0, PLOT_TOP, SCREEN_WIDTH, MINIMAP_BOTTOM - PLOT_TOP, BLACK);
 
-                    if (!logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, g_trigger_pin_base, g_trigger_type)) {
+                    if (!logic_analyser_arm(capture_pio, capture_sm, dma_chan, capture_buf, buf_size_words, g_trigger_pin_base, g_trigger_type)) {
                         writeString("failed to trigger");
                     } else {
                         writeString("done");
