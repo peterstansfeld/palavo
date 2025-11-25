@@ -40,7 +40,7 @@
     // #pragma message "PALAVO_CONFIG detected from vga2_graphics."
     #define USE_CSYNC ((PALAVO_CONFIG >> PC_BIT_USE_CSYNC) & 1)
 #else
-    #define USE_CSYNC 0
+    #define USE_CSYNC 1
 #endif
 
 #define USE_HSYNC_AND_VSYNC !USE_CSYNC
@@ -262,7 +262,7 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
 // todo - tidy these GPIO pin definitions below
 
 #if SYS_CLK_KHZ == 125000u
-      rgb5_program_init(pio_2, rgb5_sm, rgb5_offset, LO_GRN);
+      rgb5_program_init(pio_2, rgb5_sm, rgb5_offset, rgb_base_pin, rgb_pin_count);
 #elif SYS_CLK_KHZ == 150000u
     rgb5_150_mhz_rp235x_program_init(pio_2, rgb5_sm, rgb5_offset, rgb_base_pin, rgb_pin_count);
 #elif SYS_CLK_KHZ == 250000u
@@ -775,7 +775,12 @@ for (int y = 0; y < NO_OF_LINES; y++) {
     // By disabling it here will mean that eventually the VGA will stop
     // woking and require a reset.
 
-#if PICO_RP2040 == 1
+/*
+For some reason this commented out code works with USE_HSYNC_AND_VSYNC, but not with
+USE_CSYNC.
+
+
+#if PICO_RP2040
 
     // Tell the DMA to raise IRQ line 0 when the channel finishes a block
     dma_channel_set_irq0_enabled(sync_test_chan_0, true);
@@ -786,7 +791,7 @@ for (int y = 0; y < NO_OF_LINES; y++) {
     irq_set_enabled(DMA_IRQ_0, true);
 
 #endif
-
+*/
 
 #endif
 

@@ -90,10 +90,16 @@
     #pragma message "Building Palavo for SOLDERPARTY_RP2350_STAMP_XL"
     #define BOARD_TYPE 3
 
-#else
+#elif (defined RASPBERRYPI_PICO)
+
+    #pragma message "Building Palavo for RASPBERRYPI_PICO"
+    #define BOARD_TYPE 4
+
+    #else
 
     #pragma message "Building Palavo for an unknown board"
     #define BOARD_TYPE 0
+    
 #endif
 
 
@@ -125,6 +131,11 @@
         #define PALAVO_CONFIG (1 << PC_BIT_USE_DVI)
         // #define PALAVO_CONFIG (1 << PC_BIT_USE_GPIO_31_47)
 
+    #elif (BOARD_TYPE == 4)
+
+        // #pragma message "Building Palavo for RASPBERRYPI_PICO"
+        #define PALAVO_CONFIG 0
+        
     #else
 
         // This is a default palavo config for colour syntax whilst developing only.
@@ -176,7 +187,7 @@
 
 #if (PALAVO_CONFIG & (1 << PC_BIT_USE_GPIO_31_47))
 
-    #define USE_GPIO_0_47 1
+    #define USE_GPIO_31_47 1
 
     #if (!PICO_PIO_USE_GPIO_BASE)
         #error "Can't use more than 32 pins on this microcontroller."
@@ -226,7 +237,9 @@
 
 #define ENABLE_GRAPHICS_DEMO 0
 
-#if USE_GPIO_0_47
+#if USE_DVI
+
+    #if USE_GPIO_31_47
 
     #define VGA_IN_VSYNC_PIN 0
     #define VGA_IN_HSYNC_CSYNC_PIN 1
@@ -242,13 +255,17 @@
 
     #define USE_LED_AS_IR_DEBUG 0
 
-#if !USE_STDIO_USB
+    #if !USE_STDIO_USB
+
     #define UART_TX_PIN 38
     #define UART_RX_PIN 39
-#endif
+
+    #endif
 
     #if USE_IR
-        #define IR_RX_PIN 46
+    
+    #define IR_RX_PIN 46
+    
     #endif
 
     // #define UART_TX_PIN 20
@@ -281,17 +298,20 @@
 
     #if PICO_PIO_USE_GPIO_BASE
 
-#if !USE_STDIO_USB
+        #if !USE_STDIO_USB
+
     #define PICO_RESERVED_GPIO_32_47 ((1 << (UART_TX_PIN - 32)) | (1 << (UART_RX_PIN - 32)))
-#else
+
+        #else
+    
     #define PICO_RESERVED_GPIO_32_47 0
-#endif
+        #endif
 
     #define GPIO_INPUT_MASK_32_47 (0xffff & ~PICO_RESERVED_GPIO_32_47)
 
     #endif
 
-#else
+    #else
 
     // #define VGA_IN_HSYNC_CSYNC_PIN 26
     #define VGA_IN_VSYNC_PIN 0
@@ -305,32 +325,156 @@
 
     #define USE_LED_AS_IR_DEBUG 0
 
-#if !USE_STDIO_USB
+    #if !USE_STDIO_USB
+    
     #define UART_TX_PIN 8
     #define UART_RX_PIN 9
     // #define CSYNC 22
-#endif
+
+    #endif
 
     #define VGA_OUT_CSYNC_PIN 10
     #define VGA_OUT_RGB_BASE_PIN 11
     #define VGA_OUT_RGB_PIN_COUNT 1
 
     #if USE_IR
+    
     #define IR_RX_PIN 10
+    
     #endif
 
-#if !USE_STDIO_USB
+    #if !USE_STDIO_USB
     // Make every GPIO an input except UART pins and any reserved pins
+    
     #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~((PICO_RESERVED_GPIO_0_31) | (1 << UART_TX_PIN) | (1 << UART_RX_PIN)))
-#else
+    
+    #else
+    
     #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~PICO_RESERVED_GPIO_0_31)
-#endif
+
+    #endif
 
     #if PICO_PIO_USE_GPIO_BASE
+    
     #define GPIO_INPUT_MASK_32_47 (0xffff)
+    
+    #endif
+
+    #endif
+
+#else
+    // !USE_DVI
+
+    #if USE_GPIO_31_47
+
+    #define VGA_IN_VSYNC_PIN 0
+    #define VGA_IN_HSYNC_CSYNC_PIN 1
+    #define VGA_IN_RGB_BASE_PIN 2
+    #define VGA_IN_RGB_PIN_COUNT 6
+
+    #define VGA_OUT_CSYNC_PIN 31
+    #define VGA_OUT_RGB_BASE_PIN 32
+    #define VGA_OUT_RGB_PIN_COUNT 6
+
+// #define LED_PIN PICO_DEFAULT_LED_PIN
+
+    #define USE_LED_AS_IR_DEBUG 0
+
+        #if !USE_STDIO_USB
+
+    #define UART_TX_PIN 38
+    #define UART_RX_PIN 39
+
+        #endif
+
+        #if USE_IR
+    
+    #define IR_RX_PIN 46
+    
+        #endif
+
+    // #define UART_TX_PIN 20
+    // #define UART_RX_PIN 21
+
+    // #define VGA_IN_HSYNC_CSYNC_PIN 0
+    
+    // #define VGA_IN_RGB_BASE_PIN 2
+
+    // #define GPIO_INPUT_MASK ((1 << 28)  | (1 << 27)  | (1 << 26) | 0x07fffff /* 22-0 */)
+    // #define GPIO_INPUT_MASK ((1 << VGA_IN_VSYNC_PIN) | (1 << VGA_IN_HSYNC_CSYNC_PIN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
+
+
+    // #if (UART_TX_PIN < 30)
+    //     #define GPIO_INPUT_MASK ((1 << VGA_IN_VSYNC_PIN) | (1 << VGA_IN_HSYNC_CSYNC_PIN) | (1 << IR_RX_PIN) | 0b0111111 /* 5-0*/) 
+    // #else
+    // #define GPIO_INPUT_MASK ((1 << 28)  | (1 << 27)  | (1 << 26) | 0x07fffff) /* 22-0 */ /*& ~(1 << UART_TX_PIN) & ~(1 << UART_RX_PIN))*/
+    // #endif
+
+    // #define SIZE_TEST (1 << 32)
+
+    // #if SIZE_TEST
+    //     #warning SIZE_TEST seems to be 64 bits
+    //     #if (SIZE_TEST == 0x100000000)
+    //         #warning Yes
+    //     #endif
+    // #endif
+
+    #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~PICO_RESERVED_GPIO_0_31)
+
+        #if PICO_PIO_USE_GPIO_BASE
+
+            #if !USE_STDIO_USB
+
+    #define PICO_RESERVED_GPIO_32_47 ((1 << (UART_TX_PIN - 32)) | (1 << (UART_RX_PIN - 32)))
+
+            #else
+    
+    #define PICO_RESERVED_GPIO_32_47 0
+            #endif
+
+    #define GPIO_INPUT_MASK_32_47 (0xffff & ~PICO_RESERVED_GPIO_32_47)
+
+        #endif
+
+    #else
+
+    #define VGA_OUT_VSYNC_PIN 0
+    #define VGA_OUT_HSYNC_CSYNC_PIN 1
+    
+    #define VGA_OUT_CSYNC_PIN VGA_OUT_HSYNC_CSYNC_PIN
+
+    #define VGA_OUT_RGB_BASE_PIN 2
+    #define VGA_OUT_RGB_PIN_COUNT 6
+
+
+        #if !USE_STDIO_USB
+    
+    #define UART_TX_PIN 8
+    #define UART_RX_PIN 9
+    // #define CSYNC 22
+
+        #endif
+
+        #if USE_IR
+    
+    #define IR_RX_PIN 10
+    
+        #endif
+
+        #if !USE_STDIO_USB
+    // Make every GPIO an input except UART pins and any reserved pins
+    
+    #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~((PICO_RESERVED_GPIO_0_31) | (1 << UART_TX_PIN) | (1 << UART_RX_PIN)))
+    
+        #else
+    
+    #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~PICO_RESERVED_GPIO_0_31)
+
+        #endif
     #endif
 
 #endif
+
 
 // The following line doesn't seem to work...
 // bi_decl(bi_program_name("palavo " STR(VERSION_MAJOR) "." STR(VERSION_MINOR) "." STR(VERSION_PATCH)));
@@ -358,7 +502,7 @@ bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
 #endif
 
 
-#if USE_GPIO_0_47
+#if USE_GPIO_31_47
     bi_decl(bi_1pin_with_name(31, "VGA Out - CSYNC"));
     bi_decl(bi_1pin_with_name(32, "VGA Out - Dark Blue"));
     bi_decl(bi_1pin_with_name(33, "VGA Out - Light Blue"));
@@ -369,6 +513,9 @@ bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
 
 #else
     // using GPIO 0..7 for either VGA In or for VGA Out
+
+    #if USE_DVI
+
 
     bi_decl(bi_program_feature("VGA input"));
 
@@ -388,6 +535,24 @@ bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
     #ifdef VGA_OUT_RGB_BASE_PIN
         bi_decl(bi_1pin_with_name(VGA_OUT_RGB_BASE_PIN, "VGA Out - RGB"));
     #endif
+
+    #else
+
+    #if USE_CSYNC
+    bi_decl(bi_1pin_with_name(1, "VGA Out - CSYNC"));
+    #else
+    bi_decl(bi_1pin_with_name(0, "VGA Out - VSYNC"));
+    bi_decl(bi_1pin_with_name(1, "VGA Out - HSYNC"));
+    #endif
+    bi_decl(bi_1pin_with_name(2, "VGA Out - Dark Blue"));
+    bi_decl(bi_1pin_with_name(3, "VGA Out - Light Blue"));
+    bi_decl(bi_1pin_with_name(4, "VGA Out - Dark Green"));
+    bi_decl(bi_1pin_with_name(5, "VGA Out - Light Green"));
+    bi_decl(bi_1pin_with_name(6, "VGA Out - Dark Red"));
+    bi_decl(bi_1pin_with_name(7, "VGA Out - Light Red"));
+
+    #endif
+
 
 #endif
 
@@ -508,7 +673,7 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 #elif SETTINGS == 1
 
 
-#if USE_GPIO_0_47
+#if USE_GPIO_31_47
 
 // #define CAPTURE_PIN_BASE 0 // HSYNC
 
@@ -528,6 +693,7 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 
 
 #if USE_CSYNC
+
 #if USE_VGA_CAPTURE
 #define CAPTURE_PIN_BASE 10 // HSYNC
 #define CAPTURE_PIN_COUNT 10 // CSYNC, 1-bit colour and 8 DVI
@@ -571,17 +737,17 @@ uint8_t g_pins_base = CAPTURE_PIN_BASE;
 uint8_t g_pins_base_captured;
 
 #define HORIZONTAL_BLANKING_PIXELS 160
-#define VERTICAL_BLANKING_PIXELS 45
+#define VERTICAL_BLANKING_LINES 45
 
 // 640 + 160 = 800
 #define HSYNCS_IN_640_LINE (SCREEN_WIDTH + HORIZONTAL_BLANKING_PIXELS)
 
 // 480 + 45 = 525
-#define VSYNCS_IN_480_LINES (SCREEN_HEIGHT + VERTICAL_BLANKING_PIXELS)
+#define VSYNCS_IN_480_LINES (SCREEN_HEIGHT + VERTICAL_BLANKING_LINES)
 
 // 800 * 525 = 420,000
 // #define SAMPLES_IN_640_480_FRAME ((SCREEN_WIDTH + HORIZONTAL_BLANKING_PIXELS) * \
-//                                   (SCREEN_HEIGHT + VERTICAL_BLANKING_PIXELS))
+//                                   (SCREEN_HEIGHT + VERTICAL_BLANKING_LINES))
 
 #define SAMPLES_IN_640_480_FRAME (HSYNCS_IN_640_LINE * VSYNCS_IN_480_LINES)
 
@@ -596,11 +762,18 @@ uint8_t g_pins_base_captured;
 
     // 1,680,000
     #define TOTAL_SAMPLE_BITS (SAMPLES_TO_CAPTURE * CHANNELS_PER_SAMPLE)
+        
+    // This still seems ok
+    // #define TOTAL_SAMPLE_BITS (((SAMPLES_TO_CAPTURE * CHANNELS_PER_SAMPLE)) + (HSYNCS_IN_640_LINE * 4))
+
+    // This is too much (with USB stdio)
+    // #define TOTAL_SAMPLE_BITS (((SAMPLES_TO_CAPTURE * CHANNELS_PER_SAMPLE)) + (HSYNCS_IN_640_LINE * 5))
+    
 #else
     #define CHANNELS_PER_SAMPLE 8
 
     // #define TOTAL_SAMPLE_BITS (((SAMPLES_TO_CAPTURE * CHANNELS_PER_SAMPLE)) + SAMPLES_IN_640_LINE)
-    #define TOTAL_SAMPLE_BITS (((SAMPLES_TO_CAPTURE * CHANNELS_PER_SAMPLE)) + (HSYNCS_IN_640_LINE * (VERTICAL_BLANKING_PIXELS + 3)))
+    #define TOTAL_SAMPLE_BITS (((SAMPLES_TO_CAPTURE * CHANNELS_PER_SAMPLE)) + (HSYNCS_IN_640_LINE * (VERTICAL_BLANKING_LINES + 3)))
 #endif
 
 #define BUF_SIZE_WORDS (TOTAL_SAMPLE_BITS / 32)
@@ -693,8 +866,10 @@ uint get_pio_number(PIO pio) {
     int pio_num = 0;
     if (pio == pio1) {
         pio_num = 1;
+#if !PICO_RP2040
     } else if (pio == pio2) {
         pio_num = 2;
+#endif
     }
     return pio_num;
 }
@@ -716,7 +891,12 @@ void logic_analyser_init(uint pin_base, uint pin_count, float div, bool init) {
     // Load a program to capture n pins. This is just a single `in pins, n`
     // instruction with a wrap.
 
+#if PICO_RP2040
+    PIO pio = pio0;
+#else
     PIO pio = pio2;
+#endif
+
     uint sm = 3;
 
     static bool initialised;
@@ -1013,7 +1193,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     uart_my_putcf("trigger_pio: %d\n", get_pio_number(trigger_pio));
 
 
-    // Initialise both LAs, one on pio0 and one on pio2, regardles of whether we use them bith, or not.
+    // Initialise both LAs, one on pio0 and one on pio2, regardles of whether we use them both, or not.
     logic_analyser_init(/*pio_with_base_16, capture_sm, */ g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
     logic_analyser0_init(/*pio_with_base_16, capture_sm, */ g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
 
@@ -3729,7 +3909,7 @@ void init_pio_vga_detect_vsync_on_csync() {
         my_pio_set_gpio_base(vga_capture_pio, 16);
 #endif
 
-#if USE_GPIO_0_47
+#if USE_GPIO_31_47
         vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
         vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
 #else
@@ -3764,7 +3944,7 @@ void deinit_vga_capture() {
             pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
         } else {
 
-#if USE_GPIO_0_47 
+#if USE_GPIO_31_47 
             pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
 #else
             pio_remove_program(vga_capture_pio, &vga_1bit_capture_program, vga_capture_offset);
@@ -4010,9 +4190,11 @@ uint buf_size_words;
 
 uint total_sample_bits;
 
-#if PICO_PIO_USE_GPIO_BASE 
-    PIO pio = pio2;
+// #if PICO_PIO_USE_GPIO_BASE
+#if PICO_RP2040
+    PIO pio = pio0;
 #else
+    // PICO_2350
     PIO pio = pio2;
 #endif
     uint sm = 3;
@@ -4682,6 +4864,9 @@ int main() {
         my_pio_set_gpio_base(pio1, 16);
     }
 #endif
+
+    uart_my_putcf("With RGB base pin on: %d\n", VGA_OUT_RGB_BASE_PIN);
+    uart_my_putcf("And: %d pins\n", VGA_OUT_RGB_PIN_COUNT);
 
     initVGA(VGA_OUT_CSYNC_PIN, VGA_OUT_RGB_BASE_PIN, VGA_OUT_RGB_PIN_COUNT);
     init_line_colours();

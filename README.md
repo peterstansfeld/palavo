@@ -119,13 +119,16 @@ Then build it:
 
 This should generate, amongst other files, a `palavo.uf2` file and a `palavo.elf` file.
 
-To program the RP2350 using the `palavo.uf2` file, put the Pico into boot mode and copy the file onto the drive that appears on your PC.
+To program the RP2350 using the `palavo.uf2` file, put the Pico into boot mode and copy the file onto the drive that appears on your PC. Alternatively, put the Pico into boot mode and use the `picotool` utility:
+
+`$ picotool load palavo.uf2 -x` --ser 1889E3547E130184  
+  
 
 To program the RP2350 using the `palavo.elf` file, use Openocd and a Raspberry Pi Debug Probe:
 
 `$ openocd -f interface/cmsis-dap.cfg -f target/rp2350.cfg -c "adapter speed 5000" -c "init; reset; program palavo.elf verify reset exit"`
 
-Instead of remembering the above command line each time you can copy the script file `make-and-flash.sh` from the palavo directory:
+Instead of remembering the above command each time, you can copy the script file `make-and-flash.sh` from the palavo directory:
 
 `$ cp ../../../make-and-flash.sh .`
 
@@ -198,7 +201,7 @@ VGA_Out_Light_Green  GP5  7                34 GP28
          Serial_TX*  GP8 11                30 RUN
          Serial_RX*  GP9 12                29 GP22
                      GND 13                28 GND
-     Infra_Red_RX*  GP10 14                27 GP21
+     Infra_Red_RX**  GP10 14                27 GP21
                     GP11 15                26 GP20
            DVI_D0+  GP12 16                25 GP19  DVI_D2+
            DVI_D0-  GP13 17                24 GP18  DVI_D2-
@@ -206,7 +209,8 @@ VGA_Out_Light_Green  GP5  7                34 GP28
            DVI_CK+  GP14 19                22 GP17  DVI_D1+
            DVI_CK-  GP15 20                21 GP16  DVI_D1-
 ```
-\* Optional
+\* Optional. USB can be used instead
+\** Optional
 
 In addition to the previous configuration's hardware, the DVI pins (GP12-GP19) should be connected to a [Pico DVI Sock](https://github.com/Wren6991/Pico-DVI-Sock), which can the be connected to a DVI monitor using an HDMI-shaped cable. Originally designed by Raspberry Pi's Luke Wren, Adafruit now make their own version called the [DVI Sock for Pico](https://www.adafruit.com/product/5957). There are other products, such as the [PiCowBell HSTX DVI Output for Pico](https://www.adafruit.com/product/6363), that could be used instead.
 
@@ -246,7 +250,7 @@ In 'test' mode, a test screen is displayed on DVI.
 
 ### Thoughts
 
-It's pretty remarkable that this microcontroller can output a DVI signal. However, the DVI frame buffer currently uses a lot of SRAM and this limits the amount of signal data we can capture. Also this configuration doesn't leave many pins free to capture external signal data - only 7, namely: GP15, 20, 21, 22, 26, 27 and 28. We could lose the VGA output pins and gain a little SRAM by freeing up the VGA frame buffer, but if we had a second Pico 2...
+It's pretty remarkable that the RP2350 can output a DVI signal. However, the DVI frame buffer currently uses a lot of SRAM and this limits the amount of signal data we can capture. Also this configuration doesn't leave many pins free to capture external signal data - only 7, namely: GP15, 20, 21, 22, 26, 27 and 28. We could lose the VGA output pins and gain a little SRAM by freeing up the VGA frame buffer, but if we had a second Pico 2...
 
 
 ## Configuration 26
@@ -411,7 +415,7 @@ Repeat the rest of the previous build process, only use this CMAKE command:
 
 ## Testing
 
-The screen on the VGA monitor should look the same as it does in the first configuration, except that the 'base' and 'trigger' settings can be set to use GP0 to GP47 (rather than just GP0 to GP31).
+The screen on the VGA monitor should look the same as it does in the first configuration, except that the 'base' and 'trig.' settings can be set to use GP0 to GP47 (rather than just GP0 to GP31).
 
 
 ## Configuration 8
@@ -611,10 +615,10 @@ Currently only Types 0, 1, 2 and 4, and 5 have been tested (4 is the same as 0).
 ```
  _____  USE_USB (instead of UART) for serial comms
 | _____ USE_CSYNC (instead of VSYNC and HSYNC) for VGA Out 
-|| ____ USE_NEW_MAPPING - not sure - seems to be mainly for vga capturing pin assignments
-||| ___ USE_VGA_IN_TO_DVI - on start up display VGA In - i.e. a VGA to DVI converter.
-|||| __ USE_GPIO_32_47 (Only set this if using an RP2350B.)
-||||| _ USE_DVI (Display either VGA In, VGA Out, or a test screen to DVI via HSTX.)
+|| ____ USE_IR seems to be mainly for vga capturing pin assignments
+||| ___ USE_VGA_IN_TO_DVI - on start up display VGA In (instead of VG Out) - i.e. a VGA to DVI converter.
+|||| __ USE_GPIO_32_47 (only set this if using an RP2350B.)
+||||| _ USE_DVI (display either VGA In, VGA Out, or a test screen to DVI.)
 ||||||
 543210
 
@@ -722,7 +726,29 @@ some keystrokes from being transmitted.
 Then enable carriage returns with Ctrl-A U.
 
 
-## PIO State Machine Usage for Pico2
+## PIO State Machine Usage for Pico (RP2040)
+
+```
+PIO      SM       Size  Needs PIO1*  Usage
+0        0        6
+0        1        11
+0        2        14
+0        3        1                 logic_capture
+Total             31
+
+1        0                          hsync5_program (vsync and hsync for vga out) - presumably not using this???
+1        1        13                rgb5_150_mhz_RP2350_program (rrggbb for vga out) 
+1        2        15                hsync5_program (vsync and hsync for vga out OR csync for vga out)     
+1        3        1                 logic_capture
+Total             29
+```
+
+
+
+
+
+
+## PIO State Machine Usage for Pico2 (RP235x)
 
 ```
 PIO      SM       Size  Needs PIO1*  Usage
@@ -732,9 +758,9 @@ PIO      SM       Size  Needs PIO1*  Usage
 0        3
 Total             31
 
-1        0                          hsync5_program (vsync and hsync for vga out) 
-1        1        13                rgb5_150_mhz_RP2350_program (rrggbb for vga out) 
-1        2        15                hsync5_program (csync for vga out)      
+1        0                          hsync5_program (vsync and hsync for vga out) - presumably not using this???
+1        1        13                rgb5_150_mhz_RP2350_program (rrggbb for vga out)
+1        2        15                hsync5_program (vsync and hsync for vga out OR csync for vga out)
 1        3        1                 logic_capture
 Total             29
 
