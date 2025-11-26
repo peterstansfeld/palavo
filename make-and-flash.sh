@@ -1,7 +1,8 @@
 #! /bin/bash
 
-# This script uses `openocd` to make the palavo firmware and, if succesful,
-# flash it onto a raspberry Pi RP2350 using a Raspberry Pi Debug Probe. 
+# This script attempts to make the palavo firmware and, if succesful, flash
+# it onto a raspberry Pi RP2350 using a Raspberry Pi Debug Probe and
+# `openocd`
 
 # To target a specific adpater (Debug Probe) specify its serial number:
 

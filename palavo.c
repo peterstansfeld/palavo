@@ -95,7 +95,12 @@
     #pragma message "Building Palavo for RASPBERRYPI_PICO"
     #define BOARD_TYPE 4
 
-    #else
+#elif (defined PIMORONI_PICO_PLUS2_RP2350)
+
+    #pragma message "Building Palavo for PIMORONI_PICO_PLUS2_RP2350"
+    #define BOARD_TYPE 5
+
+#else
 
     #pragma message "Building Palavo for an unknown board"
     #define BOARD_TYPE 0
@@ -156,8 +161,8 @@
         // #define PICO_PIO_USE_GPIO_BASE 1
 
 // config0
-        #define PALAVO_CONFIG 51
-        #define PICO_PIO_USE_GPIO_BASE 0
+        #define PALAVO_CONFIG 40
+        #define PICO_PIO_USE_GPIO_BASE 1
 
     #endif
 
@@ -471,6 +476,12 @@
     #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~PICO_RESERVED_GPIO_0_31)
 
         #endif
+    #endif
+
+    #if PICO_PIO_USE_GPIO_BASE
+    
+    #define GPIO_INPUT_MASK_32_47 (0xffff)
+    
     #endif
 
 #endif

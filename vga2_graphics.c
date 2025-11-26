@@ -145,7 +145,7 @@ uint16_t str_cursor_x;
 
 static int sync_test_chan_0 = 0;
 
-#define USE_RING_BUF
+#define USE_RING_BUF 1
 
 
 void __not_in_flash_func(dma_handler)() {
@@ -340,7 +340,7 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
     // More DMA channels - test ones - 0 sends color data, 1 reconfigures and restarts 0
     int sync_test_chan_0 = dma_claim_unused_channel(true);
 
-#ifndef USE_RING_BUF
+#if !USE_RING_BUF
     int sync_test_chan_1 = dma_claim_unused_channel(true);
 #endif
 
@@ -358,7 +358,7 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
     // Wrap read address on 4 word boundary
     // channel_config_set_ring(&c0, false, 3); // 2 stops it working. 3 gives us only HSYNC working  as expected
 
-#ifdef USE_RING_BUF
+#if USE_RING_BUF
     channel_config_set_ring(&c0, false, 5); // Set read address to wrap at (1<<5) = 32 byte boundary
 #endif
 
@@ -371,7 +371,7 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
 
     channel_config_set_dreq(&c0, pio_get_dreq(vga_out_pio, hsync5_sm, true));     // hsync5_sm tx FIFO pacing
 
-#ifndef USE_RING_BUF
+#if !USE_RING_BUF
     channel_config_set_chain_to(&c0, sync_test_chan_1);                  // chain to other channel
 #endif
 
@@ -381,7 +381,7 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
         &vga_out_pio->txf[hsync5_sm], // write address (RGB PIO TX FIFO)
         &sync_buffer,               // The initial read address (pixel color array)
 
-#ifdef USE_RING_BUF
+#if USE_RING_BUF
         SYNC_DMA_TRANSFER_COUNT,    // Number of transfers to perform
 #else
         SYNC_BUFFER_COUNT,          // Number of transfers to perform
@@ -389,7 +389,7 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
         false                       // Don't start immediately.
     );
 
-#ifndef USE_RING_BUF
+#if !USE_RING_BUF
     // Channel One (reconfigures the first channel)
     c1 = dma_channel_get_default_config(sync_test_chan_1);   // default configs
     channel_config_set_transfer_data_size(&c1, DMA_SIZE_32);              // 32-bit txfers
@@ -416,7 +416,7 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
 
     int csync_dma_chan0 = dma_claim_unused_channel(true);
 
-#ifndef USE_RING_BUF
+#if !USE_RING_BUF
     int csync_dms_chan_1 = dma_claim_unused_channel(true);
     #warning 'were not using RING_BUF'
 #endif
@@ -435,7 +435,7 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
     // Wrap read address on 4 word boundary
     // channel_config_set_ring(&c0, false, 3); // 2 stops it working. 3 gives us only HSYNC working  as expected
 
-#ifdef USE_RING_BUF
+#if USE_RING_BUF
     channel_config_set_ring(&c0, false, 5); // Set read address to wrap at (1<<5) = 32 byte boundary
 #endif
 
@@ -448,7 +448,7 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
 
     channel_config_set_dreq(&c0, pio_get_dreq(vga_out_pio, csync_sm, true));     // hsync5_sm tx FIFO pacing
 
-#ifndef USE_RING_BUF
+#if !USE_RING_BUF
     channel_config_set_chain_to(&c0, csync_dms_chan_1);                  // chain to other channel
 #endif
 
@@ -458,7 +458,7 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
         &vga_out_pio->txf[csync_sm], // write address (RGB PIO TX FIFO)
         &csync_buffer,               // The initial read address (pixel color array)
 
-#ifdef USE_RING_BUF
+#if USE_RING_BUF
         SYNC_DMA_TRANSFER_COUNT,    // Number of transfers to perform
 #else
         SYNC_BUFFER_COUNT,          // Number of transfers to perform
@@ -466,7 +466,7 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
         false                       // Don't start immediately.
     );
 
-#ifndef USE_RING_BUF
+#if !USE_RING_BUF
     // Channel One (reconfigures the first channel)
     c1 = dma_channel_get_default_config(csync_dms_chan_1);   // default configs
     channel_config_set_transfer_data_size(&c1, DMA_SIZE_32);              // 32-bit txfers
@@ -769,7 +769,7 @@ for (int y = 0; y < NO_OF_LINES; y++) {
     dma_start_channel_mask((1u << rgb_test_chan_0)) ;
 
 
-#ifdef USE_RING_BUF
+#if USE_RING_BUF
 
     // The DVI uses irq_set_exclusive_handler(), so stops this working.
     // By disabling it here will mean that eventually the VGA will stop
@@ -809,7 +809,7 @@ USE_CSYNC.
     // Manually call the handler once, to trigger the first transfer
     // dma_handler();
 
-#ifdef USE_RING_BUF
+#if USE_RING_BUF
 
 //    dma_hw->ch[sync_test_chan_0].transfer_count = SYNC_BUFFER_COUNT * 60 * 30; this doesn't work
 
