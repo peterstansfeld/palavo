@@ -161,8 +161,8 @@
         // #define PICO_PIO_USE_GPIO_BASE 1
 
 // config0
-        #define PALAVO_CONFIG 40
-        #define PICO_PIO_USE_GPIO_BASE 1
+        #define PALAVO_CONFIG 33
+        #define PICO_PIO_USE_GPIO_BASE 0
 
     #endif
 
@@ -338,9 +338,24 @@
 
     #endif
 
+    #if USE_VGA_IN_TO_DVI
+
     #define VGA_OUT_CSYNC_PIN 10
     #define VGA_OUT_RGB_BASE_PIN 11
     #define VGA_OUT_RGB_PIN_COUNT 1
+
+    #else
+
+    #define VGA_OUT_CSYNC_PIN 1
+
+    #define VGA_OUT_VSYNC_PIN 0
+    #define VGA_OUT_HSYNC_CSYNC_PIN 1
+
+
+    #define VGA_OUT_RGB_BASE_PIN 2
+    #define VGA_OUT_RGB_PIN_COUNT 6
+
+    #endif
 
     #if USE_IR
     
@@ -497,7 +512,7 @@ bi_decl(bi_program_description("PIO-Assisted Logic Analyser with VGA Output"));
 bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
 
 // Maybe make this a feature?...
-// bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
+bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
 
 #if USE_DVI
     bi_decl(bi_program_feature("DVI output"));
@@ -3737,7 +3752,7 @@ char * start_help_text = "Press h for help.\n";
 
 #if USE_VGA_CAPTURE
 
-enum vc_modes {VC_NONE, VC_VSYNC_AND_VSYNC_ON_CSYNC, VC_VSYNC_ON_CSYNC} ;
+enum vc_modes {VC_NONE, VC_VGA_IN, VC_VGA_OUT} ;
 uint8_t vga_capture_mode = VC_NONE;
 
 PIO vga_capture_pio = pio0;
@@ -3892,104 +3907,194 @@ void vga_sync_detect_interrupt_set_enabled(bool enabled) {
     }
 }
 
+
+void deinit_vga_capture_interrupts_and_dma() {
+
+    vga_sync_detect_interrupt_set_enabled(false);
+
+    // stop and free the dma channels
+    dma_channel_cleanup(rgb_test_chan_1);
+    dma_channel_cleanup(rgb_test_chan_0);
+
+    // and unclaim them
+    dma_channel_unclaim(rgb_test_chan_1);
+    dma_channel_unclaim(rgb_test_chan_0);
+
+#if PICO_PIO_USE_GPIO_BASE
+    my_pio_set_gpio_base(vga_capture_pio, 0);
+#endif
+
+    vga_capture_mode = VC_NONE;
+
+}
+
+
 // capture the RGB of pins 0 to 5 using HSYNC and VSYNC of pins 26 & 27, or CSYNC on pin 26.
-void init_pio_vga_capture_with_vsync_and_vsync_on_csync() {
-    if (vga_capture_mode == VC_NONE) {
-        vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
+void vga_in_capture_set_enabled(bool enabled) {
+    static bool is_enabled;
 
-        vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_IN_RGB_BASE_PIN);
+    if (enabled) {
+        if (!is_enabled) {
+            if (vga_capture_mode == VC_NONE) {
+                vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
 
-        vga_detect_vsync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_program);
-        vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, VGA_IN_VSYNC_PIN);
-        // vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, 0);
+                vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_IN_RGB_BASE_PIN);
 
-        vga_detect_vsync_on_csync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_on_csync_program);
-        vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, VGA_IN_HSYNC_CSYNC_PIN);
-        // vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, 0);
+                vga_detect_vsync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_program);
+                vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, VGA_IN_VSYNC_PIN);
+                // vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, 0);
 
-        init_vga_capture_dma_and_start_capturing();
+                vga_detect_vsync_on_csync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_on_csync_program);
+                vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, VGA_IN_HSYNC_CSYNC_PIN);
+                // vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, 0);
 
-        vga_sync_detect_interrupt_set_enabled(true);
+                init_vga_capture_dma_and_start_capturing();
 
-        pio_enable_sm_mask_in_sync(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_sm) | (1u << vga_detect_vsync_on_csync_sm));
+                vga_sync_detect_interrupt_set_enabled(true);
 
-        vga_capture_mode = VC_VSYNC_AND_VSYNC_ON_CSYNC;
-    }
-}
+                pio_enable_sm_mask_in_sync(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_sm) | (1u << vga_detect_vsync_on_csync_sm));
 
+                vga_capture_mode = VC_VGA_IN; // this needs to be moved
+            }
+            is_enabled = true;
+        }
+    } else {
+        if (is_enabled) {
 
-// capture the RGB of pins 6 to 11 using CSYNC of pins 22.
-// or the RGB of pins 32 to 37 using CSYNC of pin 31
-void init_pio_vga_detect_vsync_on_csync() {
-
-    if (vga_capture_mode == VC_NONE) {
-
-#if ((VGA_OUT_RGB_BASE_PIN + 6) >= 32)
-        my_pio_set_gpio_base(vga_capture_pio, 16);
-#endif
-
-#if USE_GPIO_31_47
-        vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
-        vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
-#else
-        vga_capture_offset = pio_add_program(vga_capture_pio, &vga_1bit_capture_program);
-        vga_1bit_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
-#endif
-
-        vga_detect_vsync_on_csync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_on_csync_program);
-        vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, VGA_OUT_CSYNC_PIN);
-
-        init_vga_capture_dma_and_start_capturing();
-
-        pio_enable_sm_mask_in_sync(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_on_csync_sm));
-
-        vga_capture_mode = VC_VSYNC_ON_CSYNC;
-    }
-}
-
-
-void deinit_vga_capture() {
-    if ((vga_capture_mode == VC_VSYNC_AND_VSYNC_ON_CSYNC) || (vga_capture_mode == VC_VSYNC_ON_CSYNC)) {
         // stop the state machine
-        pio_sm_set_enabled(vga_capture_pio, vga_capture_sm, false);
-        pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_on_csync_sm, false);
+            pio_sm_set_enabled(vga_capture_pio, vga_capture_sm, false);
 
-        if (vga_capture_mode == VC_VSYNC_AND_VSYNC_ON_CSYNC) {
+    #if USE_CSYNC
+            pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_on_csync_sm, false);
+    #else
+            pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_on_csync_sm, false);
+    #endif
+
             // stop the other state machine
             pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_sm, false);
 
             // and free it
             pio_remove_program(vga_capture_pio, &vga_detect_vsync_program, vga_detect_vsync_offset);
             pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
-        } else {
+
+            // free the remaining state machine
+            pio_remove_program(vga_capture_pio, &vga_detect_vsync_on_csync_program, vga_detect_vsync_on_csync_offset);
+
+            deinit_vga_capture_interrupts_and_dma();
+
+            is_enabled = false;
+        }
+    }
+}
+
+
+// capture the RGB of pins 6 to 11 using CSYNC of pins 22.
+// or the RGB of pins 32 to 37 using CSYNC of pin 31
+void vga_out_capture_set_enabled(bool enabled) {
+    static bool is_enabled;
+
+    if (enabled) {
+        if (!is_enabled) {
+
+            if (vga_capture_mode == VC_NONE) {
+
+#if ((VGA_OUT_RGB_BASE_PIN + 6) >= 32)
+                my_pio_set_gpio_base(vga_capture_pio, 16);
+#endif
+
+#if USE_GPIO_31_47
+                vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
+                vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
+#else
+
+    #if VGA_OUT_RGB_PIN_COUNT == 1
+                vga_capture_offset = pio_add_program(vga_capture_pio, &vga_1bit_capture_program);
+                vga_1bit_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
+    #else
+                vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
+                vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
+    #endif
+
+#endif
+
+#if USE_CSYNC
+
+                vga_detect_vsync_on_csync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_on_csync_program);
+                vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, VGA_OUT_CSYNC_PIN);
+#else
+
+                // vga_detect_vsync_on_csync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_on_csync_program);
+                // vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, VGA_OUT_CSYNC_PIN);
+
+                vga_detect_vsync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_program);
+                vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, VGA_OUT_VSYNC_PIN);
+
+#endif
+
+                init_vga_capture_dma_and_start_capturing();
+
+#if USE_CSYNC
+                pio_enable_sm_mask_in_sync(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_on_csync_sm));
+#else
+                // pio_enable_sm_mask_in_sync(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_on_csync_sm));
+                pio_enable_sm_mask_in_sync(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_sm));
+#endif
+
+                vga_capture_mode = VC_VGA_OUT; // this needs to be moved
+            }
+
+            is_enabled = true;
+
+        }
+    } else {
+
+        if (is_enabled) {
+
+    // start of code copied from deinit_vga_capture
+
+        // stop the state machine
+            pio_sm_set_enabled(vga_capture_pio, vga_capture_sm, false);
+
+#if USE_CSYNC
+            pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_on_csync_sm, false);
+#else
+            // pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_on_csync_sm, false);
+            pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_sm, false);
+
+#endif
 
 #if USE_GPIO_31_47 
             pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
 #else
+    #if VGA_OUT_RGB_PIN_COUNT == 1
             pio_remove_program(vga_capture_pio, &vga_1bit_capture_program, vga_capture_offset);
+    #else
+            pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
+    #endif
+
 #endif
+
+            // free the remaining state machine
+#if USE_CSYNC
+            pio_remove_program(vga_capture_pio, &vga_detect_vsync_on_csync_program, vga_detect_vsync_on_csync_offset);
+#else
+            pio_remove_program(vga_capture_pio, &vga_detect_vsync_program, vga_detect_vsync_offset);
+#endif
+
+            deinit_vga_capture_interrupts_and_dma();
+
+            is_enabled = false;
 
         }
-
-        // free the remaining state machine
-        pio_remove_program(vga_capture_pio, &vga_detect_vsync_on_csync_program, vga_detect_vsync_on_csync_offset);
-
-        vga_sync_detect_interrupt_set_enabled(false);
-
-        // stop and free the dma channels
-        dma_channel_cleanup(rgb_test_chan_1);
-        dma_channel_cleanup(rgb_test_chan_0);
-
-        // and unclaim them
-        dma_channel_unclaim(rgb_test_chan_1);
-        dma_channel_unclaim(rgb_test_chan_0);
-
-#if PICO_PIO_USE_GPIO_BASE
-        my_pio_set_gpio_base(vga_capture_pio, 0);
-#endif
-
-        vga_capture_mode = VC_NONE;
     }
+}
+
+
+void deinit_vga_capture() {
+
+    vga_in_capture_set_enabled(false);
+    vga_out_capture_set_enabled(false);
+
 }
 
 
@@ -4001,12 +4106,12 @@ void set_vga_capture(uint8_t new_capture_mode) {
         case VC_NONE:
             break;
 
-        case VC_VSYNC_AND_VSYNC_ON_CSYNC:
-            init_pio_vga_capture_with_vsync_and_vsync_on_csync();
+        case VC_VGA_IN:
+            vga_in_capture_set_enabled(true);
             break;
 
-        case VC_VSYNC_ON_CSYNC:
-            init_pio_vga_detect_vsync_on_csync();
+        case VC_VGA_OUT:
+            vga_out_capture_set_enabled(true);
             break;
     }
 }
@@ -4119,13 +4224,13 @@ uint check_ir() {
                         break;
 
                     case 17:
-                        set_vga_capture(VC_VSYNC_AND_VSYNC_ON_CSYNC);
+                        set_vga_capture(VC_VGA_IN);
                         // '2'
                         break;
 
                     case 18:
                         // '3'
-                        set_vga_capture(VC_VSYNC_ON_CSYNC);
+                        set_vga_capture(VC_VGA_OUT);
                         break;
 
     #endif
@@ -4533,16 +4638,16 @@ void handle_command(uint ui_command) {
                 case UIC_V:
                     switch (vga_capture_mode) {
                         case VC_NONE:
-                            set_vga_capture(VC_VSYNC_AND_VSYNC_ON_CSYNC);
+                            set_vga_capture(VC_VGA_IN);
                             writeString("capture VGA IN to DVI");
                             break;
 
-                        case VC_VSYNC_AND_VSYNC_ON_CSYNC:
-                            set_vga_capture(VC_VSYNC_ON_CSYNC);
+                        case VC_VGA_IN:
+                            set_vga_capture(VC_VGA_OUT);
                             writeString("mirror VGA OUT to DVI");
                             break;
 
-                        case VC_VSYNC_ON_CSYNC:
+                        case VC_VGA_OUT:
                             set_vga_capture(VC_NONE);
                             writeString("display DVI test pattern");
                             test_DVI_framebuf();
@@ -5097,9 +5202,9 @@ int main() {
     #if USE_VGA_CAPTURE
     sleep_ms(500);
 #if USE_VGA_IN_TO_DVI
-    set_vga_capture(VC_VSYNC_AND_VSYNC_ON_CSYNC);
+    set_vga_capture(VC_VGA_IN);
 #else
-    set_vga_capture(VC_VSYNC_ON_CSYNC);
+    set_vga_capture(VC_VGA_OUT);
 #endif
     // set_vga_capture(VC_NONE);
 #endif
@@ -5181,7 +5286,7 @@ int main() {
                 
                 // reinitialise the vga capture PIOs and DMA 
                 deinit_vga_capture();
-                init_pio_vga_capture_with_vsync_and_vsync_on_csync();
+                vga_in_capture_set_enabled(true);
                 vga_capture_dma_write_addr = 0;
             }
 #endif
