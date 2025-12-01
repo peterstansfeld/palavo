@@ -161,10 +161,35 @@
         // #define PICO_PIO_USE_GPIO_BASE 1
 
 // config0
-        #define PALAVO_CONFIG 33
-        #define PICO_PIO_USE_GPIO_BASE 0
 
-    #endif
+
+// 33 = 32 + 1 = USE_USB & USE_DVI
+        // #define PALAVO_CONFIG 33
+
+// 49 = 32 + 16 + 1 = USE_USB & USE_DVI
+        // #define PALAVO_CONFIG 49
+
+// 1 = USE_DVI
+        // #define PALAVO_CONFIG 1
+
+// 17 = 16 + 1 = USE_CSYNC & USE_DVI
+        // #define PALAVO_CONFIG 17
+
+// 5 = 4 + 1 = USE_VGA_IN_TO_DVI & USE_DVI
+        // #define PALAVO_CONFIG 5
+
+// 3 = 2 + 1 = USE_GPIO_31_47 & USE_DVI
+        // #define PALAVO_CONFIG 3
+
+// 7 = 4 + 2 + 1 = USE_VGA_IN_TO_DVI USE_GPIO_31_47 & USE_DVI
+        // #define PALAVO_CONFIG 7
+
+// 15 = 8 + 4 + 2 + 1 = USE_VGA_IN_TO_DVI USE_GPIO_31_47 & USE_DVI
+        // #define PALAVO_CONFIG 15
+
+        #define PALAVO_CONFIG 0
+
+        #endif
 
 #endif
 
@@ -514,6 +539,57 @@ bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
 // Maybe make this a feature?...
 bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
 
+
+// We're always outputting VGA, either on 6 pins of RRGGBB or 1 pin of monochrome.
+// Sometimes we're using CSYNC, and other times HSYNC and VSYNC.
+
+// There's no need to include this as a feature as it's already in the description
+// bi_decl(bi_program_feature("VGA output"));
+
+#if USE_GPIO_31_47 || (USE_DVI && USE_VGA_IN_TO_DVI)
+
+    #if USE_GPIO_31_47
+
+    bi_decl(bi_1pin_with_name(31, "VGA Out - CSYNC"));
+    bi_decl(bi_1pin_with_name(32, "VGA Out - Dark Blue"));
+    bi_decl(bi_1pin_with_name(33, "VGA Out - Light Blue"));
+    bi_decl(bi_1pin_with_name(34, "VGA Out - Dark Green"));
+    bi_decl(bi_1pin_with_name(35, "VGA Out - Light Green"));
+    bi_decl(bi_1pin_with_name(36, "VGA Out - Dark Red"));
+    bi_decl(bi_1pin_with_name(37, "VGA Out - Light Red"));
+
+    #else
+
+    bi_decl(bi_1pin_with_name(10, "VGA Out - CSYNC"));
+    bi_decl(bi_1pin_with_name(11, "VGA Out - RGB"));
+
+    #endif
+
+#else
+
+    #if USE_CSYNC
+
+    bi_decl(bi_1pin_with_name(1, "VGA Out - CSYNC"));
+
+    #else
+
+    bi_decl(bi_1pin_with_name(0, "VGA Out - VSYNC"));
+    bi_decl(bi_1pin_with_name(1, "VGA Out - HSYNC"));
+
+    #endif
+
+    bi_decl(bi_1pin_with_name(2, "VGA Out - Dark Blue"));
+    bi_decl(bi_1pin_with_name(3, "VGA Out - Light Blue"));
+    bi_decl(bi_1pin_with_name(4, "VGA Out - Dark Green"));
+    bi_decl(bi_1pin_with_name(5, "VGA Out - Light Green"));
+    bi_decl(bi_1pin_with_name(6, "VGA Out - Dark Red"));
+    bi_decl(bi_1pin_with_name(7, "VGA Out - Light Red"));
+
+#endif
+
+
+// we're sometimes outputting DVI
+
 #if USE_DVI
     bi_decl(bi_program_feature("DVI output"));
 
@@ -525,23 +601,12 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
     bi_decl(bi_1pin_with_name(17, "DVI Out - D1+"));
     bi_decl(bi_1pin_with_name(18, "DVI Out - D2-"));
     bi_decl(bi_1pin_with_name(19, "DVI Out - D2+"));
-#endif
 
 
-#if USE_GPIO_31_47
-    bi_decl(bi_1pin_with_name(31, "VGA Out - CSYNC"));
-    bi_decl(bi_1pin_with_name(32, "VGA Out - Dark Blue"));
-    bi_decl(bi_1pin_with_name(33, "VGA Out - Light Blue"));
-    bi_decl(bi_1pin_with_name(34, "VGA Out - Dark Green"));
-    bi_decl(bi_1pin_with_name(35, "VGA Out - Light Green"));
-    bi_decl(bi_1pin_with_name(36, "VGA Out - Dark Red"));
-    bi_decl(bi_1pin_with_name(37, "VGA Out - Light Red"));
+    // we're sometimes capturing VGA In and mirroring it to DVI, in which case
+    // it's always on GPIO 0 - 7
 
-#else
-    // using GPIO 0..7 for either VGA In or for VGA Out
-
-    #if USE_DVI
-
+    #if (USE_VGA_IN_TO_DVI || USE_GPIO_31_47)
 
     bi_decl(bi_program_feature("VGA input"));
 
@@ -554,53 +619,42 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
     bi_decl(bi_1pin_with_name(6, "VGA In - Dark Red"));
     bi_decl(bi_1pin_with_name(7, "VGA In - Light Red"));
 
-    #ifdef VGA_OUT_CSYNC_PIN
-        bi_decl(bi_1pin_with_name(VGA_OUT_CSYNC_PIN, "VGA Out - CSYNC"));
     #endif
 
-    #ifdef VGA_OUT_RGB_BASE_PIN
-        bi_decl(bi_1pin_with_name(VGA_OUT_RGB_BASE_PIN, "VGA Out - RGB"));
+
+    // we're sometimes using IR
+
+    #if USE_IR
+
+    bi_decl(bi_1pin_with_name(IR_RX_PIN, "IR RX"));
+    bi_decl(bi_program_feature("Infra-red control"));
+    
     #endif
 
-    #else
 
-    #if USE_CSYNC
-    bi_decl(bi_1pin_with_name(1, "VGA Out - CSYNC"));
-    #else
-    bi_decl(bi_1pin_with_name(0, "VGA Out - VSYNC"));
-    bi_decl(bi_1pin_with_name(1, "VGA Out - HSYNC"));
-    #endif
-    bi_decl(bi_1pin_with_name(2, "VGA Out - Dark Blue"));
-    bi_decl(bi_1pin_with_name(3, "VGA Out - Light Blue"));
-    bi_decl(bi_1pin_with_name(4, "VGA Out - Dark Green"));
-    bi_decl(bi_1pin_with_name(5, "VGA Out - Light Green"));
-    bi_decl(bi_1pin_with_name(6, "VGA Out - Dark Red"));
-    bi_decl(bi_1pin_with_name(7, "VGA Out - Light Red"));
+    // we're sometimes using STDIO UART serial comms instead of USB-CDC
+
+    #if !USE_USB
+
+    // no need to do anything here as STDIO adds the bi_decl for us
+    // note that in `CMakeLists.txt` we've modified
+    // PICO_DEFAULT_UART_TX_PIN & PICO_DEFAULT_UART_RX_PIN
+
+    // bi_decl(bi_1pin_with_name(PICO_DEFAULT_UART_TX_PIN, "UART1 - TX"));
+    // bi_decl(bi_1pin_with_name(PICO_DEFAULT_UART_RX_PIN, "UART1 - RX"));
 
     #endif
-
 
 #endif
+
 
 #if USE_DVI 
 
     #if USE_MULTI_CORE
 
-#include "pico/multicore.h"
+    #include "pico/multicore.h"
 
     #endif
-
-#endif
-
-
-
-#ifdef IR_RX_PIN
-    bi_decl(bi_1pin_with_name(IR_RX_PIN, "IR RX"));
-    bi_decl(bi_program_feature("Infra-red control"));
-#endif
-
-
-#if USE_DVI
 
     #include "dvi64_graphics.h"
 
@@ -3586,10 +3640,11 @@ char* about_strings_title =
     "\n"
     "\n";
 
-    char* about_strings_etc =
+    char* board_str =
     "Board: ";
 
-
+    char* config_str =
+    "Config: ";
 
 void show_about_window() {
     for (int y = 0; y <= SCREEN_HEIGHT; y++) {
@@ -3612,13 +3667,18 @@ void show_about_window() {
     // writeString(press_any_key_string);
     // writeString("\n\n");
     setCursorX(HELP_WINDOW_LEFT + FONT_WIDTH);
-    writeString(about_strings_etc);
+    writeString(board_str);
 
 #ifdef PICO_BOARD
     writeString(PICO_BOARD);
 #endif
 
-    writeString("\n\n\n");
+    writeString("\n");
+    setCursorX(HELP_WINDOW_LEFT + FONT_WIDTH);
+    writeString(config_str);
+    writeString(STR(PALAVO_CONFIG));
+
+    writeString("\n\n");
 
     setCursorX(HELP_WINDOW_LEFT + FONT_WIDTH);
 
@@ -3627,12 +3687,16 @@ void show_about_window() {
 
     uart_my_puts("\nABOUT\n\nPALAVO\n");
     uart_my_puts(about_strings_title);
-    uart_my_puts(about_strings_etc);
+    uart_my_puts(board_str);
 
 #ifdef PICO_BOARD
     uart_my_puts(PICO_BOARD);
-    uart_my_puts("\n\n\n");
+    uart_my_puts("\n");
 #endif
+
+    uart_my_puts(config_str);
+    uart_my_puts(STR(PALAVO_CONFIG));
+    uart_my_puts("\n\n");
 
     uart_my_puts(press_any_key_string);
     uart_my_puts("\n");
