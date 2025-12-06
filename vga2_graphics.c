@@ -38,8 +38,9 @@
 
 #ifdef PALAVO_CONFIG
     // #pragma message "PALAVO_CONFIG detected from vga2_graphics."
-    #define USE_CSYNC ((PALAVO_CONFIG >> PC_BIT_USE_CSYNC) & 1)
+    // #define USE_CSYNC ((PALAVO_CONFIG >> PC_BIT_USE_CSYNC) & 1)
 #else
+    // This is intended only for enabling colour syntax when developing
     #define USE_CSYNC 1
 #endif
 
