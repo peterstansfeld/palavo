@@ -152,7 +152,8 @@ void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour, ui
 void set_text_padding(uint16_t padding);
 
 // void initVGA(uint csync_pin, uint rgb_base_pin) ;
-void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count);
+// void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count);
+void initVGA(uint hsync_or_csync_pin, bool use_csync, uint rgb_base_pin, uint rgb_pin_count);
 
 void drawPixel(short x, short y, char color) ;
 void drawVLine(short x, short y, short h, char color) ;

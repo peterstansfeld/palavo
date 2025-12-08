@@ -34,18 +34,6 @@
 #include "hsync5.pio.h"
 #include "rgb5.pio.h"
 
-#include "config.h"
-
-#ifdef PALAVO_CONFIG
-    // #pragma message "PALAVO_CONFIG detected from vga2_graphics."
-    // #define USE_CSYNC ((PALAVO_CONFIG >> PC_BIT_USE_CSYNC) & 1)
-#else
-    // This is intended only for enabling colour syntax when developing
-    #define USE_CSYNC 1
-#endif
-
-#define USE_HSYNC_AND_VSYNC !USE_CSYNC
-
 
 #if SYS_CLOCK_FREQ_KHZ == 250000u
 // #define USE_4_BIT_RGB5_PIO
@@ -94,22 +82,6 @@
 // #define SYNC_DMA_TRANSFER_COUNT SYNC_BUFFER_COUNT * 60 // one second (ish)
 // #define SYNC_DMA_TRANSFER_COUNT SYNC_BUFFER_COUNT * 60 * 10 // ten seconds (ish)
 
-#if USE_HSYNC_AND_VSYNC
-
-// uint32_t sync_buffer [SYNC_BUFFER_COUNT];
-uint32_t sync_buffer [SYNC_BUFFER_COUNT] __attribute__ ((aligned(SYNC_BUFFER_COUNT * sizeof(uint32_t))));
-
-uint32_t * sync_buffer_address_pointer = &sync_buffer[0] ;
-
-#endif
-#if USE_CSYNC
-
-uint32_t csync_buffer [SYNC_BUFFER_COUNT] __attribute__ ((aligned(SYNC_BUFFER_COUNT * sizeof(uint32_t))));
-
-uint32_t * csync_buffer_address_pointer = &csync_buffer[0];
-
-#endif
-
  // (16 bits (639) + 16 bits (2, 4-bit colors) + (20 * 32 = 640 bits)
 
 // any more than 48 and we get a weird vertical scrolling side-effet
@@ -144,7 +116,7 @@ uint16_t str_cursor_x;
 
 // #define LED_PIN PICO_DEFAULT_LED_PIN
 
-static int sync_test_chan_0 = 0;
+static int sync_test_chan_0;
 
 #define USE_RING_BUF 1
 
@@ -187,8 +159,15 @@ void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour, ui
      vga_1bit_data_array[line * WORDS_PER_LINE] = (((fore_colour << 6) | (back_colour)) << 16) | 639;
 }
 
-void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
+
+void initVGA(uint hsync_or_csync_pin, bool use_csync, uint rgb_base_pin, uint rgb_pin_count) {
     // Choose which PIO instance to use (there are two instances (three for rp2350), each with 4 state machines)
+
+    // note: needed to make the variables below `static` to get this working - work out why - todo
+
+    static uint32_t sync_buffer [SYNC_BUFFER_COUNT] __attribute__ ((aligned(SYNC_BUFFER_COUNT * sizeof(uint32_t))));
+
+    static uint32_t * sync_buffer_address_pointer = &sync_buffer[0] ;
 
     PIO vga_out_pio = pio1;
 
@@ -217,19 +196,15 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
 
     // Manually select a couple of state machines from pio instance pio1
 
-#if USE_HSYNC_AND_VSYNC
+    // The reason that we have two separate Sms for either hsync (and vsync),
+    // or for csync is that at one stage they were both implemented for testing
+    // CSYNC. We could get combine them in one `sync_sm` .
 
     uint hsync5_sm = 0;
 
-#endif    
-    
     uint rgb5_sm = 1;
 
-#if USE_CSYNC
-
     uint csync_sm = 2;
-
-#endif
 
 #if SYS_CLK_KHZ == 125000u
     uint rgb5_offset = pio_add_program(vga_out_pio, &rgb5_program);
@@ -247,19 +222,15 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
     // the pio file, then all information about how to use/setup that state machine
     // is consolidated in one place. Here in the C, we then just import and use it.
     
-#if USE_HSYNC_AND_VSYNC
-      // hsync5_program_init(vga_out_pio, hsync5_sm, hsync5_offset, HSYNC2, 2);
-      hsync5_program_init(vga_out_pio, hsync5_sm, hsync5_offset, 0 /*VSYNC*/, 2);
-#endif
+    if (!use_csync) {
+        // hsync5_program_init(vga_out_pio, hsync5_sm, hsync5_offset, HSYNC2, 2);
+        hsync5_program_init(vga_out_pio, hsync5_sm, hsync5_offset, hsync_or_csync_pin - 1, 2);
+    } else {
+        // Initialise a second copy of hvsync which we'll call csync and use to test csync
+        // uint csync_offset = pio_add_program(vga_out_pio, &hsync5_program);
+        hsync5_program_init(vga_out_pio, csync_sm, hsync5_offset, hsync_or_csync_pin, 1);
+    }
 
-
-#if USE_CSYNC
-
-    // Initialise a second copy of hvsync which we'll call csync and use to test csync
-    // uint csync_offset = pio_add_program(vga_out_pio, &hsync5_program);
-    hsync5_program_init(vga_out_pio, csync_sm, hsync5_offset, csync_pin, 1);
-
-#endif
 // todo - tidy these GPIO pin definitions below
 
 #if SYS_CLK_KHZ == 125000u
@@ -336,283 +307,208 @@ void initVGA(uint csync_pin, uint rgb_base_pin, uint rgb_pin_count) {
         false                               // Don't start immediately.
     );
 
-#if USE_HSYNC_AND_VSYNC
+    int csync_dma_chan0;
 
-    // More DMA channels - test ones - 0 sends color data, 1 reconfigures and restarts 0
-    int sync_test_chan_0 = dma_claim_unused_channel(true);
+    if (!use_csync) {
 
-#if !USE_RING_BUF
-    int sync_test_chan_1 = dma_claim_unused_channel(true);
-#endif
+        // More DMA channels - test ones - 0 sends color data, 1 reconfigures and restarts 0
+        sync_test_chan_0 = dma_claim_unused_channel(true);
 
-    // Channel Zero (sends color data to PIO VGA machine)
-    c0 = dma_channel_get_default_config(sync_test_chan_0);  // default configs
-    channel_config_set_transfer_data_size(&c0, DMA_SIZE_32);             // 32-bit txfers
+    #if !USE_RING_BUF
+        int sync_test_chan_1 = dma_claim_unused_channel(true);
+    #endif
 
-    //  Prevent this channel from generating IRQs at the end of every transfer block
-    // channel_config_set_irq_quiet(&c0, true); 
+        // Channel Zero (sends color data to PIO VGA machine)
+        c0 = dma_channel_get_default_config(sync_test_chan_0);  // default configs
+        channel_config_set_transfer_data_size(&c0, DMA_SIZE_32);             // 32-bit txfers
 
-    // don't actually need the following two as they are the default values
-    channel_config_set_read_increment(&c0, true);                        // yes read incrementing
-    channel_config_set_write_increment(&c0, false);                      // no write incrementing
+        //  Prevent this channel from generating IRQs at the end of every transfer block
+        // channel_config_set_irq_quiet(&c0, true); 
 
-    // Wrap read address on 4 word boundary
-    // channel_config_set_ring(&c0, false, 3); // 2 stops it working. 3 gives us only HSYNC working  as expected
+        // don't actually need the following two as they are the default values
+        channel_config_set_read_increment(&c0, true);                        // yes read incrementing
+        channel_config_set_write_increment(&c0, false);                      // no write incrementing
 
-#if USE_RING_BUF
-    channel_config_set_ring(&c0, false, 5); // Set read address to wrap at (1<<5) = 32 byte boundary
-#endif
+        // Wrap read address on 4 word boundary
+        // channel_config_set_ring(&c0, false, 3); // 2 stops it working. 3 gives us only HSYNC working  as expected
 
-    // 2 stops it working.
-    // 3 gives us only HSYNC working as expected
-    // 4 seems to work but doesn't wrap by itself - it still seems to need chaining, it does
-    // as the ring only repeats until SYNC_BUFFER_COUNT is decremented to 0
+    #if USE_RING_BUF
+        channel_config_set_ring(&c0, false, 5); // Set read address to wrap at (1<<5) = 32 byte boundary
+    #endif
 
-    // channel_config_set_dreq(&c0, DREQ_PIO1_TX0) ;                        // DREQ_PIO1_TX0 pacing (FIFO)
+        // 2 stops it working.
+        // 3 gives us only HSYNC working as expected
+        // 4 seems to work but doesn't wrap by itself - it still seems to need chaining, it does
+        // as the ring only repeats until SYNC_BUFFER_COUNT is decremented to 0
 
-    channel_config_set_dreq(&c0, pio_get_dreq(vga_out_pio, hsync5_sm, true));     // hsync5_sm tx FIFO pacing
+        // channel_config_set_dreq(&c0, DREQ_PIO1_TX0) ;                        // DREQ_PIO1_TX0 pacing (FIFO)
 
-#if !USE_RING_BUF
-    channel_config_set_chain_to(&c0, sync_test_chan_1);                  // chain to other channel
-#endif
+        channel_config_set_dreq(&c0, pio_get_dreq(vga_out_pio, hsync5_sm, true));     // hsync5_sm tx FIFO pacing
 
-     dma_channel_configure(
-        sync_test_chan_0,           // Channel to be configured
-        &c0,                        // The configuration we just created
-        &vga_out_pio->txf[hsync5_sm], // write address (RGB PIO TX FIFO)
-        &sync_buffer,               // The initial read address (pixel color array)
+    #if !USE_RING_BUF
+        channel_config_set_chain_to(&c0, sync_test_chan_1);                  // chain to other channel
+    #endif
 
-#if USE_RING_BUF
-        SYNC_DMA_TRANSFER_COUNT,    // Number of transfers to perform
-#else
-        SYNC_BUFFER_COUNT,          // Number of transfers to perform
-#endif
-        false                       // Don't start immediately.
-    );
+        dma_channel_configure(
+            sync_test_chan_0,           // Channel to be configured
+            &c0,                        // The configuration we just created
+            &vga_out_pio->txf[hsync5_sm], // write address (RGB PIO TX FIFO)
+            &sync_buffer,               // The initial read address (pixel color array)
 
-#if !USE_RING_BUF
-    // Channel One (reconfigures the first channel)
-    c1 = dma_channel_get_default_config(sync_test_chan_1);   // default configs
-    channel_config_set_transfer_data_size(&c1, DMA_SIZE_32);              // 32-bit txfers
-    channel_config_set_read_increment(&c1, false);                        // no read incrementing
-    channel_config_set_write_increment(&c1, false);                       // no write incrementing
-    channel_config_set_chain_to(&c1, sync_test_chan_0);                         // chain to other channel
+    #if USE_RING_BUF
+            SYNC_DMA_TRANSFER_COUNT,    // Number of transfers to perform
+    #else
+            SYNC_BUFFER_COUNT,          // Number of transfers to perform
+    #endif
+            false                       // Don't start immediately.
+        );
 
-    dma_channel_configure(
-        sync_test_chan_1,                         // Channel to be configured
-        &c1,                                // The configuration we just created
-        &dma_hw->ch[sync_test_chan_0].read_addr,  // Write address (channel 0 read address)
-        &sync_buffer_address_pointer,                   // Read address (POINTER TO AN ADDRESS)
-        1,                                  // Number of transfers, in this case each is 4 byte
-        false                               // Don't start immediately.
-    );
+    #if !USE_RING_BUF
+        // Channel One (reconfigures the first channel)
+        c1 = dma_channel_get_default_config(sync_test_chan_1);   // default configs
+        channel_config_set_transfer_data_size(&c1, DMA_SIZE_32);              // 32-bit txfers
+        channel_config_set_read_increment(&c1, false);                        // no read incrementing
+        channel_config_set_write_increment(&c1, false);                       // no write incrementing
+        channel_config_set_chain_to(&c1, sync_test_chan_0);                         // chain to other channel
 
-#endif
+        dma_channel_configure(
+            sync_test_chan_1,                         // Channel to be configured
+            &c1,                                // The configuration we just created
+            &dma_hw->ch[sync_test_chan_0].read_addr,  // Write address (channel 0 read address)
+            &sync_buffer_address_pointer,                   // Read address (POINTER TO AN ADDRESS)
+            1,                                  // Number of transfers, in this case each is 4 byte
+            false                               // Don't start immediately.
+        );
 
-#endif 
+    #endif
 
-#if USE_CSYNC
+    } else {
 
-    // More DMA channels - test ones - 0 sends color data, 1 reconfigures and restarts 0
+        // More DMA channels - test ones - 0 sends color data, 1 reconfigures and restarts 0
 
-    int csync_dma_chan0 = dma_claim_unused_channel(true);
+        csync_dma_chan0 = dma_claim_unused_channel(true);
 
-#if !USE_RING_BUF
-    int csync_dms_chan_1 = dma_claim_unused_channel(true);
-    #warning 'were not using RING_BUF'
-#endif
+    #if !USE_RING_BUF
+        int csync_dms_chan_1 = dma_claim_unused_channel(true);
+        #warning 'were not using RING_BUF'
+    #endif
 
-    // Channel Zero (sends color data to PIO VGA machine)
-    c0 = dma_channel_get_default_config(csync_dma_chan0);  // default configs
-    channel_config_set_transfer_data_size(&c0, DMA_SIZE_32);             // 32-bit txfers
+        // Channel Zero (sends color data to PIO VGA machine)
+        c0 = dma_channel_get_default_config(csync_dma_chan0);  // default configs
+        channel_config_set_transfer_data_size(&c0, DMA_SIZE_32);             // 32-bit txfers
 
-    //  Prevent this channel from generating IRQs at the end of every transfer block
-    // channel_config_set_irq_quiet(&c0, true); 
+        //  Prevent this channel from generating IRQs at the end of every transfer block
+        // channel_config_set_irq_quiet(&c0, true); 
 
-    // don't actually need the following two as they are the default values
-    channel_config_set_read_increment(&c0, true);                        // yes read incrementing
-    channel_config_set_write_increment(&c0, false);                      // no write incrementing
+        // don't actually need the following two as they are the default values
+        channel_config_set_read_increment(&c0, true);                        // yes read incrementing
+        channel_config_set_write_increment(&c0, false);                      // no write incrementing
 
-    // Wrap read address on 4 word boundary
-    // channel_config_set_ring(&c0, false, 3); // 2 stops it working. 3 gives us only HSYNC working  as expected
+        // Wrap read address on 4 word boundary
+        // channel_config_set_ring(&c0, false, 3); // 2 stops it working. 3 gives us only HSYNC working  as expected
 
-#if USE_RING_BUF
-    channel_config_set_ring(&c0, false, 5); // Set read address to wrap at (1<<5) = 32 byte boundary
-#endif
+    #if USE_RING_BUF
+        channel_config_set_ring(&c0, false, 5); // Set read address to wrap at (1<<5) = 32 byte boundary
+    #endif
 
-    // 2 stops it working.
-    // 3 gives us only HSYNC working as expected
-    // 4 seems to work but doesn't wrap by itself - it still seems to need chaining, it does
-    // as the ring only repeats until SYNC_BUFFER_COUNT is decremented to 0
+        // 2 stops it working.
+        // 3 gives us only HSYNC working as expected
+        // 4 seems to work but doesn't wrap by itself - it still seems to need chaining, it does
+        // as the ring only repeats until SYNC_BUFFER_COUNT is decremented to 0
 
-    // channel_config_set_dreq(&c0, DREQ_PIO1_TX0) ;                        // DREQ_PIO1_TX0 pacing (FIFO)
+        // channel_config_set_dreq(&c0, DREQ_PIO1_TX0) ;                        // DREQ_PIO1_TX0 pacing (FIFO)
 
-    channel_config_set_dreq(&c0, pio_get_dreq(vga_out_pio, csync_sm, true));     // hsync5_sm tx FIFO pacing
+        channel_config_set_dreq(&c0, pio_get_dreq(vga_out_pio, csync_sm, true));     // hsync5_sm tx FIFO pacing
 
-#if !USE_RING_BUF
-    channel_config_set_chain_to(&c0, csync_dms_chan_1);                  // chain to other channel
-#endif
+    #if !USE_RING_BUF
+        channel_config_set_chain_to(&c0, csync_dms_chan_1);                  // chain to other channel
+    #endif
 
-     dma_channel_configure(
-        csync_dma_chan0,           // Channel to be configured
-        &c0,                        // The configuration we just created
-        &vga_out_pio->txf[csync_sm], // write address (RGB PIO TX FIFO)
-        &csync_buffer,               // The initial read address (pixel color array)
+        dma_channel_configure(
+            csync_dma_chan0,           // Channel to be configured
+            &c0,                        // The configuration we just created
+            &vga_out_pio->txf[csync_sm], // write address (RGB PIO TX FIFO)
+            &sync_buffer,               // The initial read address (pixel color array)
 
-#if USE_RING_BUF
-        SYNC_DMA_TRANSFER_COUNT,    // Number of transfers to perform
-#else
-        SYNC_BUFFER_COUNT,          // Number of transfers to perform
-#endif
-        false                       // Don't start immediately.
-    );
+    #if USE_RING_BUF
+            SYNC_DMA_TRANSFER_COUNT,    // Number of transfers to perform
+    #else
+            SYNC_BUFFER_COUNT,          // Number of transfers to perform
+    #endif
+            false                       // Don't start immediately.
+        );
 
-#if !USE_RING_BUF
-    // Channel One (reconfigures the first channel)
-    c1 = dma_channel_get_default_config(csync_dms_chan_1);   // default configs
-    channel_config_set_transfer_data_size(&c1, DMA_SIZE_32);              // 32-bit txfers
-    channel_config_set_read_increment(&c1, false);                        // no read incrementing
-    channel_config_set_write_increment(&c1, false);                       // no write incrementing
-    channel_config_set_chain_to(&c1, csync_dma_chan0);                         // chain to other channel
+    #if !USE_RING_BUF
+        // Channel One (reconfigures the first channel)
+        c1 = dma_channel_get_default_config(csync_dms_chan_1);   // default configs
+        channel_config_set_transfer_data_size(&c1, DMA_SIZE_32);              // 32-bit txfers
+        channel_config_set_read_increment(&c1, false);                        // no read incrementing
+        channel_config_set_write_increment(&c1, false);                       // no write incrementing
+        channel_config_set_chain_to(&c1, csync_dma_chan0);                         // chain to other channel
 
-    dma_channel_configure(
-        csync_dms_chan_1,                         // Channel to be configured
-        &c1,                                // The configuration we just created
-        &dma_hw->ch[csync_dma_chan0].read_addr,  // Write address (channel 0 read address)
-        &csync_buffer_address_pointer,                   // Read address (POINTER TO AN ADDRESS)
-        1,                                  // Number of transfers, in this case each is 4 byte
-        false                               // Don't start immediately.
-    );
+        dma_channel_configure(
+            csync_dms_chan_1,                         // Channel to be configured
+            &c1,                                // The configuration we just created
+            &dma_hw->ch[csync_dma_chan0].re    if (!use_csync) {
+            pio_enable_sm_mask_in_sync(vga_out_pio, ((1u << hsync5_sm) | (1u << rgb5_sm)));
+        } else {
+            pio_enable_sm_mask_in_sync(vga_out_pio, ((1u << rgb5_sm) | (1u << csync_sm)));
+        }
+    ad_addr,  // Write address (channel 0 read address)
+            &sync_buffer_address_pointer,                   // Read address (POINTER TO AN ADDRESS)
+            1,                                  // Number of transfers, in this case each is 4 byte
+            false                               // Don't start immediately.
+        );
 
-#endif
+    #endif
 
-#endif
+    }
 
     // put some data in the buffer
-/*
-    for (int i = 0; i < SYNC_BUFFER_COUNT; i++) {
-        // sync_buffer[i] = 0x55aa55aa;
-        // sync_buffer[i] = 0x55555555;
-        // sync_buffer[i] = 0x12345678;
-        sync_buffer[i] = i;
-    }
-*/
 
-    // Setup interrupt handler for sync_test_chan_0 DMA channels
+    if (!use_csync) {
 
-    // dma_channel_set_irq0_enabled(sync_test_chan_0, true);
-    // irq_set_exclusive_handler(DMA_IRQ_0, dma_irh);
-    // irq_set_enabled(DMA_IRQ_0, true);
+        uint32_t encode(int repeat, bool vsync0, bool hsync0, char delay0, bool irq, bool vsync1, bool hsync1, char delay1) {
+            // return ((delay1 - 8 - irq) << 3 | vsync1 << 2 | hsync1 << 1 | irq) << 20 | (delay0 - 4) << 11 | vsync0 << 10 | hsync0 << 9 | repeat;
+            // VSYNC was on a GPIO one higher than HSYNC. They are now reversed so that HSYNC is on a GPIO one higher than VSYNC.
+            // The reason for this is CSYNC needs to be on HSYNC and when displaying the trace its neater to have CSYNC immediately
+            // above the RGB GPIOs.
+            return ((delay1 - 8 - irq) << 3 | vsync1 << 1 | hsync1 << 2 | irq) << 20 | (delay0 - 4) << 11 | vsync0 << 9 | hsync0 << 10 | repeat;
+        }
 
-
-
-
-
-
-/*
-
-    sync_buffer[0] = ((88 - 4) << 2) | 0b11;
-    sync_buffer[1] = ((12 - 4) << 2) | 0b10;
-    sync_buffer[2] = ((88 - 4) << 2) | 0b11;
-    sync_buffer[3] = ((12 - 4) << 2) | 0b10;
-
-    // these should be ignored if we set the ring to (1 << 4) = 16 (bytes)) - they are
-    sync_buffer[4] = ((88 - 4) << 2) | 0b11;
-    sync_buffer[5] = ((12 - 4) << 2) | 0b10;
-    sync_buffer[6] = ((6 - 4) << 2)  | 0b11;
-
-    sync_buffer[7] = ((88 - 6 - 4) << 2) | 0b01;
-    sync_buffer[8] = ((12 - 4) << 2) | 0b00;
-
-    sync_buffer[9] = ((88 - 4) << 2) | 0b01;
-    sync_buffer[10] = ((12 - 4) << 2) | 0b00;
-
-    sync_buffer[11] = ((6 - 4) << 2) | 0b01;
-    sync_buffer[12] = ((88 - 6 - 4) << 2) | 0b11;
-    sync_buffer[13] = ((12 - 4) << 2) | 0b10;
-
-*/
-
-
-    // uint32_t encode(char delay1, bool vsync1, bool hsync1, char delay0,  bool vsync0, bool hsync0, int repeat) {
-        // return ((delay1 - 6) << 2 | vsync1 << 1 | hsync1) << 16 | (delay0 - 5) << 2 | vsync0 << 1 | hsync0;
-        // return ((delay1 - 5) << 2 | vsync1 << 1 | hsync1) << 16 | (delay0 - 5) << 2 | vsync0 << 1 | hsync0;
-        // return ((delay1 - 6) << 2 | vsync1 << 1 | hsync1) << 16 | repeat << 9 | (delay0 - 5) << 2 | vsync0 << 1 | hsync0;
-        // return ((delay1 - 6) << 2 | vsync1 << 1 | hsync1) << 16 | (delay0 - 5) << 9 | vsync0 << 8 | hsync0 << 7 | repeat;
-        // return ((delay1 - 9) << 3 | vsync1 << 1 | hsync1) << 19 | repeat << 10 | (delay0 - 6) << 2 | vsync0 << 1 | hsync0;
-    //  }
-
-#if USE_HSYNC_AND_VSYNC
-
-    uint32_t encode(int repeat, bool vsync0, bool hsync0, char delay0, bool irq, bool vsync1, bool hsync1, char delay1) {
-        // return ((delay1 - 8 - irq) << 3 | vsync1 << 2 | hsync1 << 1 | irq) << 20 | (delay0 - 4) << 11 | vsync0 << 10 | hsync0 << 9 | repeat;
-        // VSYNC was on a GPIO one higher than HSYNC. They are now reversed so that HSYNC is on a GPIO one higher than VSYNC.
-        // The reason for this is CSYNC needs to be on HSYNC and when displaying the trace its neater to have CSYNC immediately
-        // above the RGB GPIOs.
-        return ((delay1 - 8 - irq) << 3 | vsync1 << 1 | hsync1 << 2 | irq) << 20 | (delay0 - 4) << 11 | vsync0 << 9 | hsync0 << 10 | repeat;
-     }
-
-//                          rpt    V  H  delay         irq V  H  delay
-    sync_buffer[0] = encode(479,   1, 0, 24,           1,  1, 1, 176     );
-    sync_buffer[1] = encode(9,     1, 0, 24,           0,  1, 1, 176     );
-    sync_buffer[2] = encode(0,     1, 0, 24,           0,  1, 1, 12      );
-    sync_buffer[3] = encode(0,     0, 1, 176 - 12,     0,  0, 0, 24      );
-    sync_buffer[4] = encode(0,     0, 1, 176,          0,  0, 0, 24      );
-    sync_buffer[5] = encode(0,     0, 1, 12,           0,  1, 1, 176 - 12);
-    sync_buffer[6] = encode(30,    1, 0, 24,           0,  1, 1, 176     );
-// add a buffer entry so we can use RING on the DMA channel
-    sync_buffer[7] = encode(0,     1, 0, 24,           0,  1, 1, 176     );
-
-#endif
-
-
-#if USE_CSYNC
-
-
-/*
-    uint32_t encode(int repeat, bool vsync0, bool hsync0, char delay0, bool irq, bool vsync1, bool hsync1, char delay1) {
-        return ((delay1 - 8 - irq) << 3 | vsync1 << 2 | hsync1 << 1 | irq) << 20 | (delay0 - 4) << 11 | vsync0 << 10 | hsync0 << 9 | repeat;
-     }
-
-//                           rpt    V  H  delay         irq V  H  delay
-    csync_buffer[0] = encode(479,   1, 0, 24,           1,  1, 1, 176     ); // 480 lines with irq triggering
-    csync_buffer[1] = encode(9,     1, 0, 24,           0,  1, 1, 176     ); // 10 lines with no irq triggering
-    csync_buffer[2] = encode(0,     1, 0, 24,           0,  1, 1, 12      ); // 1 short delay before start of vsync 
-    csync_buffer[3] = encode(0,     0, 0, 176 - 12,     0,  0, 1, 24      ); // 1 start of vsync
-    csync_buffer[4] = encode(0,     0, 0, 176,          0,  0, 1, 24      ); // 
-    csync_buffer[5] = encode(0,     0, 0, 12,           0,  1, 1, 176 - 12);
-    csync_buffer[6] = encode(30,    1, 0, 24,           0,  1, 1, 176     );
-// add a buffer entry so we can use RING on the DMA channel
-    csync_buffer[7] = encode(0,     1, 0, 24,           0,  1, 1, 176     );
-*/
-
-
-    uint32_t encode(int repeat, bool hsync0, char delay0, bool irq, bool hsync1, char delay1) {
-        return ((delay1 - 8 - irq) << 3 | hsync1 << 1 | irq) << 20 | (delay0 - 4) << 11 | hsync0 << 9 | repeat;
-     }
-
-//                           rpt    C  delay         irq C  delay
-    csync_buffer[0] = encode(479,   0, 24,           1,  1, 176     ); // 480 lines with irq triggering
-    csync_buffer[1] = encode(9,     0, 24,           0,  1, 176     ); // 10 lines with no irq triggering
-    csync_buffer[2] = encode(0,     0, 24,           0,  1, 12      ); // 1 short delay before start of vsync 
-    csync_buffer[3] = encode(0,     0, 176 - 12,     0,  1, 24      ); // 1 start of vsync
-    csync_buffer[4] = encode(0,     0, 176,          0,  1, 24      ); // 
-    csync_buffer[5] = encode(0,     0, 12,           0,  1, 176 - 12);
-    csync_buffer[6] = encode(30,    0, 24,           0,  1, 176     );
-// add a buffer entry so we can use RING on the DMA channel
-    csync_buffer[7] = encode(0,     0, 24,           0,  1, 176     );
-
-
+    //                          rpt    V  H  delay         irq V  H  delay
+        sync_buffer[0] = encode(479,   1, 0, 24,           1,  1, 1, 176     );
+        sync_buffer[1] = encode(9,     1, 0, 24,           0,  1, 1, 176     );
+        sync_buffer[2] = encode(0,     1, 0, 24,           0,  1, 1, 12      );
+        sync_buffer[3] = encode(0,     0, 1, 176 - 12,     0,  0, 0, 24      );
+        sync_buffer[4] = encode(0,     0, 1, 176,          0,  0, 0, 24      );
+        sync_buffer[5] = encode(0,     0, 1, 12,           0,  1, 1, 176 - 12);
+        sync_buffer[6] = encode(30,    1, 0, 24,           0,  1, 1, 176     );
+    // add a buffer entry so we can use RING on the DMA channel
+        sync_buffer[7] = encode(0,     1, 0, 24,           0,  1, 1, 176     );
 
 // HSYNC   24  176         24  176        24 12   
 //        ____""""" * 480 ____""""" * 10 ____""  
 
 
-// VSYNC
+    } else {
 
+        uint32_t encode(int repeat, bool hsync0, char delay0, bool irq, bool hsync1, char delay1) {
+            return ((delay1 - 8 - irq) << 3 | hsync1 << 1 | irq) << 20 | (delay0 - 4) << 11 | hsync0 << 9 | repeat;
+        }
 
+    //                          rpt    C  delay         irq C  delay
+        sync_buffer[0] = encode(479,   0, 24,           1,  1, 176     ); // 480 lines with irq triggering
+        sync_buffer[1] = encode(9,     0, 24,           0,  1, 176     ); // 10 lines with no irq triggering
+        sync_buffer[2] = encode(0,     0, 24,           0,  1, 12      ); // 1 short delay before start of vsync 
+        sync_buffer[3] = encode(0,     0, 176 - 12,     0,  1, 24      ); // 1 start of vsync
+        sync_buffer[4] = encode(0,     0, 176,          0,  1, 24      ); // 
+        sync_buffer[5] = encode(0,     0, 12,           0,  1, 176 - 12);
+        sync_buffer[6] = encode(30,    0, 24,           0,  1, 176     );
+    // add a buffer entry so we can use RING on the DMA channel
+        sync_buffer[7] = encode(0,     0, 24,           0,  1, 176     );
 
-#endif
+}
 
 // vga_1bit_data_array[0] = (((WHITE << 4) | BLACK) << 16) | (639);
 
@@ -750,18 +646,11 @@ for (int y = 0; y < NO_OF_LINES; y++) {
     // start them all simultaneously anyway.
 
 
-#if !USE_CSYNC
-    pio_enable_sm_mask_in_sync(vga_out_pio, ((1u << hsync5_sm) | (1u << rgb5_sm)));
-#else
-
-#if USE_HSYNC_AND_VSYNC
-    pio_enable_sm_mask_in_sync(vga_out_pio, ((1u << hsync5_sm) | (1u << rgb5_sm) | (1u << csync_sm)));
-#else
-    pio_enable_sm_mask_in_sync(vga_out_pio, ((1u << rgb5_sm) | (1u << csync_sm)));
-#endif
-
-
-#endif
+    if (!use_csync) {
+        pio_enable_sm_mask_in_sync(vga_out_pio, ((1u << hsync5_sm) | (1u << rgb5_sm)));
+    } else {
+        pio_enable_sm_mask_in_sync(vga_out_pio, ((1u << rgb5_sm) | (1u << csync_sm)));
+    }
 
     // Start DMA channel 0. Once started, the contents of the pixel color array
     // will be continously DMA's to the PIO machines that are driving the screen.
@@ -799,12 +688,11 @@ USE_CSYNC.
     // Manually call the handler once, to trigger the first transfer
     // dma_handler();
 
-#if !USE_CSYNC
-
-    dma_start_channel_mask((1u << sync_test_chan_0));
-#else
-    dma_start_channel_mask((1u << sync_test_chan_0) | (1u << csync_dma_chan0));
-#endif
+    if (!use_csync) {
+        dma_start_channel_mask((1u << sync_test_chan_0));
+    } else {
+        dma_start_channel_mask(1u << csync_dma_chan0);
+    }
 
 
     // Manually call the handler once, to trigger the first transfer

@@ -4695,7 +4695,14 @@ int main() {
     uart_my_putcf("With RGB base pin on: %d\n", VGA_OUT_RGB_BASE_PIN);
     uart_my_putcf("And: %d pins\n", VGA_OUT_RGB_PIN_COUNT);
 
-    initVGA(VGA_OUT_CSYNC_PIN, VGA_OUT_RGB_BASE_PIN, VGA_OUT_RGB_PIN_COUNT);
+
+    bool use_csync;
+
+#if USE_CSYNC
+    use_csync = true;
+#endif
+
+    initVGA(VGA_OUT_CSYNC_PIN, use_csync, VGA_OUT_RGB_BASE_PIN, VGA_OUT_RGB_PIN_COUNT);
     init_line_colours();
 
     // We're going to capture into a u32 buffer, for best DMA efficiency. Need
