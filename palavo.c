@@ -71,6 +71,7 @@
 // Configuration settings, including bit locations for PALAVO_CONFIG
 #include "config.h"
 
+// Pins that are not available on the Pico, Pico 2, and others which are based are based of the Pico.
 #define PICO_RESERVED_GPIO_0_31 ((1 << 31) | (1 << 30) | (1 << 29) | (1 << 25) | (1 << 24)  | (1 << 23))
 
 #define ENABLE_GRAPHICS_DEMO 0
@@ -236,21 +237,36 @@ bi_decl(bi_1pin_with_name(IR_RX_PIN, "IR RX"));
 #endif
 
 
-// we're sometimes using STDIO UART serial comms instead of USB-CDC
-
-#if USE_USB_STDIO
-
-    #if USE_GPIO_31_47
-
-#define GPIO_INPUT_MASK_0_31 0xffffffff
-
-    #else
+#if BOARD_HAS_SAME_RESERVED_GPIO_AS_PICO
 
 #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~PICO_RESERVED_GPIO_0_31)
 
-    #endif
+#else
+
+#define GPIO_INPUT_MASK_0_31 0xffffffff
+
+#define GPIO_INPUT_MASK_32_47 (0xffff)
+
+#endif
+
+
+#if USE_USB_STDIO
+// we're using UART stdio serial comms
+
+//     #if USE_GPIO_31_47
+
+// #define GPIO_INPUT_MASK_0_31 0xffffffff
+
+//     #else
+
+// #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~PICO_RESERVED_GPIO_0_31)
+
+//     #endif
 
 #else
+// we're using USB-CDC stdio serial comms so we need to prevent the UART pins from being set
+// as inputs
+
 // no need to do anything here as STDIO adds the bi_decl for us
 // note that in `CMakeLists.txt` we've modified
 // PICO_DEFAULT_UART_TX_PIN & PICO_DEFAULT_UART_RX_PIN
@@ -262,24 +278,59 @@ bi_decl(bi_1pin_with_name(IR_RX_PIN, "IR RX"));
 // is just the UART pins, I think
 
 
-#if PICO_DEFAULT_UART_TX_PIN < 32
+    #if PICO_DEFAULT_UART_TX_PIN < 32
 
 #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~((PICO_RESERVED_GPIO_0_31) | (1 << PICO_DEFAULT_UART_TX_PIN) | (1 << PICO_DEFAULT_UART_RX_PIN)))
 
-#else
+    #else
 
-#define GPIO_INPUT_MASK_0_31 (0xffffffff & ~((PICO_RESERVED_GPIO_0_31) | (1 << PICO_DEFAULT_UART_TX_PIN - 32) | (1 << PICO_DEFAULT_UART_RX_PIN - 32)))
+#define GPIO_INPUT_MASK_0_31 (0xffffffff & ~PICO_RESERVED_GPIO_0_31)
 
+// It seems we do need to do this for PICO_DEFAULT_UART_TX_PIN >= 32 - don't know why - todo.
+bi_decl(bi_1pin_with_name(PICO_DEFAULT_UART_TX_PIN, "UART1 - TX"));
+bi_decl(bi_1pin_with_name(PICO_DEFAULT_UART_RX_PIN, "UART1 - RX"));
 
-#endif
-
-#endif
-
-#if PICO_PIO_USE_GPIO_BASE
-
-#define GPIO_INPUT_MASK_32_47 (0xffff)
+    #endif
 
 #endif
+
+
+// #if PICO_PIO_USE_GPIO_BASE
+
+//     #if PICO_DEFAULT_UART_TX_PIN < 32
+
+// #define GPIO_INPUT_MASK_32_47 (0xffff)
+
+//     #else
+
+// #define GPIO_INPUT_MASK_32_47 (0xffff & ~((1 << PICO_DEFAULT_UART_TX_PIN - 32) | (1 << PICO_DEFAULT_UART_RX_PIN - 32)))
+
+//     #endif
+
+// #endif
+
+
+// Repeatable condition to cause the DVI to stop working (the rest of the program works and the DVI is continues to output something).
+// It fails on both the Pico Lipo2 XL W and the RP2350 Stamp.
+
+// Enable the following #define to cause eventual (sometimes a few seconds, other time minutes) DVI lockup:
+    #define GPIO_INPUT_MASK_32_47 (0xffff)
+
+
+// Enable the following #define to NOT (left overnight) cause DVI lockup:
+// #define GPIO_INPUT_MASK_32_47 (0xffff & ~((1 << (PICO_DEFAULT_UART_TX_PIN - 32)) | (1 << (PICO_DEFAULT_UART_RX_PIN - 32))))
+
+// Update. By reading the each of gpio function selectors the problem seems to have magically gone away. ???
+
+// The plot thickens. The function that seems to make the difference is `gpio_is_dir_out()` for GPIO 32..47.
+// I commented out `gpio_get_function()` for all 48 GPIO, and both test XLs are still happily working after 
+// at least an hour.
+
+// search for the #define READ_HIGH_GPIO_DIRS. Set it to 1 and no DVI lockups; to 0 and we get lockups
+
+#define READ_HIGH_GPIO_DIRS 0
+
+// End of repeatable condition
 
 
 #if USE_DVI 
@@ -3569,7 +3620,8 @@ int vsync_counter;
 uint vga_capture_dma_write_addr;
 
 
-void __scratch_x("") pio0_irq_handler() {
+// void __scratch_x("") pio0_irq_handler() {
+void pio0_irq_handler() {
     pio_interrupt_clear(vga_capture_pio, VGA_CAPTURE_FRAME_PIO_IRQ);
     if (++vsync_counter >= VGA_VERTICAL_REFRESH_FREQ) {
         // every second
@@ -4458,7 +4510,7 @@ int main() {
 
     // Initialize stdio
     
-    stdio_init_all();
+    // stdio_init_all();
 
     // stdio_driver_t my_uart_driver;
     // Initialize your UART driver here
@@ -4483,6 +4535,8 @@ int main() {
         }
     }
 #endif
+
+    stdio_init_all();
 
 
 #if !USE_STDIO_UART
@@ -4927,7 +4981,98 @@ int main() {
 
     }
 
+
+    // testing roval of the line below...
+    // uint high_ins = 0; // I've moved this from above the previous #define - makes no difference - DVI still locks out
+
+
+#if PICO_PIO_USE_GPIO_BASE
+
+    uint high_ins = 0; // I've moved this from above the previous #define - makes no difference - DVI still locks out
+
+#if READ_HIGH_GPIO_DIRS
+
+    for (int i = 0; i < 16; i++) {
+
+        // if (gpio_is_dir_out(i) == 0) {
+        // if (gpio_is_pulled_up(i) == 0) {
+        if (gpio_is_dir_out(32 + i) == 0) {
+            high_ins |= (1 << i);
+        }
+
+    }
+
+#endif
+
+
+
+/*
+
+    for (int i = 0; i < 48; i++) {
+
+        // if (gpio_is_dir_out(i) == 0) {
+        // if (gpio_is_pulled_up(i) == 0) {
+        gpio_function_t f = gpio_get_function(i);
+            // uart_my_putcf("%d\n", (uint) f);
+
+        printf("%d: %d\n", i, (uint) f);
+
+    }
+
+*/
+
+
+#endif
+
     uart_my_putcf("Inputs: %x\n", ins);
+
+    // stdio_printf("Inputs: %x\n", ins); // testing this to see if that has any effect... dvi crashes. Test 2 seems fine.
+
+
+#if PICO_PIO_USE_GPIO_BASE
+
+    // #if READ_HIGH_GPIO_DIRS
+    
+    // uart_my_putcf("High inputs: %x\n", high_ins); // line stops DVI crashing it seems!!!, but not with the sleep_ms() line below???
+    
+//  what if we simply send a constant str
+    // uart_my_putcf("High inputs: %x\n", 180); // testing... this seems like it also stops the DV crashing
+
+    // uart_my_putcf("Any old string: %x\n", 180); // testing... so does this one
+
+    // uart_my_puts("?\n"); // ok, so this crashes. Test 2 seems fine.
+
+    // uart_my_puts("Any new string: 12\n"); // this crashes too
+
+    // printf("Any old string: %x\n", 180); // this crashes too
+
+    // uart_my_putcf("H: %x\n", high_ins); // testing... this does not crash the dvi
+
+    // uart_my_putcf("Inputs: %x\n", ins); // testing... this does not crash the dvi
+
+    // uart_my_putcf("Inputs: \n", ins); // testing... this does not crash the dvi
+
+    // printf("Inputs: \n", ins); // testing... this does not crash the dvi
+
+    // printf("Inputs: \n", high_ins); // testing... this had a hiccup and then a crash - this makes no sense!!!
+
+    // printf("Inputs: \n", ins); // testing... this did not crash the dvi. testing again... does now
+
+    // printf("Inputs: %x\n", high_ins); // testing... crash. Test 2 seems fine.
+
+    // uart_my_putcf("High inputs: %x\n", high_ins); // testing this again, it worked before... and it still works - what is going on?
+
+    stdio_printf("High inputs: %x\n", high_ins); // testing... crashes dvi. Test 2 seems fine.
+
+    // Well, I've just removed the `__scratch_x("")` attribute from `pio0_irq_handler()` and the above `stdio_printf()` is working fine
+    // Testing all the others that failed, and in reverse order - marking them with Test 2 ... 
+
+
+    // #endif
+#endif
+
+    // sleep_ms(1000); //dvi still crashes with this!!!, but not with the above??? Test 2 seems fine.
+
 
     // mainloop
     while(true) {
@@ -5010,6 +5155,45 @@ int main() {
 
     #if USE_MULTI_CORE
             sleep_ms(10); // testing to see if this still randomly crashes the hstx-dvi now that it's on core 1 - it doesn't
+
+            // Ok, here's a strange one. PALAVO_CONFIG=59 on a Pimoroni Pico Lipo 2 W XL:
+            // * Its DVI output flickers on a line every now and then. Sometimes the screen goes blank and then recovers - sometimes it
+            // never recovers. If the above sleep_ms() is commented out the DVI never gets going at all - or crashes very soon 
+            // after the test screen appears
+
+            // By contrast the VGA to DVI converter (PALAVO_CONFIG=29) works without an issue (not sure about commenting out the 
+            // sleep_ms() though).
+
+            // Putting a sleep_ms(500) before the mainloop gets us to displaying a capture trace and then it crashes out.
+
+            // So... after discovering a problem using UART stdio when the pins are >= GP32, the DVI seems stable. i.e. when NOT
+            // using USB stdio. I thought / hoped running the DVI in the second core had fixed that - apparently not. Sad face.
+            // Presumably the flickering seen above was a USB interrupt interfering with the DVI interrupt - don't know - todo.
+
+            // If a Pico 2 is used instead of the Pimoroni Pico Lipo 2 W XL it all works fine, by which I mean even with USB
+            // comms enabled DVI output never fails - or lasts a very long time. The XL has an RP2350B, whereas the Pico 2 has an
+            // RP2350A. It uses GPIO (for UI) on pins higher than GP31 - and so uses PICO_PIO_USE_GPIO_BASE quite a bit. I suppose
+            // one thing to do is try the RP2350 Stamp XL to see whether it's something physical or something in the `boards.h`
+            // file that's upsetting something somewhere... Ok, the same binary (PALAVO_CONFIG=59) that was programmed into the
+            // Pico Lipo 2 W XL works absolutely fine on the RTP2350 Stamp XL. It must be either the module itself or the 
+            // Pico Omnibus into which it's plugged in... Well, what deuce is going on? I've just reassembled the hardware to
+            // re-test the Pico Lipo 2 W XL, and it's working with no DVI locking-up whatsoever. Aaaargh. But also, hooray!
+            //
+
+            // Following some hair-pulling tests, here's what ssems to make the Pico Lipo 2 W XL's DVI fall over, even when
+            // using USB stdio:
+
+            // #define GPIO_INPUT_MASK_32_47 (0xffff)
+
+            // Whereas, this, does not make the the DVI fall over:
+            
+            // #define GPIO_INPUT_MASK_32_47 (0xffff & ~((1 << (PICO_DEFAULT_UART_TX_PIN - 32)) | (1 << (PICO_DEFAULT_UART_RX_PIN - 32))))
+
+            // I suppose it would be useful to know how GPIO 38 and 39 are configured. The datasheet
+
+
+
+
     #endif
 
 #endif

@@ -46,8 +46,8 @@ VGA_Out_Light_Green  GP5  7                34 GP28
                     GP15 20                21 GP16
 ```
 
-\* USB can be used instead of UART serial comms  
-\** Optional
+\* USB can be used instead of UART serial comms - add 32 to PALAVO_CONFIG  
+\** To enable IR add 8 to PALAVO_CONFIG  
 
 The VGA_Out_signals need to be fed into a resistor network to provide the voltages for the Red, Green, and Blue colour pins on a 15 pin VGA socket or cable that's attached to a VGA monitor:
 
@@ -183,7 +183,7 @@ Hopefully, the above instructions are clear enough to be able to get started usi
 
 #### PALAVO_CONFIG=1
 
-"That's all well and good," I hear you say "but can't the Pico 2 output DVI with its RP2350's HSTX peripheral?". Well, yes it can. Try this:
+"That's all well and good" I hear you say ", but can't the Pico 2 output DVI with its RP2350's HSTX peripheral?". Well, yes it can. Try this:
 
 ### Hardware
 
@@ -209,8 +209,8 @@ VGA_Out_Light_Green  GP5  7                34 GP28
            DVI_CK+  GP14 19                22 GP17  DVI_D1+
            DVI_CK-  GP15 20                21 GP16  DVI_D1-
 ```
-\* Optional - USB can be used instead  
-\** Optional
+\* USB can be used instead of UART serial comms - add 32 to PALAVO_CONFIG  
+\** To enable IR add 8 to PALAVO_CONFIG  
 
 In addition to the previous configuration's hardware, the DVI pins (GP12-GP19) need to be connected to a [Pico DVI Sock](https://github.com/Wren6991/Pico-DVI-Sock), which can the be connected to a DVI monitor using an HDMI-shaped cable. Originally designed by Raspberry Pi's Luke Wren, Adafruit now make their own version called the [DVI Sock for Pico](https://www.adafruit.com/product/5957). Adafruit also make other products, such as their [DVI Breakout Board](https://www.adafruit.com/product/4984), and their [PiCowBell HSTX DVI Output for Pico](https://www.adafruit.com/product/6363), which could be used instead.
 
@@ -250,13 +250,12 @@ In 'test' mode, a test screen is displayed on DVI.
 
 ### Thoughts
 
-It's pretty remarkable that the RP2350 can output a DVI signal. However, the DVI frame buffer currently uses a lot of SRAM and this limits the amount of signal data we can capture. Also this configuration doesn't leave many pins free to capture external signal data - only 7, namely: GP15, 20, 21, 22, 26, 27 and 28. We could lose the VGA output pins and gain a little SRAM by freeing up the VGA frame buffer, but if we had a second Pico 2...
+It's pretty remarkable that the RP2350 can output a DVI signal. However, the DVI frame buffer currently uses a lot of SRAM and this reduces the amount of signal data we can capture. Also this configuration doesn't leave many pins free to capture external signal data - only 7, namely: GP15, 20, 21, 22, 26, 27 and 28. We could lose the VGA output pins and gain a little SRAM by freeing up the VGA frame buffer, but if we had a second Pico 2...
 
 
-## Configuration 26
+## Configuration 29
 
-#### PALAVO_CONFIG=13
-#### PALAVO_CONFIG=26 - to specify that csync is used instead of VSYNC and HSYNC. todo
+#### PALAVO_CONFIG=29
 
 If we use a second Pico 2, and change the VGA_Out\*s to VGA_In\*s we can make a VGA (6-bit logic level) - DVI Converter. If we lose the Infra_Red_RX we can squeeze in VGA_Out_CSYNC and VGA_Out_RGB to provide a monochrome VGA output for testing purposes, which can also be mirrored to the DVI output.
 
@@ -267,7 +266,7 @@ If we use a second Pico 2, and change the VGA_Out\*s to VGA_In\*s we can make a 
    VGA_In_Dark_Blue  GP2  4                37 3V3 EN
   VGA_In_Light_Blue  GP3  5                36 3V3 OUT
   VGA_In_Dark_Green  GP4  6                35 ADC VREF
- VGA_In_Light_Green  GP5  7                34 GP28
+ VGA_In_Light_Green  GP5  7                34 GP28 Infra_Red_RX**
              Ground  GND  8                33 ADC GND
     VGA_In_Dark_Red  GP6  9                32 GP27
    VGA_In_Light_Red  GP7 10     PICO 2     31 GP26
@@ -282,9 +281,11 @@ If we use a second Pico 2, and change the VGA_Out\*s to VGA_In\*s we can make a 
            DVI_CK+  GP14 19                22 GP17  DVI_D1+
            DVI_CK-  GP15 20                21 GP16  DVI_D1-
 ```
-\* Optional
 
-This can then sit on top of, or underneath, the Pico 2 (Configuration 0) with *only* the connections we need, namely all the VGA_In pins (which connect to the VGA_Out pins), VSYS, and the GNDs.
+\* USB can be used instead of UART serial comms - add 32 to PALAVO_CONFIG  
+\** To enable IR add 8 to PALAVO_CONFIG  
+
+This Pico 2 can then sit on top of, or underneath, the Pico [2] (Configuration 0) with *only* the connections we need, namely all the VGA_In pins (which connect to the VGA_Out pins), and the GNDs. N.B. If this Pico 2 (Configuration 26) is not being powered via its USB port, it can be powered by connecting its VSYS pin to the VSYS pin of the Pico [2] (Configuration 0). N.B. Do NOT power both Picos with USB (or another source) if their VSYS pins are connected together.
 
 ### Firmware
 
@@ -339,7 +340,7 @@ VGA_Out_Red                VGA_In_Dark_Red & VGA_In_Light_Red
 
 Start both devices and hopefully you should see Hunter's demo appearing on the DVI monitor... I said it was fun.
 
-If you're wondering why Palavo uses 6-bit colour (RRGGBB), it's because when converting the VGA output to DVI, using the HSTX peripheral on the RP2350, the colours remain the same as the VGA output. This is due to each colour being made up of the same number of bits, which is not the case with Hunter's and Bruce's 4-bit colour (RGGB). To save SRAM used by the VGA driver each horizontal line consists of a maximum of two 6-bit colours.
+If you're wondering why Palavo uses 6-bit colour (RRGGBB), it's because when converting the VGA output to DVI, using the HSTX peripheral on the RP2350, the colours remain the same as the VGA output. This is due to each colour being made up of the same number of bits, which is not the case with Hunter's and Bruce's 4-bit colour (RGGB). To save SRAM used by the VGA driver, each horizontal line consists of a maximum of two 6-bit colours.
 
 
 ## Configuration 2
@@ -374,7 +375,7 @@ The trouble with Configuration 0 is that we're using quite a few GPIO pins for t
                        3V3 21                  40 BOOT
        VGA_Out_CSYNC  GP31 22                  39 GP47
                        GND 23                  38 GND
-   VGA_Out_Dark_Blue  GP32 24                  37 GP46  Infra_Red_RX*
+   VGA_Out_Dark_Blue  GP32 24                  37 GP46  Infra_Red_RX**
   VGA_Out_Light_Blue  GP33 25        XL        36 GP45
   VGA_Out_Dark_Green  GP34 26                  34 GP44
  VGA_Out_Light_Green  GP35 27                  33 GP43
@@ -383,8 +384,8 @@ The trouble with Configuration 0 is that we're using quite a few GPIO pins for t
    VGA_Out_Light_Red  GP37 30                  31 GP38  Serial_TX*
 ```
 
-\* Optional
-
+\* USB can be used instead of UART serial comms - add 32 to PALAVO_CONFIG  
+\** To enable IR add 8 to PALAVO_CONFIG  
 
 It's *so* long. And just *look* at all those free GPIO pins - enough to cpature the signals from a keyboard's switch matrix, perhaps? It's pictured here attached, mostly, to a [Pimoroni Pico Omnibus](https://shop.pimoroni.com/products/pico-omnibus) with 24 signals from a keyboard switch matrix connected to GP0 to GP26. 
 
@@ -424,8 +425,8 @@ The screen on the VGA monitor should look the same as it does in the first confi
 What if we wanted to capture 32 contiguous channels? Unfortunately, it's not possible with the Pimoroni Pico LiPo 2 XL W because some GPIO pins are not broken out, and others are used for the on-board PSRAM and others for the wireless module. The answer is to use something that breaks out every GPIO pin, and the only boards which do that, that I know of, are the [Solder Party RP2350 Stamp XL](https://www.solder.party/docs/rp2350-stamp-xl/) and the [Pimoroni PGA2350](https://shop.pimoroni.com/products/pga2350). Here's the Stamp XL housed in a [Solder Party RP2xxx Stamp Carrier Basic](https://www.solder.party/docs/rp2xxx-stamp-carrier-basic/):
 
 ```
- G 0                           USB                           GND G
- G 1  VGA_Out_CSYNC                                           3V G
+ G 0  VGA_Out_VSYNC                         USB              GND G
+ G 1  VGA_Out_HSYNC or VGA_Out_CSYNC                          3V G
  G 2  VGA_Out_Dark_Blue                                       5V G
  G 3  VGA_Out_Light_Blue ---------------------               BAT G
  G 4  VGA_Out_Dark_Green                      |             BOOT G
@@ -453,6 +454,9 @@ What if we wanted to capture 32 contiguous channels? Unfortunately, it's not pos
 ```
 
 \* Optional  
+
+\* USB can be used instead of UART serial comms - add 32 to PALAVO_CONFIG  
+\** To enable IR add 8 to PALAVO_CONFIG  
 
 As you can see the GPIOs GP11 to GP47 (37 GPIOs in total) are free to use and they are conveniently and contiguously located. And if you decide to use USB comms instead of UART comms and GPIOs 8, 9 would be free to use, as would GPIO 10 if you could get by without infra-red.
 

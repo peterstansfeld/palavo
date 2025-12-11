@@ -16,28 +16,31 @@
 #define PC_BIT_USE_CSYNC 4
 #define PC_BIT_USE_USB_STDIO 5
 
+#define BOARD_HAS_SAME_RESERVED_GPIO_AS_PICO 1
 
-#if (defined RASPBERRYPI_PICO2)
+#if defined(RASPBERRYPI_PICO2)
 
     #pragma message "Building Palavo for RASPBERRYPI_PICO2"
     #define BOARD_TYPE 1
 
-#elif (defined PIMORONI_PICO_LIPO2XL_W_RP2350)
+#elif defined(PIMORONI_PICO_LIPO2XL_W_RP2350)
 
     #pragma message "Building Palavo for PIMORONI_PICO_LIPO2XL_W_RP2350"
     #define BOARD_TYPE 2
 
-#elif (defined SOLDERPARTY_RP2350_STAMP_XL)
+#elif defined(SOLDERPARTY_RP2350_STAMP_XL)
 
     #pragma message "Building Palavo for SOLDERPARTY_RP2350_STAMP_XL"
     #define BOARD_TYPE 3
 
-#elif (defined RASPBERRYPI_PICO)
+    #undef BOARD_HAS_SAME_RESERVED_GPIO_AS_PICO
+
+#elif defined(RASPBERRYPI_PICO)
 
     #pragma message "Building Palavo for RASPBERRYPI_PICO"
     #define BOARD_TYPE 4
 
-#elif (defined PIMORONI_PICO_PLUS2_RP2350)
+#elif defined(PIMORONI_PICO_PLUS2_RP2350)
 
     #pragma message "Building Palavo for PIMORONI_PICO_PLUS2_RP2350"
     #define BOARD_TYPE 5
@@ -46,7 +49,7 @@
 
     #pragma message "Building Palavo for an unknown board"
     #define BOARD_TYPE 0
-    
+
 #endif
 
 
@@ -130,8 +133,12 @@
 // 15 = 8 + 4 + 2 + 1 = USE_VGA_IN_TO_DVI USE_GPIO_31_47 & USE_DVI
         // #define PALAVO_CONFIG 15
 
-        #define PALAVO_CONFIG 34
+        #define PALAVO_CONFIG 59
+        // #define PALAVO_CONFIG 29
+        // #define PALAVO_CONFIG 27
         #define PICO_PIO_USE_GPIO_BASE 1
+
+    // #undef BOARD_HAS_SAME_RESERVED_GPIO_AS_PICO
 
 // #13 needs CSYNC to be set?
 
