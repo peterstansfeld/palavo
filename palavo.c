@@ -22,7 +22,7 @@
 
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 0
-#define VERSION_PATCH 0
+#define VERSION_PATCH 1
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
@@ -100,46 +100,46 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
 
     #if USE_GPIO_31_47
 
-    #define VGA_OUT_CSYNC_PIN 31
+        #define VGA_OUT_CSYNC_PIN 31
 
-    #define VGA_IN_VSYNC_PIN 0
-    #define VGA_IN_HSYNC_CSYNC_PIN 1
-    #define VGA_IN_RGB_BASE_PIN 2
-    #define VGA_IN_RGB_PIN_COUNT 6
+        #define VGA_IN_VSYNC_PIN 0
+        #define VGA_IN_HSYNC_CSYNC_PIN 1
+        #define VGA_IN_RGB_BASE_PIN 2
+        #define VGA_IN_RGB_PIN_COUNT 6
 
-    #define VGA_OUT_CSYNC_PIN 31
-    #define VGA_OUT_RGB_BASE_PIN 32
-    #define VGA_OUT_RGB_PIN_COUNT 6
+        #define VGA_OUT_CSYNC_PIN 31
+        #define VGA_OUT_RGB_BASE_PIN 32
+        #define VGA_OUT_RGB_PIN_COUNT 6
 
-    bi_decl(bi_1pin_with_name(31, "VGA Out - CSYNC"));
-    bi_decl(bi_1pin_with_name(32, "VGA Out - Dark Blue"));
-    bi_decl(bi_1pin_with_name(33, "VGA Out - Light Blue"));
-    bi_decl(bi_1pin_with_name(34, "VGA Out - Dark Green"));
-    bi_decl(bi_1pin_with_name(35, "VGA Out - Light Green"));
-    bi_decl(bi_1pin_with_name(36, "VGA Out - Dark Red"));
-    bi_decl(bi_1pin_with_name(37, "VGA Out - Light Red"));
+        bi_decl(bi_1pin_with_name(31, "VGA Out - CSYNC"));
+        bi_decl(bi_1pin_with_name(32, "VGA Out - Dark Blue"));
+        bi_decl(bi_1pin_with_name(33, "VGA Out - Light Blue"));
+        bi_decl(bi_1pin_with_name(34, "VGA Out - Dark Green"));
+        bi_decl(bi_1pin_with_name(35, "VGA Out - Light Green"));
+        bi_decl(bi_1pin_with_name(36, "VGA Out - Dark Red"));
+        bi_decl(bi_1pin_with_name(37, "VGA Out - Light Red"));
 
-    // define this, but its only use if enabled
-    #define IR_RX_PIN 46
+        // this is applied only if USE_IR is true
+        #define IR_RX_PIN 46
 
     #else
-    // USE_DVI && USE_VGA_IN_TO_DVI
+        // USE_DVI && USE_VGA_IN_TO_DVI
 
-    // these shouldn't really here, but for now...
-    #define VGA_IN_VSYNC_PIN 0
-    #define VGA_IN_HSYNC_CSYNC_PIN 1
-    #define VGA_IN_RGB_BASE_PIN 2
+        // these shouldn't really here, but for now...
+        #define VGA_IN_VSYNC_PIN 0
+        #define VGA_IN_HSYNC_CSYNC_PIN 1
+        #define VGA_IN_RGB_BASE_PIN 2
 
-    // these should
-    #define VGA_OUT_CSYNC_PIN 10
-    #define VGA_OUT_RGB_BASE_PIN 11
-    #define VGA_OUT_RGB_PIN_COUNT 1
+        // these should
+        #define VGA_OUT_CSYNC_PIN 10
+        #define VGA_OUT_RGB_BASE_PIN 11
+        #define VGA_OUT_RGB_PIN_COUNT 1
 
-    bi_decl(bi_1pin_with_name(10, "VGA Out - CSYNC"));
-    bi_decl(bi_1pin_with_name(11, "VGA Out - RGB"));
+        bi_decl(bi_1pin_with_name(10, "VGA Out - CSYNC"));
+        bi_decl(bi_1pin_with_name(11, "VGA Out - RGB"));
 
-    // define this, but its only use if enabled
-    #define IR_RX_PIN 28
+        // this is applied only if USE_IR is true
+        #define IR_RX_PIN 28
 
     #endif
 
@@ -156,20 +156,20 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
 
     #if USE_CSYNC
 
-    #define VGA_OUT_CSYNC_PIN 1
-    
-    bi_decl(bi_1pin_with_name(1, "VGA Out - CSYNC"));
+        #define VGA_OUT_CSYNC_PIN 1
+
+        bi_decl(bi_1pin_with_name(1, "VGA Out - CSYNC"));
 
     #else
 
-    #define VGA_OUT_VSYNC_PIN 0
-    #define VGA_OUT_HSYNC_CSYNC_PIN 1
+        #define VGA_OUT_VSYNC_PIN 0
+        #define VGA_OUT_HSYNC_CSYNC_PIN 1
 
-    // this is temporary just so we can compile - needs sorting - todo
-    #define VGA_OUT_CSYNC_PIN VGA_OUT_HSYNC_CSYNC_PIN
+        // this is temporary just so we can compile - needs sorting - todo
+        #define VGA_OUT_CSYNC_PIN VGA_OUT_HSYNC_CSYNC_PIN
 
-    bi_decl(bi_1pin_with_name(0, "VGA Out - VSYNC"));
-    bi_decl(bi_1pin_with_name(1, "VGA Out - HSYNC"));
+        bi_decl(bi_1pin_with_name(0, "VGA Out - VSYNC"));
+        bi_decl(bi_1pin_with_name(1, "VGA Out - HSYNC"));
 
     #endif
 
@@ -212,16 +212,16 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
 
     #if (USE_VGA_IN_TO_DVI || USE_GPIO_31_47)
 
-    bi_decl(bi_program_feature("VGA input"));
+        bi_decl(bi_program_feature("VGA input"));
 
-    bi_decl(bi_1pin_with_name(0, "VGA In - VSYNC"));
-    bi_decl(bi_1pin_with_name(1, "VGA In - HSYNC / CSYNC"));
-    bi_decl(bi_1pin_with_name(2, "VGA In - Dark Blue"));
-    bi_decl(bi_1pin_with_name(3, "VGA In - Light Blue"));
-    bi_decl(bi_1pin_with_name(4, "VGA In - Dark Green"));
-    bi_decl(bi_1pin_with_name(5, "VGA In - Light Green"));
-    bi_decl(bi_1pin_with_name(6, "VGA In - Dark Red"));
-    bi_decl(bi_1pin_with_name(7, "VGA In - Light Red"));
+        bi_decl(bi_1pin_with_name(0, "VGA In - VSYNC"));
+        bi_decl(bi_1pin_with_name(1, "VGA In - HSYNC / CSYNC"));
+        bi_decl(bi_1pin_with_name(2, "VGA In - Dark Blue"));
+        bi_decl(bi_1pin_with_name(3, "VGA In - Light Blue"));
+        bi_decl(bi_1pin_with_name(4, "VGA In - Dark Green"));
+        bi_decl(bi_1pin_with_name(5, "VGA In - Light Green"));
+        bi_decl(bi_1pin_with_name(6, "VGA In - Dark Red"));
+        bi_decl(bi_1pin_with_name(7, "VGA In - Light Red"));
 
     #endif
 
@@ -231,113 +231,47 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
 
 #if USE_IR
 
-bi_decl(bi_program_feature("Infra-red control"));
-bi_decl(bi_1pin_with_name(IR_RX_PIN, "IR RX"));
+    bi_decl(bi_program_feature("Infra-red control"));
+    bi_decl(bi_1pin_with_name(IR_RX_PIN, "IR RX"));
 
 #endif
 
 
 #if BOARD_HAS_SAME_RESERVED_GPIO_AS_PICO
 
-#define GPIO_INPUT_MASK_0_31 (0xffffffff & ~PICO_RESERVED_GPIO_0_31)
+    #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~PICO_RESERVED_GPIO_0_31)
 
 #else
 
-#define GPIO_INPUT_MASK_0_31 0xffffffff
-
-#define GPIO_INPUT_MASK_32_47 (0xffff)
+    #define GPIO_INPUT_MASK_0_31 0xffffffff
 
 #endif
 
 
-#if USE_USB_STDIO
-// we're using UART stdio serial comms
+#if PICO_PIO_USE_GPIO_BASE
 
-//     #if USE_GPIO_31_47
+    #define GPIO_INPUT_MASK_32_47 (0xffff)
 
-// #define GPIO_INPUT_MASK_0_31 0xffffffff
-
-//     #else
-
-// #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~PICO_RESERVED_GPIO_0_31)
-
-//     #endif
-
-#else
-// we're using USB-CDC stdio serial comms so we need to prevent the UART pins from being set
-// as inputs
-
-// no need to do anything here as STDIO adds the bi_decl for us
-// note that in `CMakeLists.txt` we've modified
-// PICO_DEFAULT_UART_TX_PIN & PICO_DEFAULT_UART_RX_PIN
-
-// bi_decl(bi_1pin_with_name(PICO_DEFAULT_UART_TX_PIN, "UART1 - TX"));
-// bi_decl(bi_1pin_with_name(PICO_DEFAULT_UART_RX_PIN, "UART1 - RX"));
-
-// however, we do need to leave alone any pins that belong to peripherals, and this
-// is just the UART pins, I think
+#endif
 
 
-    #if PICO_DEFAULT_UART_TX_PIN < 32
+#if !USE_USB_STDIO
 
-#define GPIO_INPUT_MASK_0_31 (0xffffffff & ~((PICO_RESERVED_GPIO_0_31) | (1 << PICO_DEFAULT_UART_TX_PIN) | (1 << PICO_DEFAULT_UART_RX_PIN)))
+    #if PICO_DEFAULT_UART_TX_PIN >= 32
 
-    #else
-
-#define GPIO_INPUT_MASK_0_31 (0xffffffff & ~PICO_RESERVED_GPIO_0_31)
-
-// It seems we do need to do this for PICO_DEFAULT_UART_TX_PIN >= 32 - don't know why - todo.
-bi_decl(bi_1pin_with_name(PICO_DEFAULT_UART_TX_PIN, "UART1 - TX"));
-bi_decl(bi_1pin_with_name(PICO_DEFAULT_UART_RX_PIN, "UART1 - RX"));
+        bi_decl(bi_1pin_with_name(PICO_DEFAULT_UART_TX_PIN, "UART1 - TX"));
+        bi_decl(bi_1pin_with_name(PICO_DEFAULT_UART_RX_PIN, "UART1 - RX"));
 
     #endif
 
 #endif
 
 
-// #if PICO_PIO_USE_GPIO_BASE
-
-//     #if PICO_DEFAULT_UART_TX_PIN < 32
-
-// #define GPIO_INPUT_MASK_32_47 (0xffff)
-
-//     #else
-
-// #define GPIO_INPUT_MASK_32_47 (0xffff & ~((1 << PICO_DEFAULT_UART_TX_PIN - 32) | (1 << PICO_DEFAULT_UART_RX_PIN - 32)))
-
-//     #endif
-
-// #endif
-
-
-// Repeatable condition to cause the DVI to stop working (the rest of the program works and the DVI is continues to output something).
-// It fails on both the Pico Lipo2 XL W and the RP2350 Stamp.
-
-// Enable the following #define to cause eventual (sometimes a few seconds, other time minutes) DVI lockup:
-    #define GPIO_INPUT_MASK_32_47 (0xffff)
-
-
-// Enable the following #define to NOT (left overnight) cause DVI lockup:
-// #define GPIO_INPUT_MASK_32_47 (0xffff & ~((1 << (PICO_DEFAULT_UART_TX_PIN - 32)) | (1 << (PICO_DEFAULT_UART_RX_PIN - 32))))
-
-// Update. By reading the each of gpio function selectors the problem seems to have magically gone away. ???
-
-// The plot thickens. The function that seems to make the difference is `gpio_is_dir_out()` for GPIO 32..47.
-// I commented out `gpio_get_function()` for all 48 GPIO, and both test XLs are still happily working after 
-// at least an hour.
-
-// search for the #define READ_HIGH_GPIO_DIRS. Set it to 1 and no DVI lockups; to 0 and we get lockups
-
-#define READ_HIGH_GPIO_DIRS 0
-
-// End of repeatable condition
-
-
 #if USE_DVI 
 
     #if USE_MULTI_CORE
 
-    #include "pico/multicore.h"
+        #include "pico/multicore.h"
 
     #endif
 
@@ -359,7 +293,9 @@ uint8_t last_uart_char = 0;
 
 #define MAX_NO_OF_PINS 32
 
+
 #if PICO_PIO_USE_GPIO_BASE
+
     #define MAX_BASE_PIN_NO 47
 
 #else
@@ -369,10 +305,6 @@ uint8_t last_uart_char = 0;
 #endif
 
 // Some globals for storing timer information
-volatile unsigned int time_accum = 0;
-unsigned int time_accum_old = 0 ;
-char timetext[40];
-
 
 int g_mag = 0;
 int g_scrollx = 0;
@@ -383,23 +315,6 @@ int g_prev_scrollx = 0;
 enum SETTINGS_STATES {SS_CHANNEL, SS_PALETTE, SS_ZOOM, SS_FREQ, SS_PINS_BASE, SS_NO_OF_PINS, SS_TRIGGER_PIN_BASE, SS_TRIGGER_TYPE, SS_COUNT};
 
 uint8_t settings_state = SS_CHANNEL;
-
-/*
-// Timer interrupt
-bool repeating_timer_callback(struct repeating_timer *t) {
-    time_accum += 1 ;
-
-#if USE_LED_AS_IR_DEBUG
-
-    #ifdef LED_PIN
-        gpio_xor_mask(1u << LED_PIN); // toggle LED_PIN
-    #endif
-
-#endif
-
-    return true;
-}
-*/
 
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
@@ -598,9 +513,10 @@ void uart_my_puts(const char * s) {
 
 
 void uart_my_putuif(const char *s, uint c) {
-    char str[80];
-    sprintf(str, s, c);
-    uart_my_puts(str);
+    // char str[80];
+    // sprintf(str, s, c);
+    // uart_my_puts(str);
+    stdio_printf(s, c);
 }
 
 
@@ -621,9 +537,10 @@ void logic_analyser_configure(PIO pio, uint sm, uint pin_base, uint pin_count, f
 
 
 void uart_my_putcf(const char *s, int c) {
-    char str[80];
-    sprintf(str, s, c);
-    uart_my_puts(str);
+    // char str[80];
+    // sprintf(str, s, c);
+    // uart_my_puts(str);
+    stdio_printf(s, c);
 }
 
 
@@ -1446,7 +1363,7 @@ int get_minimap_padding() {
 }
 
 
-int get_minimap_top(){
+int get_minimap_top() {
     // int minimap_height = MINIMAP_HEIGHT;
     // int minimap_padding = get_minimap_padding();
     // if (g_no_of_captured_pins > 16) {
@@ -2044,6 +1961,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
             for (int i = 0; i < no_of_pws; i++) {
                 setCursor(pws[i].x, cursor_y);
                 sprintf(str,"%d", pws[i].value);
+                // itoa(pws[i].value, str, 10);
                 writeString(str);
             }
         }
@@ -2268,57 +2186,6 @@ int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next
     return next_sample;
 }
 
-#if ENABLE_GRAPHICS_DEMO
-uint32_t last_demo_time;
-
-// Demonstrates the graphics primitives.
-void demo() {
-    // color chooser
-    static char color_index = 0 ;
-   // position of the disc primitive
-    static short disc_x = 0 ;
-    // position of the box primitive
-    static short box_x = 0 ;
-    // position of vertical line primitive
-    static short Vline_x = 350;
-    // position of horizontal line primitive
-    static short Hline_y = 250;
-    // circle radii:
-    static short circle_x = 0 ;
-
-    // Modify the color chooser
-    if (color_index ++ == 15) color_index = 0 ;
-
-    // A row of filled circles
-    fillCircle(disc_x, 100, 20, color_index);
-    disc_x += 35 ;
-    if (disc_x > SCREEN_WIDTH) disc_x = 0;
-
-    // Concentric empty circles
-    drawCircle(320, 200, circle_x, color_index);
-    circle_x += 1 ;
-    if (circle_x > 130) circle_x = 0;
-
-    // A series of rectangles
-    drawRect(10, 300, box_x, box_x, color_index);
-    box_x += 5 ;
-    if (box_x > 195) box_x = 10;
-
-    // Random lines
-    drawLine(210+(rand()&0x7f), 350+(rand()&0x7f), 210+(rand()&0x7f),
-            350+(rand()&0x7f), color_index);
-
-    // Vertical lines
-    drawVLine(Vline_x, 300, (Vline_x>>2), color_index);
-    Vline_x += 2 ;
-    if (Vline_x > 620) Vline_x = 350;
-
-    // Horizontal lines
-    drawHLine(400, Hline_y, 150, color_index);
-    Hline_y += 2 ;
-    if (Hline_y > 400) Hline_y = 240;
-}
-#endif
 
 enum UI_COMMANDS {
     UIC_NONE,
@@ -2338,7 +2205,7 @@ enum UI_COMMANDS {
     UIC_H,
     UIC_A,
 
-#if USE_DVI
+    #if USE_DVI
     UIC_V,
     #if USE_DVI_DEBUG
 
@@ -2360,8 +2227,6 @@ enum UI_COMMANDS {
     UIC_ESC
  };
 
-
-// #define HINT_LEFT STATUSBAR_LEFT + 1
 
 void draw_hint(char *s) {
     fillRect(STATUSBAR_HINT_LEFT, STATUSBAR_TOP, STATUSBAR_HINT_WIDTH, STATUSBAR_HEIGHT, STATUSBAR_HINT_COLOR);
@@ -2616,6 +2481,7 @@ uint check_keyboard() {
 
         char str[80];
         sprintf(str,"%d ", ch);
+        // itoa(ch, str, 10);
         writeString(str);
         // if (uart_is_writable(UART_ID)) {
         //     uart_putc(UART_ID, ch);
@@ -2654,6 +2520,7 @@ uint check_keyboard() {
                     noofchars += 1;
 
                     sprintf(str,"%d ", ch);
+                    // itoa(ch, str, 10);
                     writeString(str);
                     // if (uart_is_writable(UART_ID)) {
                     //     uart_putc(UART_ID, ch);
@@ -2993,21 +2860,13 @@ char* help_strings =
     "h to show this help window\n"
     "a to show the about window\n"
 
-#if ENABLE_GRAPHICS_DEMO
-    "SPACE to play / pause graphics demo\n"
-#endif
-
 #if USE_DVI
     "v to cycle DVI modes: mirror VGA out -> test -> VGA in\n"
 #else
     "\n"
 #endif
 
-#if !ENABLE_GRAPHICS_DEMO
-    "\n"
-#endif
-
-    "\n";
+    "\n\n";
 
 char* press_any_key_string = 
     "Press any key to close this window\n";
@@ -3907,6 +3766,7 @@ uint check_ir() {
             last_ir_button_start_time = time_now;
             last_ir_command = ir_command;
             sprintf(str, "%#x " , ir_command);
+            // itoa(ir_command, str, 16);
             writeString(str);
         } else {
             // ir_command == 0, ie repeat code
@@ -3919,6 +3779,7 @@ uint check_ir() {
                         ir_command = last_ir_command;
                         last_ir_button_time = time_now;
                         sprintf(str, "repeat %#x ", ir_command);
+                        // itoa(ir_command, str, 16);
                         writeString(str);
                         // uart_my_putuif("ir2: %#x\n", ir_command);
                     } else {
@@ -4107,12 +3968,6 @@ void handle_command(uint ui_command) {
 
             switch (ui_command) {
 
-#if ENABLE_GRAPHICS_DEMO
-                case UIC_SPACEBAR:
-                    writeString("space");
-                    demo_paused = !demo_paused;
-                    break;
-#endif
                 case UIC_CTRL_RIGHT:
                 case UIC_CTRL_LEFT:
                     writeString(ui_command == UIC_CTRL_RIGHT ? "next" : "previous");
@@ -4597,62 +4452,6 @@ int main() {
     uart_my_putcf("clk_hstx: %d\n", clock_get_hz (clk_hstx));
     // uart_my_putcf("HSTX Frequency: %d\n", clock_get_hz (CLK_DEST_HSTX));
 
-
-    // clock_stop(clk_hstx);
-
-/*
-        clock_configure(
-            clk_peri,                                   //clock_handle
-            0,                                          //
-            CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, //
-            150000000,                                  // src_freq
-            150000000                                   // freq
-        );
-
-        clock_configure(
-            clk_hstx,                                   //clock_handle
-            0,                                          //
-            CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, //
-            150000000,                                  // src_freq
-            125000000                                   // freq
-        );
-*/
-
-    // this does not work
-    // CLK_HSTX = clk_sys. Transmit bit clock for the HSTX peripheral.
-    // clock_configure_undivided(clk_hstx,
-    //                 0,
-    //                 CLOCKS_CLK_HSTX_CTRL_AUXSRC_VALUE_CLK_SYS,
-    //                 125000000); // reports as changed to this value, but makes no difference to hstx dvi refresh rate - it's still 72Hz and tring for 60 Hz
-
-
-// this does not work
-
-        // clock_configure(
-        //     clk_hstx,                                   //clock_handle
-        //     0,                                          //
-        //     CLOCKS_CLK_HSTX_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, //
-        //     150000000,                                  // src_freq
-        //     125000000                                   // freq
-        // );
-
-
-// this does not work
-
-    // clock_configure(
-    //     clk_hstx,
-    //     0,                                                // No glitchless mux
-    //     // CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, // System PLL on AUX mux
-
-    //     CLOCKS_CLK_HSTX_CTRL_AUXSRC_VALUE_CLK_SYS,
-    //     // Option.CPU_Speed * 1000,                               // Input frequency
-    //     // Option.CPU_Speed * 500                                // Output (must be same as no divider)
-    //     250000000,                               // Input frequency
-    //     125000000                                // Output (must be same as no divider)
-    // );
-
-    // sleep_ms(100) ;
-
  #if USE_MULTI_CORE
 
     // for some reason we need a delay here - either from the USB connecting to the host 
@@ -4702,31 +4501,6 @@ int main() {
 
     change_plot_line_colour_palette(g_palette);
 
-#if PICO_PIO_USE_GPIO_BASE
-
-    // When connected to another Pico 2 (for VGA to DVI conversion) CSYNC seems
-    // to suffer electrically. Increasing the drive strength improves it.
-    // Also putting a buffer IC between the Pico Lipo's output and the VGA CSYNC
-    // resistor fixed it. Signal relection from the monitor, perhaps? todo 
-    // gpio_set_drive_strength(CSYNC /*CSYNC*/, GPIO_DRIVE_STRENGTH_8MA); // works when Pico2 CSYNC has not pull resistance - unless a debug probe is attached & powered(???)
-
-    // enum gpio_drive_strength gds = gpio_get_drive_strength(CSYNC /*CSYNC*/);
-    // uart_my_putcf("CSYNC drive strength: %d\n", gds);
-
-    // gpio_set_function(CSYNC, GPIO_OUT); // set CSYNC to output
-    // gpio_set_drive_strength(CSYNC /*CSYNC*/, GPIO_DRIVE_STRENGTH_12MA);
-
-    // enum gpio_drive_strength gds = gpio_get_drive_strength(CSYNC /*CSYNC*/);
-    // uart_my_putcf("CSYNC drive strength: %d\n", gds);
-
-    // I have a nasty feeling that most or all of the above issues may have been
-    // caused by a bad breadboard contact.
-
-#else
-    // gpio_set_function(VGA_OUT_CSYNC_PIN, GPIO_OUT); // set CSYNC to output
-    // gpio_set_drive_strength(VGA_OUT_CSYNC_PIN /*CSYNC*/, GPIO_DRIVE_STRENGTH_8MA);
-#endif
-
     uart_my_puts("Initialising VGA...\n");
 
     // sometimes we the VGA to DVI doesn't work if this delay is too short
@@ -4735,8 +4509,6 @@ int main() {
     // uart_my_puts("Initialising VGA...\n");
     
     // uart_my_putcf("VGA_OUT_RGB_BASE_PIN: %x\n", VGA_OUT_RGB_BASE_PIN);
-
-
 
     // The VGA driver state machines are on pio1
 
@@ -4748,7 +4520,6 @@ int main() {
 
     uart_my_putcf("With RGB base pin on: %d\n", VGA_OUT_RGB_BASE_PIN);
     uart_my_putcf("And: %d pins\n", VGA_OUT_RGB_PIN_COUNT);
-
 
     bool use_csync;
 
@@ -4811,90 +4582,28 @@ int main() {
     // Claim a DMA channel for the pio state machine(s) used for capturing.
     dma_chan = dma_claim_unused_channel(true);
 
-
-#if ENABLE_GRAPHICS_DEMO
-    // animation pause
-    bool demo_paused = true;
-#endif
-
+    // draw corner markers for reference
     #define CORNER_LEN 2
 
+    // top left
     drawHLine(0, 0, CORNER_LEN, WHITE);
     drawVLine(0, 0, CORNER_LEN, WHITE);
 
+    // top right
     drawHLine(SCREEN_WIDTH - CORNER_LEN, 0, CORNER_LEN, WHITE);
-    drawVLine(639, 0, CORNER_LEN, WHITE);
+    drawVLine(SCREEN_WIDTH - 1, 0, CORNER_LEN, WHITE);
 
-    // drawRect(0, 0, SCREEN_WIDTH, TOOLBAR_TOP + TOOLBAR_HEIGHT + 1, WHITE);
-
-    // drawHLine(0, TOOLBAR_TOP + TOOLBAR_HEIGHT + 3, SCREEN_WIDTH, WHITE);
-
-
-
-
-
-    // drawHLine(10, TOOLBAR_TOP + TOOLBAR_HEIGHT, SCREEN_WIDTH - 10, WHITE);
-    // drawVLine(102, 0, TOOLBAR_TOP + TOOLBAR_HEIGHT - 1, WHITE);
-
-
-    // for (int i = 0; i < SCREEN_WIDTH - 10; i+= 3){
-    //     drawPixel(10 + i , TOOLBAR_TOP + TOOLBAR_HEIGHT, WHITE); // test all colours in first horizontal line following sync
-    // }
-
+    // bottom left
     drawHLine(0, SCREEN_HEIGHT - 1, CORNER_LEN, WHITE);
     drawVLine(0, SCREEN_HEIGHT - CORNER_LEN, CORNER_LEN, WHITE);
 
-    drawVLine(639, SCREEN_HEIGHT - CORNER_LEN, CORNER_LEN, WHITE);
+    // bottom right
+    drawVLine(SCREEN_WIDTH - 1, SCREEN_HEIGHT - CORNER_LEN, CORNER_LEN, WHITE);
     drawHLine(SCREEN_WIDTH - CORNER_LEN, SCREEN_HEIGHT - 1, CORNER_LEN, WHITE);
 
-
-
-
-
-
-
-    // drawRect(0, SCREEN_HEIGHT - (STATUSBAR_HEIGHT + 3), SCREEN_WIDTH, STATUSBAR_HEIGHT + 3, WHITE);
-
-    // drawHLine(0, SCREEN_HEIGHT - (STATUSBAR_HEIGHT + 3), SCREEN_WIDTH, WHITE);
-
-    // draw_titlebar();
-    
     draw_toolbar();
 
     draw_statusbar();
-
-    // drawHLine(630, 480 - 1, 1, WHITE);
-
-
-    // for (int i = 0; i < 16; i++){
-    //     drawPixel(16 + i , 0, i); // test all colours in first horizontal line following sync
-    // }
-
-    // drawPixel(0, 0, WHITE);
-
-    // drawHLine(0, 0, 32, WHITE);
-
-/*
-    drawPixel(1, 0, WHITE);
-    drawPixel(2, 0, 1);
-    drawPixel(3, 0, 1);
-    drawPixel(4, 0, 2);
-    drawPixel(5, 0, 2);
-*/
-
-
-    // for (int i = 0; i < 16; i++){
-    //     fillRect(i * 40, 51, 40, 40, i); // colour boxes
-    // }
-
-    // Write some text
-
-    // setTextColor(WHITE) ;
-    // set_text_padding(2);
-    // setCursor(65, 0) ;
-    // logo(3, 0, true);
-
-    // logo_small(180, 0, true);
 
     logo_med(3, 3, true);
 
@@ -4902,71 +4611,37 @@ int main() {
 
     // logo(440, 30);
 
-
-    // setCursor(435, 0);
-    // writeString(right_rect_text);
-
-    // setCursor(250, 0) ;
-    // setTextSize(2) ;
-    // writeString("Time Elapsed:") ;
-
-
     clear_statusbar_hint(); // set the cursor etc.
     // Capture and plot
     handle_command(UIC_C);
-
-    // Delay to see whether the capture suceeded or not
-    // sleep_ms(1000);
 
     // Show help message
     clear_statusbar_hint(); // set the cursor etc.
     writeString(start_help_text);
     uart_my_puts(start_help_text);
 
-    /*
-    // Setup a 1Hz timer
-    struct repeating_timer timer;
-    add_repeating_timer_ms(-1000, repeating_timer_callback, NULL, &timer);
-    */
-   
-    // Wait for the pios to get warmed up. Probably not necessary.
-    // sleep_ms(10);
-
-    // no need to initialise the ir PIO state machine here as it's done in `logic_analyser_arm()`
-    // init_ir_rx(); 
-
-    
-/*
-    logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, g_trigger_pin_base, g_trigger_type);
-
-    get_plot_height(g_no_of_captured_pins);
-    set_plot_line_colors(g_no_of_captured_pins);
-
-
-    // print_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES);
-    plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, true);
-
-    // plot a fixed minimap of the above capture
-    plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
-
-    draw_minimap_indicator();
-
-    */
-
-
 #if USE_IR
+
     init_ir_rx(true);
+
 #endif
 
-    #if USE_VGA_CAPTURE
+#if USE_VGA_CAPTURE
     sleep_ms(500);
-#if USE_VGA_IN_TO_DVI
+
+    #if USE_VGA_IN_TO_DVI
+
     set_vga_capture(VC_VGA_IN);
-#else
+
+    #else
+
     set_vga_capture(VC_VGA_OUT);
-#endif
+
+    #endif
+
     // set_vga_capture(VC_NONE);
-#endif
+
+ #endif
 
     uint ins = 0;
 
@@ -4982,29 +4657,15 @@ int main() {
     }
 
 
-    // testing roval of the line below...
-    // uint high_ins = 0; // I've moved this from above the previous #define - makes no difference - DVI still locks out
-
-
 #if PICO_PIO_USE_GPIO_BASE
 
-    uint high_ins = 0; // I've moved this from above the previous #define - makes no difference - DVI still locks out
+    uint high_ins = 0;
 
-#if READ_HIGH_GPIO_DIRS
-
-    for (int i = 0; i < 16; i++) {
-
-        // if (gpio_is_dir_out(i) == 0) {
-        // if (gpio_is_pulled_up(i) == 0) {
-        if (gpio_is_dir_out(32 + i) == 0) {
-            high_ins |= (1 << i);
+    for (int i = 32; i < 48; i++) {
+        if (gpio_is_dir_out(i) == 0) {
+            high_ins |= (1 << (i - 32));
         }
-
     }
-
-#endif
-
-
 
 /*
 
@@ -5021,74 +4682,18 @@ int main() {
 
 */
 
-
 #endif
 
     uart_my_putcf("Inputs: %x\n", ins);
 
-    // stdio_printf("Inputs: %x\n", ins); // testing this to see if that has any effect... dvi crashes. Test 2 seems fine.
-
-
 #if PICO_PIO_USE_GPIO_BASE
 
-    // #if READ_HIGH_GPIO_DIRS
-    
-    // uart_my_putcf("High inputs: %x\n", high_ins); // line stops DVI crashing it seems!!!, but not with the sleep_ms() line below???
-    
-//  what if we simply send a constant str
-    // uart_my_putcf("High inputs: %x\n", 180); // testing... this seems like it also stops the DV crashing
+    stdio_printf("High inputs: %x\n", high_ins);
 
-    // uart_my_putcf("Any old string: %x\n", 180); // testing... so does this one
-
-    // uart_my_puts("?\n"); // ok, so this crashes. Test 2 seems fine.
-
-    // uart_my_puts("Any new string: 12\n"); // this crashes too
-
-    // printf("Any old string: %x\n", 180); // this crashes too
-
-    // uart_my_putcf("H: %x\n", high_ins); // testing... this does not crash the dvi
-
-    // uart_my_putcf("Inputs: %x\n", ins); // testing... this does not crash the dvi
-
-    // uart_my_putcf("Inputs: \n", ins); // testing... this does not crash the dvi
-
-    // printf("Inputs: \n", ins); // testing... this does not crash the dvi
-
-    // printf("Inputs: \n", high_ins); // testing... this had a hiccup and then a crash - this makes no sense!!!
-
-    // printf("Inputs: \n", ins); // testing... this did not crash the dvi. testing again... does now
-
-    // printf("Inputs: %x\n", high_ins); // testing... crash. Test 2 seems fine.
-
-    // uart_my_putcf("High inputs: %x\n", high_ins); // testing this again, it worked before... and it still works - what is going on?
-
-    stdio_printf("High inputs: %x\n", high_ins); // testing... crashes dvi. Test 2 seems fine.
-
-    // Well, I've just removed the `__scratch_x("")` attribute from `pio0_irq_handler()` and the above `stdio_printf()` is working fine
-    // Testing all the others that failed, and in reverse order - marking them with Test 2 ... 
-
-
-    // #endif
 #endif
-
-    // sleep_ms(1000); //dvi still crashes with this!!!, but not with the above??? Test 2 seems fine.
-
 
     // mainloop
     while(true) {
-
-        // Timing text
-        
-        // if (time_accum != time_accum_old) {
-        //     setTextColor(WHITE) ;
-        //     time_accum_old = time_accum ;
-        //     fillRect(250, 20, 176, 30, MIDDLE_BOX_COLOR); // red box
-        //     sprintf(timetext, "%d", time_accum) ;
-        //     setCursor(250, 20) ;
-        //     setTextSize(2) ;
-        //     writeString(timetext) ;
-        //     // gpio_xor_mask(1 << LED_PIN);
-        // }
 
         uint ui_command = check_keyboard();
 
@@ -5101,31 +4706,6 @@ int main() {
         if (ui_command) {
             handle_command(ui_command);
         } else {
-
-#if ENABLE_GRAPHICS_DEMO
-            if (!demo_paused && !showing_window) {
-                // uint32_t time_us_now = 
-                if (time_us_32() - last_demo_time >= 10000) {
-                    // {
-
-                    demo();
-                    last_demo_time = time_us_32();
-
-                    // sleep_ms(1); // this crashes the hstx-dvi
-                    // sleep_ms(10); // this seems not to crash the hstx-dvi
-                    // sleep_ms(1); // any sleep seems to crash the hstx-dvi
-
-                // A brief nap
-                    // sleep_ms(10);
-                    // reduce the sleep time to test the hstx-dvi lockup issue
-                    // sleep_ms(2);
-
-                    // sleep_ms(10);
-
-                    // busy_wait_us(10000);
-                }
-            }
-#endif
 
 #if USE_VGA_CAPTURE
 
@@ -5154,45 +4734,8 @@ int main() {
 #else
 
     #if USE_MULTI_CORE
+
             sleep_ms(10); // testing to see if this still randomly crashes the hstx-dvi now that it's on core 1 - it doesn't
-
-            // Ok, here's a strange one. PALAVO_CONFIG=59 on a Pimoroni Pico Lipo 2 W XL:
-            // * Its DVI output flickers on a line every now and then. Sometimes the screen goes blank and then recovers - sometimes it
-            // never recovers. If the above sleep_ms() is commented out the DVI never gets going at all - or crashes very soon 
-            // after the test screen appears
-
-            // By contrast the VGA to DVI converter (PALAVO_CONFIG=29) works without an issue (not sure about commenting out the 
-            // sleep_ms() though).
-
-            // Putting a sleep_ms(500) before the mainloop gets us to displaying a capture trace and then it crashes out.
-
-            // So... after discovering a problem using UART stdio when the pins are >= GP32, the DVI seems stable. i.e. when NOT
-            // using USB stdio. I thought / hoped running the DVI in the second core had fixed that - apparently not. Sad face.
-            // Presumably the flickering seen above was a USB interrupt interfering with the DVI interrupt - don't know - todo.
-
-            // If a Pico 2 is used instead of the Pimoroni Pico Lipo 2 W XL it all works fine, by which I mean even with USB
-            // comms enabled DVI output never fails - or lasts a very long time. The XL has an RP2350B, whereas the Pico 2 has an
-            // RP2350A. It uses GPIO (for UI) on pins higher than GP31 - and so uses PICO_PIO_USE_GPIO_BASE quite a bit. I suppose
-            // one thing to do is try the RP2350 Stamp XL to see whether it's something physical or something in the `boards.h`
-            // file that's upsetting something somewhere... Ok, the same binary (PALAVO_CONFIG=59) that was programmed into the
-            // Pico Lipo 2 W XL works absolutely fine on the RTP2350 Stamp XL. It must be either the module itself or the 
-            // Pico Omnibus into which it's plugged in... Well, what deuce is going on? I've just reassembled the hardware to
-            // re-test the Pico Lipo 2 W XL, and it's working with no DVI locking-up whatsoever. Aaaargh. But also, hooray!
-            //
-
-            // Following some hair-pulling tests, here's what ssems to make the Pico Lipo 2 W XL's DVI fall over, even when
-            // using USB stdio:
-
-            // #define GPIO_INPUT_MASK_32_47 (0xffff)
-
-            // Whereas, this, does not make the the DVI fall over:
-            
-            // #define GPIO_INPUT_MASK_32_47 (0xffff & ~((1 << (PICO_DEFAULT_UART_TX_PIN - 32)) | (1 << (PICO_DEFAULT_UART_RX_PIN - 32))))
-
-            // I suppose it would be useful to know how GPIO 38 and 39 are configured. The datasheet
-
-
-
 
     #endif
 
