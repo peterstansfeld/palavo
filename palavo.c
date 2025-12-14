@@ -100,14 +100,12 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
 
     #if USE_GPIO_31_47
 
-        #define VGA_OUT_CSYNC_PIN 31
-
         #define VGA_IN_VSYNC_PIN 0
         #define VGA_IN_HSYNC_CSYNC_PIN 1
         #define VGA_IN_RGB_BASE_PIN 2
         #define VGA_IN_RGB_PIN_COUNT 6
 
-        #define VGA_OUT_CSYNC_PIN 31
+        #define VGA_OUT_HSYNC_CSYNC_PIN 31
         #define VGA_OUT_RGB_BASE_PIN 32
         #define VGA_OUT_RGB_PIN_COUNT 6
 
@@ -131,7 +129,7 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
         #define VGA_IN_RGB_BASE_PIN 2
 
         // these should
-        #define VGA_OUT_CSYNC_PIN 10
+        #define VGA_OUT_HSYNC_CSYNC_PIN 10
         #define VGA_OUT_RGB_BASE_PIN 11
         #define VGA_OUT_RGB_PIN_COUNT 1
 
@@ -156,7 +154,7 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
 
     #if USE_CSYNC
 
-        #define VGA_OUT_CSYNC_PIN 1
+        #define VGA_OUT_HSYNC_CSYNC_PIN 1
 
         bi_decl(bi_1pin_with_name(1, "VGA Out - CSYNC"));
 
@@ -164,9 +162,6 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
 
         #define VGA_OUT_VSYNC_PIN 0
         #define VGA_OUT_HSYNC_CSYNC_PIN 1
-
-        // this is temporary just so we can compile - needs sorting - todo
-        #define VGA_OUT_CSYNC_PIN VGA_OUT_HSYNC_CSYNC_PIN
 
         bi_decl(bi_1pin_with_name(0, "VGA Out - VSYNC"));
         bi_decl(bi_1pin_with_name(1, "VGA Out - HSYNC"));
@@ -2876,11 +2871,7 @@ bool showing_window = false;
 
 #define HELP_WINDOW_PADDING 2
 #define HELP_WINDOW_WIDTH (56 + 2) * FONT_WIDTH
-#if USE_DVI
 #define HELP_WINDOW_HEIGHT (21 + 2) * (FONT_HEIGHT + HELP_WINDOW_PADDING)
-#else
-#define HELP_WINDOW_HEIGHT (20 + 2) * (FONT_HEIGHT + HELP_WINDOW_PADDING)
-#endif
 #define HELP_WINDOW_TOP (SCREEN_HEIGHT - HELP_WINDOW_HEIGHT) / 2
 #define HELP_WINDOW_LEFT (SCREEN_WIDTH - HELP_WINDOW_WIDTH) / 2 
 
@@ -3637,11 +3628,9 @@ void vga_out_capture_set_enabled(bool enabled) {
 #if USE_CSYNC
 
                 vga_detect_vsync_on_csync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_on_csync_program);
-                vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, VGA_OUT_CSYNC_PIN);
-#else
+                vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, VGA_OUT_HSYNC_CSYNC_PIN);
 
-                // vga_detect_vsync_on_csync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_on_csync_program);
-                // vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, VGA_OUT_CSYNC_PIN);
+#else
 
                 vga_detect_vsync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_program);
                 vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, VGA_OUT_VSYNC_PIN);
@@ -4527,7 +4516,7 @@ int main() {
     use_csync = true;
 #endif
 
-    initVGA(VGA_OUT_CSYNC_PIN, use_csync, VGA_OUT_RGB_BASE_PIN, VGA_OUT_RGB_PIN_COUNT);
+    initVGA(VGA_OUT_HSYNC_CSYNC_PIN, use_csync, VGA_OUT_RGB_BASE_PIN, VGA_OUT_RGB_PIN_COUNT);
     init_line_colours();
 
     // We're going to capture into a u32 buffer, for best DMA efficiency. Need

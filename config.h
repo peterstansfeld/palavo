@@ -133,6 +133,7 @@
 // 15 = 8 + 4 + 2 + 1 = USE_VGA_IN_TO_DVI USE_GPIO_31_47 & USE_DVI
         // #define PALAVO_CONFIG 15
 
+        // #define PALAVO_CONFIG 40
         #define PALAVO_CONFIG 59
         // #define PALAVO_CONFIG 29
         // #define PALAVO_CONFIG 27
