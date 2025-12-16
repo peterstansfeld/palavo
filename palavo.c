@@ -1,32 +1,42 @@
-/**
- * Hunter Adams (vha3@cornell.edu)
- *
- *
- * HARDWARE CONNECTIONS
-   - GPIO 16 ---> VGA Hsync
-   - GPIO 17 ---> VGA Vsync
-   - GPIO 18 ---> VGA Green lo-bit --> 470 ohm resistor --> VGA_Green
-   - GPIO 19 ---> VGA Green hi_bit --> 330 ohm resistor --> VGA_Green
-   - GPIO 20 ---> 330 ohm resistor ---> VGA-Blue
-   - GPIO 21 ---> 330 ohm resistor ---> VGA-Red
-   - RP2040 GND ---> VGA-GND
- *
- * RESOURCES USED
- *  - PIO state machines 0, 1, and 2 on PIO instance 0
- *  - DMA channels obtained by claim mechanism
- *  - 153.6 kBytes of RAM (for pixel color data)
- *
- */
+/* 
+* PALAVO
+*
+* PIO-Assisted Logic Analyser with VGA Output
+*
+* Developed by Peter Stansfeld
+*   (pstansfeld@redcreations.co.uk)
+*
+* Inspired by and using code from:
+*
+* * Raspberry Pi's Logic Analyser example for the Pico.
+*   (github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser)
+*
+* * Hunter Adams's (vha3@cornell.edu) VGA Graphics Driver for RP2040 with
+*   Bruce Land's 4-bit mod.
+*   (github.com/vha3/Hunter-Adams-RP2040-Demos/blob/master/VGA_Graphics)
+*
+* * Raspberry Pi's DVI Out HSTX Encoder_out_hstx_encoder example for the Pico 2.
+*   (github.com/raspberrypi/pico-examples/tree/master/hstx/dvi_out_hstx_encoder)
+*
+* There are many possible hardware configurations; please see README.md for
+* details. To view the information on a programmed device (in BOOTSEL mode)
+* Raspberry Pi's `picotool` utility can be used:
+*
+*   `$ picotool info -a`
+*
+* To view the information in a firmware file:
+*   `$ picotool info -a palavo.uf2`
+*/
 
-// Use core 1 for the DVI output (initialisation and interrupt service routine)
 
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 0
-#define VERSION_PATCH 1
+#define VERSION_PATCH 2
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 
+// Use core 1 for the DVI output (initialisation and interrupt service routine)
 #define USE_MULTI_CORE 1
 
 #define USE_STDIO_UART 1
@@ -76,19 +86,12 @@
 
 #define ENABLE_GRAPHICS_DEMO 0
 
-
-// The following line doesn't seem to work...
-// bi_decl(bi_program_name("palavo " STR(VERSION_MAJOR) "." STR(VERSION_MINOR) "." STR(VERSION_PATCH)));
-
-// ... so, maybe make it a feature?...
-// bi_decl(bi_program_feature("Version: " STR(VERSION_MAJOR) "." STR(VERSION_MINOR) "." STR(VERSION_PATCH)));
-
+bi_decl(bi_program_version_string(STR(VERSION_MAJOR) "." STR(VERSION_MINOR) "." STR(VERSION_PATCH)));
 bi_decl(bi_program_description("PIO-Assisted Logic Analyser with VGA Output"));
 bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
 
 // Maybe make this a feature?...
 bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
-
 
 // We're always outputting VGA, either on 6 pins of RRGGBB or 1 pin of monochrome.
 // Sometimes we're using CSYNC, and other times HSYNC and VSYNC.
@@ -250,7 +253,7 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
 #endif
 
 
-#if !USE_USB_STDIO
+#if USE_UART_STDIO
 
     #if PICO_DEFAULT_UART_TX_PIN >= 32
 
@@ -4435,7 +4438,7 @@ int main() {
 
 
 #if USE_DVI
-    // Initialize the VGA screen
+    // Initialise the HSTX DVI driver
     uart_my_puts("Initialising DVI...\n");
 
     uart_my_putcf("clk_hstx: %d\n", clock_get_hz (clk_hstx));
@@ -4443,18 +4446,25 @@ int main() {
 
  #if USE_MULTI_CORE
 
-    // for some reason we need a delay here - either from the USB connecting to the host 
+    #if USE_UART_STDIO
+    // for some reason we need a delay here. find out why. todo
 
-    #if !USE_USB_STDIO
+    // sleep_ms(1); // if using DVI this seems to be required ??? needs to empty the UART perhaps? todo
 
-    // sleep_ms(2000); // if using DVI this seems to be required
-    // sleep_ms(1000); // if using DVI this seems to be required
-    sleep_ms(1); // if using DVI this seems to be required ??? needs to empty the UART perhaps?
-    
+    // try sleep_us()...
+    // sleep_us(100); // if using DVI this seems to be required ??? needs to empty the UART perhaps? todo
+    // 190 fails everytime, 200 fails sometimes, 201 passes everty time
+
+    // This only seems to be needed following a programming of the flash via SWD, or a reset via SWD.
+    // If given a hardware reset (RUN driven low and then released) it works every time, ie needs no delay.
+    // Also, it doesn't need a delay if programming the flash via picotool. So for now let's leave it at
+    // 500 and investigate further later.
+
+    sleep_us(500);
+
     #endif
 
     multicore_launch_core1(core1_main);
-
 
     // wait for core 1 to acknowledge that it's initialised the DVI output
     if (multicore_fifo_pop_blocking()) {   

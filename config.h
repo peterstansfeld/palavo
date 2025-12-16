@@ -14,7 +14,7 @@
 #define PC_BIT_USE_VGA_IN_TO_DVI 2
 #define PC_BIT_USE_IR 3
 #define PC_BIT_USE_CSYNC 4
-#define PC_BIT_USE_USB_STDIO 5
+#define PC_BIT_USE_UART_STDIO 5
 
 #define BOARD_HAS_SAME_RESERVED_GPIO_AS_PICO 1
 
@@ -147,6 +147,7 @@
 
 #endif
 
+
 #if (PALAVO_CONFIG & (1 << PC_BIT_USE_DVI))
     #define USE_DVI 1
 #endif
@@ -171,9 +172,11 @@
     #define USE_CSYNC 1
 #endif
 
-#if (PALAVO_CONFIG & (1 << PC_BIT_USE_USB_STDIO))
-    #define USE_USB_STDIO 1
+
+#if (PALAVO_CONFIG & (1 << PC_BIT_USE_UART_STDIO))
+    #define USE_UART_STDIO 1
 #endif
+
 
 #if USE_DVI
     // Using DVI - define what mode to show on startup.
@@ -197,7 +200,6 @@
 
 
 #if USE_GPIO_31_47
-
 
     #if (!PICO_PIO_USE_GPIO_BASE)
         #error "Can't use more than 32 pins on this microcontroller"
@@ -230,7 +232,7 @@
 
 #if USE_CSYNC
 
-    #pragma message "Using CSYNC instead of VSYNC and HSYNC"
+    #pragma message "Using CSYNC"
 
 #else
 
@@ -242,14 +244,22 @@
     #define USE_CSYNC 1
     #pragma message "Added `#define USE_CSYNC 1`"
 
+    #else
+
+    #pragma message "Using HSYNC and VSYNC"
+
     #endif
 
 #endif
 
 
-#if USE_USB_STDIO
+#if USE_UART_STDIO
 
-    #pragma message "Using USB STDIO instead of UART STDIO"
+    #pragma message "Using UART STDIO"
+
+#else
+
+    #pragma message "Using USB STDIO"
 
 #endif
 
