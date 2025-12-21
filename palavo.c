@@ -15,7 +15,7 @@
 *   Bruce Land's 4-bit mod.
 *   (github.com/vha3/Hunter-Adams-RP2040-Demos/blob/master/VGA_Graphics)
 *
-* * Raspberry Pi's DVI Out HSTX Encoder_out_hstx_encoder example for the Pico 2.
+* * Raspberry Pi's DVI Out HSTX Encoder example for the Pico 2.
 *   (github.com/raspberrypi/pico-examples/tree/master/hstx/dvi_out_hstx_encoder)
 *
 * There are many possible hardware configurations; please see README.md for
@@ -2222,7 +2222,8 @@ enum UI_COMMANDS {
     UIC_0,
     UIC_TAB,
     UIC_SHIFT_TAB,
-    UIC_ESC
+    UIC_ESC,
+    UIC_UPPER_S
  };
 
 
@@ -2435,6 +2436,7 @@ void clear_statusbar_hint() {
     setTextSize(1);
 }
 
+
 void clear_statusbar_info() {
     fillRect(STATUSBAR_INFO_LEFT, STATUSBAR_TOP, STATUSBAR_INFO_WIDTH, STATUSBAR_HEIGHT, STATUSBAR_INFO_COLOR);
     // draw_settings();
@@ -2442,6 +2444,12 @@ void clear_statusbar_info() {
     setTextColor(WHITE);
     setTextSize(1);
 }
+
+
+void clear_screen() {
+    fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
+}
+
 
 uint check_keyboard() {
 
@@ -2659,6 +2667,10 @@ uint check_keyboard() {
 
                 case '\t':
                     ui_command = UIC_TAB;
+                    break;
+
+                case 'S':
+                    ui_command = UIC_UPPER_S;
                     break;
         
             }
@@ -3251,7 +3263,17 @@ void show_about_window() {
 }
 
 
+// Sets all line colours to `fore_colour` on `back_colour`
+void set_all_line_colours(uint8_t fore_colour, uint8_t back_colour) {
+    for (int y = 0; y < SCREEN_HEIGHT; y++) {
+        set_line_colors(y, back_colour, fore_colour, WHITE, LIGHT_BLUE);
+    }
+}
+
+
+// Sets all line colours to `WHITE` on `BLACK`
 void init_line_colours() {
+    /*
     for (int y = 0; y < SCREEN_HEIGHT; y++) {
         // vga_1bit_data_array[y * WORDS_PER_LINE] = (((BLUE << 4) | (y & 0x0f)) << 16) | (639);
         char fore_colour;
@@ -3269,6 +3291,10 @@ void init_line_colours() {
         // vga_1bit_data_array[y * WORDS_PER_LINE] = (((fore_colour << 4) | (back_colour)) << 16) | (639);
         set_line_colors(y, back_colour, fore_colour, WHITE, LIGHT_BLUE);
     }
+
+    */
+
+    set_all_line_colours(WHITE, BLACK);
 }
 
 #if USE_DVI
@@ -3322,6 +3348,7 @@ void test_DVI_framebuf() {
 }
 #endif
 
+
 void close_window() {
     fillRect(HELP_WINDOW_LEFT, HELP_WINDOW_TOP, HELP_WINDOW_WIDTH, HELP_WINDOW_HEIGHT, BLACK);
     uart_my_puts("Window closed\n");
@@ -3330,33 +3357,6 @@ void close_window() {
     showing_window = false;
 }
 
-
-// char* left_rect_text =
-//     // "Raspberry Pi Pico Test\n"
-//     // "Graphics primitives demo\n"
-//     // "Hunter Adams\n"
-//     // "vha3@cornell.edu\n"
-//     // "4-bit mod by Bruce Land";
-
-//     "PALAVO\n"
-//     "PIO Accelerated\n"
-//     "Logic Analyser with\n"
-//     "VGA Output\n"
-//     "Peter Stansfeld\n";
-
-    // "PLATYPI\n"
-    // "Pico Logic Analyser\n"
-    // "for Testing Your\n"
-    // "PIO Ideas\n"
-    // "Peter Stansfeld";
-
-// char* right_rect_text =
-
-//     "Inspired by and using\n"
-//     "Graphics primitives demo\n"
-//     "Hunter Adams\n"
-//     "vha3@cornell.edu\n"
-//     "4-bit mod by Bruce Land\n";
 
 char * start_help_text = "Press h for help.\n";
 
@@ -3943,9 +3943,30 @@ uint total_sample_bits;
     uint dma_chan;
 
 
-void handle_command(uint ui_command) {
-    if (ui_command) {
+    enum MAIN_STATES {MS_ACTIVE, MS_SCREENSAVE, MS_BLANK};
 
+    uint8_t main_state = MS_ACTIVE;
+
+    uint64_t last_event_time;
+
+
+    void start_screensaver() {
+        uart_my_puts("Preparing to blank the screen...\n");
+        set_all_line_colours(DARK_GREY_64, BLACK);
+        main_state = MS_SCREENSAVE;
+        last_event_time = time_us_64();
+    }
+
+    void start_screen_blanking() {
+        uart_my_puts("Blanking the screen...\n");
+        set_all_line_colours(BLACK, BLACK);
+        main_state = MS_BLANK;
+        last_event_time = time_us_64();
+    }
+
+    void handle_command(uint ui_command) {
+    if (ui_command) {
+        last_event_time = time_us_64();
         bool plot_required = false;
         bool mini_map_redraw_required = false;
         if (showing_window) {
@@ -4236,6 +4257,11 @@ void handle_command(uint ui_command) {
                     show_about_window();
                     break;
 
+                case UIC_UPPER_S:
+                    writeString("start screensaver");
+                    start_screensaver();
+                    break;
+
 #if USE_DVI
 
 #if USE_VGA_CAPTURE
@@ -4335,6 +4361,50 @@ void core1_main() {
     #endif
 
 #endif
+
+
+void draw_ui() {
+    // draw corner markers for reference
+    #define CORNER_LEN 2
+
+    // top left
+    drawHLine(0, 0, CORNER_LEN, WHITE);
+    drawVLine(0, 0, CORNER_LEN, WHITE);
+
+    // top right
+    drawHLine(SCREEN_WIDTH - CORNER_LEN, 0, CORNER_LEN, WHITE);
+    drawVLine(SCREEN_WIDTH - 1, 0, CORNER_LEN, WHITE);
+
+    // bottom left
+    drawHLine(0, SCREEN_HEIGHT - 1, CORNER_LEN, WHITE);
+    drawVLine(0, SCREEN_HEIGHT - CORNER_LEN, CORNER_LEN, WHITE);
+
+    // bottom right
+    drawVLine(SCREEN_WIDTH - 1, SCREEN_HEIGHT - CORNER_LEN, CORNER_LEN, WHITE);
+    drawHLine(SCREEN_WIDTH - CORNER_LEN, SCREEN_HEIGHT - 1, CORNER_LEN, WHITE);
+
+    draw_toolbar();
+
+    draw_statusbar();
+
+    logo_med(3, 3, true);
+
+    // logo(200, 0);
+
+    // logo(440, 30);
+
+    clear_statusbar_hint(); // set the cursor etc.
+}
+
+
+void screensaver_init(bool init) {
+
+}
+
+
+void screensaver_animate() {
+
+}
 
 
 int main() {
@@ -4581,36 +4651,8 @@ int main() {
     // Claim a DMA channel for the pio state machine(s) used for capturing.
     dma_chan = dma_claim_unused_channel(true);
 
-    // draw corner markers for reference
-    #define CORNER_LEN 2
+    draw_ui();
 
-    // top left
-    drawHLine(0, 0, CORNER_LEN, WHITE);
-    drawVLine(0, 0, CORNER_LEN, WHITE);
-
-    // top right
-    drawHLine(SCREEN_WIDTH - CORNER_LEN, 0, CORNER_LEN, WHITE);
-    drawVLine(SCREEN_WIDTH - 1, 0, CORNER_LEN, WHITE);
-
-    // bottom left
-    drawHLine(0, SCREEN_HEIGHT - 1, CORNER_LEN, WHITE);
-    drawVLine(0, SCREEN_HEIGHT - CORNER_LEN, CORNER_LEN, WHITE);
-
-    // bottom right
-    drawVLine(SCREEN_WIDTH - 1, SCREEN_HEIGHT - CORNER_LEN, CORNER_LEN, WHITE);
-    drawHLine(SCREEN_WIDTH - CORNER_LEN, SCREEN_HEIGHT - 1, CORNER_LEN, WHITE);
-
-    draw_toolbar();
-
-    draw_statusbar();
-
-    logo_med(3, 3, true);
-
-    // logo(200, 0);
-
-    // logo(440, 30);
-
-    clear_statusbar_hint(); // set the cursor etc.
     // Capture and plot
     handle_command(UIC_C);
 
@@ -4703,8 +4745,47 @@ int main() {
 #endif
 
         if (ui_command) {
-            handle_command(ui_command);
+
+            if (main_state == MS_ACTIVE) {
+                handle_command(ui_command);
+            } else {
+                uart_my_puts("Reactivating the screen...\n");
+
+                // clear_screen();
+                // draw_ui();
+                // plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, true);
+                // draw_minimap_indicator();
+                // plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
+                // draw_statusbar_info();
+
+                init_line_colours();
+
+                if (!showing_window) {
+                    set_plot_line_colors(g_no_of_captured_pins);
+                }
+
+                main_state = MS_ACTIVE;
+                last_event_time = time_us_64();
+            }
         } else {
+
+            switch (main_state) {
+                case MS_ACTIVE:
+                if (time_us_64() - last_event_time >= (60 * 1000 * 1000)) {
+                    start_screensaver();
+                }
+                break;
+
+                case MS_SCREENSAVE:
+                if (time_us_64() - last_event_time >= (5 * 1000 * 1000)) {
+                    start_screen_blanking();
+                }
+                break;
+
+                case MS_BLANK:
+                break;
+
+            }
 
 #if USE_VGA_CAPTURE
 

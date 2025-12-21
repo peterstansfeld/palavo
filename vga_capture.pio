@@ -15,7 +15,7 @@ start:
     wait 1 jmppin+0                 ; wait for VSYNC to be high
 
 ; Signal that a VSYNC has occurred, which allows us to test whether we're out
-; of sync with the DMA channel resposible for writing to the dvi frame buffer.  
+; of sync with the DMA channel responsible for writing to the dvi frame buffer.  
     irq 7
 
 ; Wait for 32 HSYNCs
@@ -122,7 +122,7 @@ wait_for_hsync:
     wait 0 jmppin                   ; wait for csync to be low
     wait 1 jmppin                   ; wait for csync to be high
 
-    irq 4                           ; signal to another state machine to grab the pixel value
+    irq 4                           ; signal to another SM to start grabbing a line of pixels
     jmp y-- wait_for_hsync
 
 .wrap
