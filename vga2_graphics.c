@@ -160,6 +160,18 @@ void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour, ui
 }
 
 
+    PIO vga_out_pio = pio1;
+
+    uint hsync5_sm = 0;
+
+    uint rgb5_sm = 1;
+
+    // uint csync_sm = 2;
+
+    // we are using either hsync and vsync OR csync, so they can use the same SM
+    uint csync_sm = 0;
+
+
 void initVGA(uint hsync_or_csync_pin, bool use_csync, uint rgb_base_pin, uint rgb_pin_count) {
     // Choose which PIO instance to use (there are two instances (three for rp2350), each with 4 state machines)
 
@@ -168,8 +180,6 @@ void initVGA(uint hsync_or_csync_pin, bool use_csync, uint rgb_base_pin, uint rg
     static uint32_t sync_buffer [SYNC_BUFFER_COUNT] __attribute__ ((aligned(SYNC_BUFFER_COUNT * sizeof(uint32_t))));
 
     static uint32_t * sync_buffer_address_pointer = &sync_buffer[0] ;
-
-    PIO vga_out_pio = pio1;
 
     // Our assembled program needs to be loaded into this PIO's instruction
     // memory. This SDK function will find a location (offset) in the
@@ -199,12 +209,6 @@ void initVGA(uint hsync_or_csync_pin, bool use_csync, uint rgb_base_pin, uint rg
     // The reason that we have two separate Sms for either hsync (and vsync),
     // or for csync is that at one stage they were both implemented for testing
     // CSYNC. We could get combine them in one `sync_sm` .
-
-    uint hsync5_sm = 0;
-
-    uint rgb5_sm = 1;
-
-    uint csync_sm = 2;
 
 #if SYS_CLK_KHZ == 125000u
     uint rgb5_offset = pio_add_program(vga_out_pio, &rgb5_program);
@@ -704,6 +708,16 @@ USE_CSYNC.
 
 #endif
 
+}
+
+
+void vga_pause() {
+    pio_sm_set_enabled(vga_out_pio, csync_sm, false);
+}
+
+
+void vga_restart() {
+    pio_sm_set_enabled(vga_out_pio, csync_sm, true);
 }
 
 

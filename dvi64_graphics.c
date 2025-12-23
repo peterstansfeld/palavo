@@ -27,7 +27,7 @@
 
 #include "dvi64_graphics.h"
 
-#define USE_EXCLUSIVE_IRQ_HANDLER 0
+#define USE_EXCLUSIVE_IRQ_HANDLER 1
 
 // ----------------------------------------------------------------------------
 
@@ -992,11 +992,21 @@ void dvi_init_hstx_gpio() {
 }
 
 
+void dvi_deinit_hstx_gpio() {
+    for (int i = 12; i <= 19; ++i) {
+        gpio_set_function(i, GPIO_FUNC_NULL);
+    }
+}
+
+
 void dvi_init_hstx_dma() {
 
-    dma_channel_claim(DMACH_PING);
-    dma_channel_claim(DMACH_PONG);
+    static bool inited;
 
+    if (!inited) {
+        dma_channel_claim(DMACH_PING);
+        dma_channel_claim(DMACH_PONG);
+    }
 
     // Both channels are set up identically, to transfer a whole scanline and
     // then chain to the opposite channel. Each time a channel finishes, we
@@ -1067,6 +1077,8 @@ void dvi_init_hstx_dma() {
 
 // #endif
 
+inited = true;
+
 }
 
 
@@ -1099,21 +1111,35 @@ void dvi_deinit_hstx_regs() {
 
 
 void dvi_deinit_hstx_dma() {
-    // disable the irq
-    irq_set_enabled(DMA_IRQ_0, false);
-
     // stop and free the dma channels
     dma_channel_cleanup(DMACH_PONG);
     dma_channel_cleanup(DMACH_PING);
 
+    // dma_channel_abort(DMACH_PONG);
+    // dma_channel_abort(DMACH_PING);
+
+    // disable the irq
+    irq_set_enabled(DMA_IRQ_0, false);
+
+    // dma_channel_abort(DMACH_PONG);
+    // dma_channel_abort(DMACH_PING);
+
+    irq_remove_handler(DMA_IRQ_0, dma_irq_handler);
+
+    // stop and free the dma channels
+    // dma_channel_cleanup(DMACH_PONG);
+    // dma_channel_cleanup(DMACH_PING);
+
     // and unclaim them
-    dma_channel_unclaim(DMACH_PONG);
-    dma_channel_unclaim(DMACH_PING);
+    // dma_channel_unclaim(DMACH_PONG);
+    // dma_channel_unclaim(DMACH_PING);
 }
 
 void dvi_deinit() {
     
     dvi_deinit_hstx_dma();
+
+    dvi_deinit_hstx_gpio();
 
     // hstx_ctrl_hw->csr = 0;
 
@@ -1226,4 +1252,3 @@ void dvi_reinit() {
 // so, something is upsetting the 
 
 }
-

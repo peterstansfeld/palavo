@@ -15,7 +15,7 @@ start:
     wait 1 jmppin+0                 ; wait for VSYNC to be high
 
 ; Signal that a VSYNC has occurred, which allows us to test whether we're out
-; of sync with the DMA channel responsible for writing to the dvi frame buffer.  
+; of sync with the DMA channel responsible for writing to the dvi frame buffer.
     irq 7
 
 ; Wait for 32 HSYNCs
@@ -107,7 +107,11 @@ test_low_pulse_width:
 
 ; if not, see if it has been low for long enough
     jmp x-- test_low_pulse_width
-    
+
+; Signal that a VSYNC has occurred, which allows us to test whether we're out
+; of sync with the DMA channel responsible for writing to the dvi frame buffer.
+
+    irq 7
     mov x, isr                      ; x = 34 for 35 hsync on csync pulses
 
 ; Wait for 35 hsyncs on csync (2 for the 704 and 48 pulses, and 33 more for the back porch)

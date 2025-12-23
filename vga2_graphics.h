@@ -182,3 +182,6 @@ void writeStringBig(char* str) ;
 void setTextColorBig(char, char); //works, but can use usual setTextColor2
 // 5x7 font
 void writeStringBold(char* str);
+
+void vga_pause();
+void vga_restart();

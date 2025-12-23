@@ -31,7 +31,7 @@
 
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 0
-#define VERSION_PATCH 2
+#define VERSION_PATCH 3
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
@@ -626,7 +626,7 @@ void logic_analyser0_init(/*PIO pio, uint sm,*/ uint pin_base, uint pin_count, f
 
     // This is a copy of `logic_analyser_init()` with the setting of the gpio_base removed
 
-    PIO pio = pio0;
+    PIO pio = pio1;
     uint sm = 3;
 
     static bool initialised;
@@ -689,7 +689,7 @@ bool pio_sm_exec_timeout_us(PIO pio, uint sm, uint instr, uint32_t timeout_us) {
 // Is it because it's stored in flash rather than ram? todo -find out
 
 // #define la_capture_pio pio0
-PIO la_capture_pio = pio0;
+PIO la_capture_pio = pio1;
 uint la_capture_sm = 3;
 
 #endif
@@ -3471,7 +3471,10 @@ int vsync_counter;
 #define VGA_VERTICAL_REFRESH_FREQ 60
 
 uint vga_capture_dma_write_addr;
+uint vga_capture_seconds_count;
+uint last_vga_capture_seconds_count;
 
+uint64_t last_vga_capture_time;
 
 // void __scratch_x("") pio0_irq_handler() {
 void pio0_irq_handler() {
@@ -3487,6 +3490,7 @@ void pio0_irq_handler() {
         gpio_put(PICO_DEFAULT_LED_PIN, led_state);
 #endif
         vsync_counter = 0;
+        vga_capture_seconds_count++;
     }
 }
 
@@ -3641,6 +3645,7 @@ void vga_out_capture_set_enabled(bool enabled) {
 #endif
 
                 init_vga_capture_dma_and_start_capturing();
+                vga_sync_detect_interrupt_set_enabled(true);
 
 #if USE_CSYNC
                 pio_enable_sm_mask_in_sync(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_on_csync_sm));
@@ -3943,9 +3948,14 @@ uint total_sample_bits;
     uint dma_chan;
 
 
-    enum MAIN_STATES {MS_ACTIVE, MS_SCREENSAVE, MS_BLANK};
+    enum MAIN_STATES {MS_ACTIVE, MS_SCREENSAVE, MS_BLANK, MS_HALTED};
 
     uint8_t main_state = MS_ACTIVE;
+
+
+    enum MAIN_DVI_STATES {MDS_ACTIVE, MDS_NO_SIGNAL};
+
+    uint8_t main_dvi_state = MS_ACTIVE;
 
     uint64_t last_event_time;
 
@@ -3957,12 +3967,22 @@ uint total_sample_bits;
         last_event_time = time_us_64();
     }
 
+
     void start_screen_blanking() {
         uart_my_puts("Blanking the screen...\n");
         set_all_line_colours(BLACK, BLACK);
         main_state = MS_BLANK;
         last_event_time = time_us_64();
     }
+
+
+    void halt_vga_out() {
+        uart_my_puts("Halting VGA OUT...\n");
+        vga_pause();
+        main_state = MS_HALTED;
+        // last_event_time = time_us_64();
+    }
+
 
     void handle_command(uint ui_command) {
     if (ui_command) {
@@ -4345,16 +4365,32 @@ uint total_sample_bits;
     #if USE_DVI
 
 #define FLAG_VALUE 123
+#define CORE1_CMD_DEINIT_DVI 456
+#define CORE1_CMD_INIT_DVI 789
 
 void core1_main() { 
     dvi_init();
-    // dvi_testbars();
+    dvi_testbars();
 
     multicore_fifo_push_blocking(FLAG_VALUE);
 
     while (true) {
-        tight_loop_contents();
-        // sleep_ms(10); // testing to see if this still randomly crashes the hstx-dvi now that it's on core 1 - it does
+
+        if (multicore_fifo_rvalid()) {
+            uint32_t cmnd = multicore_fifo_pop_blocking();
+            switch (cmnd) {
+                case CORE1_CMD_DEINIT_DVI:
+                dvi_deinit();
+                break;
+
+                case CORE1_CMD_INIT_DVI:
+                dvi_init();
+                break;
+            }
+        } else {
+            tight_loop_contents();
+            // sleep_ms(10); // testing to see if this still randomly crashes the hstx-dvi now that it's on core 1 - it does
+        }
     }
 }
 
@@ -4542,7 +4578,7 @@ int main() {
     }
 
     // show the test bars
-    dvi_testbars();
+    // dvi_testbars();
     sleep_ms(500); 
 
 #else
@@ -4764,6 +4800,8 @@ int main() {
                     set_plot_line_colors(g_no_of_captured_pins);
                 }
 
+                vga_restart();
+
                 main_state = MS_ACTIVE;
                 last_event_time = time_us_64();
             }
@@ -4783,6 +4821,12 @@ int main() {
                 break;
 
                 case MS_BLANK:
+                if (time_us_64() - last_event_time >= (1 * 1000 * 1000)) {
+                    halt_vga_out();
+                }
+                break;
+
+                case MS_HALTED:
                 break;
 
             }
@@ -4798,7 +4842,40 @@ int main() {
                 deinit_vga_capture();
                 vga_in_capture_set_enabled(true);
                 vga_capture_dma_write_addr = 0;
+            } else {
+                if (vga_capture_seconds_count != last_vga_capture_seconds_count) {
+                    last_vga_capture_seconds_count = vga_capture_seconds_count;
+                    last_vga_capture_time = time_us_64();
+                    if (main_dvi_state == MDS_NO_SIGNAL) {
+                        uart_my_puts("VGA input signal detected.\n");
+
+                        // dvi_init();
+                        // dvi_reinit();
+                        multicore_fifo_push_blocking(CORE1_CMD_INIT_DVI);
+
+
+                        // !!! cant' talk to dvi via core 0 !!!
+
+                        main_dvi_state = MDS_ACTIVE;
+                    }
+                } else {
+                    if (main_dvi_state == MDS_ACTIVE) {
+                        if (time_us_64() - last_vga_capture_time >= (5 * 1000 * 1000)) {
+                            uart_my_puts("No VGA input signal.\n");
+                            // dvi_testbars();
+
+                            // dvi_deinit();
+                            // dvi_reinit();
+                        // !!! cant' talk to dvi via core 0 !!!
+
+                            multicore_fifo_push_blocking(CORE1_CMD_DEINIT_DVI);
+
+                            main_dvi_state = MDS_NO_SIGNAL;
+                        }
+                    }
+                }
             }
+
 #endif
 
 #if !USE_DVI
