@@ -1966,9 +1966,6 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
         y += trace_height + y_padding;
     }
-
-    g_prev_scrollx = scrollx;
-
 }
 
 /*
@@ -2721,7 +2718,7 @@ bool set_scroll_x(int x) {
     if (changed) {
         g_scrollx = x;
         draw_statusbar_info();
-        // g_prev_scrollx = x;
+        g_prev_scrollx = x;
     }
     draw_minimap_indicator();
     return changed;
@@ -4132,7 +4129,12 @@ uint total_sample_bits;
 
                     // plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
 
-                    set_scroll_x(0);
+                    if (g_scrollx >= g_capture_n_samples) {
+                        set_scroll_x(0);
+                    } else {
+                         draw_statusbar_info();
+                        draw_minimap_indicator();
+                    }
 
                     get_plot_height(g_no_of_captured_pins);
 
