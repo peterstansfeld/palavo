@@ -31,7 +31,7 @@
 
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 0
-#define VERSION_PATCH 4
+#define VERSION_PATCH 5
 
 #ifndef VGA_TIMEOUT
 // If the number of idle seconds before the VGA output is blanked and
@@ -4848,7 +4848,7 @@ int main() {
 
             switch (main_state) {
                 case MS_ACTIVE:
-                if (VGA_TIMEOUT & (time_us_64() - last_event_time >= (VGA_TIMEOUT * 1000 * 1000))) {
+                if (VGA_TIMEOUT && (time_us_64() - last_event_time >= (VGA_TIMEOUT * 1000 * 1000))) {
                         start_screensaver();
                 }
                 break;
