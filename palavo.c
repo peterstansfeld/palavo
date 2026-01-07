@@ -31,7 +31,14 @@
 
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 0
-#define VERSION_PATCH 3
+#define VERSION_PATCH 4
+
+#ifndef VGA_TIMEOUT
+// If the number of idle seconds before the VGA output is blanked and
+// then halted hasn't been defined on the CMake command line, then
+// define one here
+#define VGA_TIMEOUT 60
+#endif
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
@@ -2220,7 +2227,10 @@ enum UI_COMMANDS {
     UIC_TAB,
     UIC_SHIFT_TAB,
     UIC_ESC,
-    UIC_UPPER_S
+    UIC_UPPER_S,
+
+    UIC_CTRL_LESS_THAN,
+    UIC_CTRL_GREATER_THAN
  };
 
 
@@ -2669,7 +2679,14 @@ uint check_keyboard() {
                 case 'S':
                     ui_command = UIC_UPPER_S;
                     break;
-        
+
+                case 44:
+                    ui_command = UIC_CTRL_LESS_THAN;
+                    break;
+
+                case 46:
+                    ui_command = UIC_CTRL_GREATER_THAN;
+                    break;
             }
          }
     }
@@ -3944,30 +3961,49 @@ uint total_sample_bits;
     // Claim a DMA channel for the pio state machine(s) used for capturing.
     uint dma_chan;
 
+    uint64_t last_event_time;
 
-    enum MAIN_STATES {MS_ACTIVE, MS_SCREENSAVE, MS_BLANK, MS_HALTED};
+    enum MAIN_STATES {MS_ACTIVE, MS_SCREENSAVE, MS_BLANK, MS_VGA_HALTED};
 
     uint8_t main_state = MS_ACTIVE;
-
-
-    enum MAIN_DVI_STATES {MDS_ACTIVE, MDS_NO_SIGNAL};
-
-    uint8_t main_dvi_state = MS_ACTIVE;
-
-    uint64_t last_event_time;
+    uint screensaver_line;
 
 
     void start_screensaver() {
-        uart_my_puts("Preparing to blank the screen...\n");
-        set_all_line_colours(DARK_GREY_64, BLACK);
+        uart_my_puts("Saving the screen...\n");
         main_state = MS_SCREENSAVE;
         last_event_time = time_us_64();
+        screensaver_line = 0;
+    }
+
+
+    bool screensaver_animate() {
+        bool res = true;
+        if (screensaver_line < SCREEN_HEIGHT / 2) {
+            // new white lines
+            set_line_colors(screensaver_line, WHITE, WHITE, WHITE, LIGHT_BLUE);
+            set_line_colors(SCREEN_HEIGHT - 1 - screensaver_line, WHITE, WHITE, WHITE, LIGHT_BLUE);
+            // delete old white lines
+            set_line_colors(screensaver_line - 1, BLACK, BLACK, WHITE, LIGHT_BLUE);
+            set_line_colors(SCREEN_HEIGHT - 1 - screensaver_line + 1, BLACK, BLACK, WHITE, LIGHT_BLUE);
+            screensaver_line++;
+        } else if (screensaver_line < (SCREEN_HEIGHT / 2) + 20) {
+            if (screensaver_line == (SCREEN_HEIGHT / 2) + 10) {
+                // delete one of the two remaining white lines after about 100 ms
+                set_line_colors((SCREEN_HEIGHT / 2) - 1, BLACK, BLACK, WHITE, LIGHT_BLUE);
+            }
+            screensaver_line++;
+        } else {
+            // delete the last remaining white line after about 200 ms
+            set_line_colors((SCREEN_HEIGHT / 2), BLACK, BLACK, WHITE, LIGHT_BLUE);
+            res = false;
+        }
+        return res;
     }
 
 
     void start_screen_blanking() {
         uart_my_puts("Blanking the screen...\n");
-        set_all_line_colours(BLACK, BLACK);
         main_state = MS_BLANK;
         last_event_time = time_us_64();
     }
@@ -3976,10 +4012,30 @@ uint total_sample_bits;
     void halt_vga_out() {
         uart_my_puts("Halting VGA OUT...\n");
         vga_pause();
-        main_state = MS_HALTED;
-        // last_event_time = time_us_64();
+        main_state = MS_VGA_HALTED;
     }
 
+    void restart_vga_out() {
+        // clear_screen();
+        // draw_ui();
+        // plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, true);
+        // draw_minimap_indicator();
+        // plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
+        // draw_statusbar_info();
+
+        uart_my_puts("Restarting VGA OUT...\n");
+        init_line_colours();
+        if (!showing_window) {
+            set_plot_line_colors(g_no_of_captured_pins);
+        }
+        vga_restart();
+        main_state = MS_ACTIVE;
+        last_event_time = time_us_64();
+    }
+
+    enum MAIN_DVI_STATES {MDS_ACTIVE, MDS_NO_SIGNAL};
+
+    uint8_t main_dvi_state = MDS_ACTIVE;
 
     void handle_command(uint ui_command) {
     if (ui_command) {
@@ -4284,6 +4340,15 @@ uint total_sample_bits;
                     start_screensaver();
                     break;
 
+                case UIC_CTRL_LESS_THAN:
+                case UIC_CTRL_GREATER_THAN:
+                    writeString(ui_command == UIC_CTRL_GREATER_THAN ? "next" : "previous");
+                    writeString(" two edges");
+                    plot_required = set_scroll_x(
+                        find_transition(capture_buf, g_channel, 
+                            find_transition(capture_buf, g_channel, g_scrollx, ui_command == UIC_CTRL_GREATER_THAN), 
+                            ui_command == UIC_CTRL_GREATER_THAN));
+                    break;
 #if USE_DVI
 
 #if USE_VGA_CAPTURE
@@ -4432,16 +4497,6 @@ void draw_ui() {
     // logo(440, 30);
 
     clear_statusbar_hint(); // set the cursor etc.
-}
-
-
-void screensaver_init(bool init) {
-
-}
-
-
-void screensaver_animate() {
-
 }
 
 
@@ -4787,37 +4842,21 @@ int main() {
             if (main_state == MS_ACTIVE) {
                 handle_command(ui_command);
             } else {
-                uart_my_puts("Reactivating the screen...\n");
-
-                // clear_screen();
-                // draw_ui();
-                // plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, true);
-                // draw_minimap_indicator();
-                // plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
-                // draw_statusbar_info();
-
-                init_line_colours();
-
-                if (!showing_window) {
-                    set_plot_line_colors(g_no_of_captured_pins);
-                }
-
-                vga_restart();
-
-                main_state = MS_ACTIVE;
-                last_event_time = time_us_64();
+                restart_vga_out();
             }
         } else {
 
             switch (main_state) {
                 case MS_ACTIVE:
-                if (time_us_64() - last_event_time >= (60 * 1000 * 1000)) {
-                    start_screensaver();
+                if (VGA_TIMEOUT & (time_us_64() - last_event_time >= (VGA_TIMEOUT * 1000 * 1000))) {
+                        start_screensaver();
                 }
                 break;
 
                 case MS_SCREENSAVE:
-                if (time_us_64() - last_event_time >= (5 * 1000 * 1000)) {
+                if (screensaver_animate()) {
+                    screensaver_animate();
+                } else {
                     start_screen_blanking();
                 }
                 break;
@@ -4828,7 +4867,7 @@ int main() {
                 }
                 break;
 
-                case MS_HALTED:
+                case MS_VGA_HALTED:
                 break;
 
             }
@@ -4849,15 +4888,8 @@ int main() {
                     last_vga_capture_seconds_count = vga_capture_seconds_count;
                     last_vga_capture_time = time_us_64();
                     if (main_dvi_state == MDS_NO_SIGNAL) {
-                        uart_my_puts("VGA input signal detected.\n");
-
-                        // dvi_init();
-                        // dvi_reinit();
+                        uart_my_puts("VGA input signal detected - restarting DVI...\n");
                         multicore_fifo_push_blocking(CORE1_CMD_INIT_DVI);
-
-
-                        // !!! cant' talk to dvi via core 0 !!!
-
                         main_dvi_state = MDS_ACTIVE;
                     }
                 } else {

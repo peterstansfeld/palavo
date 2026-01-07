@@ -79,6 +79,12 @@ else()
         PICO_DEFAULT_UART_RX_PIN=9)
 endif()
 
+if (DEFINED VGA_TIMEOUT)
+    # without the following line we can't pass the `VGA_TIMEOUT` definition 
+    # `-DVGA_TIMEOUT=x` as an argument when running `make`.
+    add_compile_definitions(VGA_TIMEOUT=${VGA_TIMEOUT})
+endif()
+
 # Set the maximum number of milliseconds to wait during USB stdio 
 # initialization. Without this a number of transmissions are lost
 # because the host (PC) isn't ready to receive. 
