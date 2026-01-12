@@ -31,7 +31,7 @@
 
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 0
-#define VERSION_PATCH 5
+#define VERSION_PATCH 6
 
 #ifndef VGA_TIMEOUT
 // If the number of idle seconds before the VGA output is blanked and
@@ -349,7 +349,7 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 // #define CAPTURE_N_SAMPLES SCREEN_WIDTH * 96 // enough for 48 screen width's worth of data
 
 //set the default sample rate to the pixel clock rate of 25 MHz
-#define CAPTURE_SAMPLE_FREQ_DIVISOR (SYS_CLK_KHZ / 25000u)
+#define CAPTURE_SAMPLE_FREQ_DIVISOR (SYS_CLK_HZ / 25 * MHZ)
 
 
 #define CAPTUTRE_TRIGGER_TYPE TT_VGA_CRGB
@@ -399,18 +399,17 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 #define CAPTUTRE_TRIGGER_TYPE TT_VGA_VSYNC
 #endif
 
-#if PICO_RP2350
-// assume this is a PICO2350 (running at 150 MHz)
-#define CAPTURE_SAMPLE_FREQ_DIVISOR 6
-#else
-// assume this is a PICO2040 (running at 125 MHz)
-#define CAPTURE_SAMPLE_FREQ_DIVISOR 5
+    #if SYS_CLK_HZ == 125 * MHZ
+        #define CAPTURE_SAMPLE_FREQ_DIVISOR 5
+    #elif SYS_CLK_HZ == 150 * MHZ
+        #define CAPTURE_SAMPLE_FREQ_DIVISOR 6
+    #elif SYS_CLK_HZ == 250 * MHZ
+        #define CAPTURE_SAMPLE_FREQ_DIVISOR 10
+    #endif
 
 #endif
 
-#endif
-
-// #define CAPTURE_SAMPLE_FREQ_DIVISOR (SYS_CLK_KHZ / 480)
+// #define CAPTURE_SAMPLE_FREQ_DIVISOR (SYS_CLK_HZ / 480)
 
 #endif
 
@@ -3565,10 +3564,16 @@ void vga_in_capture_set_enabled(bool enabled) {
     if (enabled) {
         if (!is_enabled) {
             if (vga_capture_mode == VC_NONE) {
+#if SYS_CLK_HZ == 125 * MHZ
+                vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_125_mhz_program);
+
+                vga_capture_125_mhz_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_IN_RGB_BASE_PIN);
+
+#elif SYS_CLK_HZ == 150 * MHZ
                 vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
 
                 vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_IN_RGB_BASE_PIN);
-
+#endif
                 vga_detect_vsync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_program);
                 vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, VGA_IN_VSYNC_PIN);
                 // vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, 0);
@@ -3604,8 +3609,11 @@ void vga_in_capture_set_enabled(bool enabled) {
 
             // and free it
             pio_remove_program(vga_capture_pio, &vga_detect_vsync_program, vga_detect_vsync_offset);
+#if SYS_CLK_HZ == 125 * MHZ
+            pio_remove_program(vga_capture_pio, &vga_capture_125_mhz_program, vga_capture_offset);
+#elif SYS_CLK_HZ == 150 * MHZ
             pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
-
+#endif
             // free the remaining state machine
             pio_remove_program(vga_capture_pio, &vga_detect_vsync_on_csync_program, vga_detect_vsync_on_csync_offset);
 
@@ -3632,16 +3640,32 @@ void vga_out_capture_set_enabled(bool enabled) {
 #endif
 
 #if USE_GPIO_31_47
+    #if SYS_CLK_HZ == 125 * MHZ
+                vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_125_mhz_program);
+                vga_capture_125_mhz_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
+    #elif SYS_CLK_HZ == 150 * MHZ
                 vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
                 vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
+    #endif
 #else
 
     #if VGA_OUT_RGB_PIN_COUNT == 1
+        #if SYS_CLK_HZ == 125 * MHZ
+                vga_capture_offset = pio_add_program(vga_capture_pio, &vga_1bit_capture_125_mhz_program);
+                vga_1bit_capture_125_mhz_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
+        #elif SYS_CLK_HZ == 150 * MHZ
                 vga_capture_offset = pio_add_program(vga_capture_pio, &vga_1bit_capture_program);
                 vga_1bit_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
+        #endif
+
     #else
+        #if SYS_CLK_HZ == 125 * MHZ
+                vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_125_mhz_program);
+                vga_capture_125_mhz_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
+        #elif SYS_CLK_HZ == 150 * MHZ
                 vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
                 vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
+        #endif
     #endif
 
 #endif
@@ -3692,12 +3716,25 @@ void vga_out_capture_set_enabled(bool enabled) {
 #endif
 
 #if USE_GPIO_31_47 
+    #if SYS_CLK_HZ == 125 * MHZ
+            pio_remove_program(vga_capture_pio, &vga_capture_125_mhz_program, vga_capture_offset);
+    #elif SYS_CLK_HZ == 150 * MHZ
             pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
+    #endif
 #else
     #if VGA_OUT_RGB_PIN_COUNT == 1
+        #if SYS_CLK_HZ == 125 * MHZ
+            pio_remove_program(vga_capture_pio, &vga_1bit_capture_125_mhz_program, vga_capture_offset);
+        #elif SYS_CLK_HZ == 150 * MHZ
             pio_remove_program(vga_capture_pio, &vga_1bit_capture_program, vga_capture_offset);
+        #endif
+
     #else
+        #if SYS_CLK_HZ == 125 * MHZ
+            pio_remove_program(vga_capture_pio, &vga_capture_125_mhz_program, vga_capture_offset);
+        #elif SYS_CLK_HZ == 150 * MHZ
             pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
+        #endif
     #endif
 
 #endif
@@ -4575,9 +4612,9 @@ int main() {
     put_about_text();
 
 
-#ifdef SYS_CLK_KHZ
-    int sys_clk_freq_khz = SYS_CLK_KHZ;
-    uart_my_putcf("SYS_CLOCK_KHZ: %d\n", sys_clk_freq_khz);
+#ifdef SYS_CLK_HZ
+    int sys_clk_freq_hz = SYS_CLK_HZ;
+    uart_my_putcf("SYS_CLK_HZ: %d\n", sys_clk_freq_hz);
 #endif
 
 #ifdef PICO_SDK_VERSION_STRING
@@ -4603,6 +4640,10 @@ int main() {
 #if USE_DVI
     // Initialise the HSTX DVI driver
     uart_my_puts("Initialising DVI...\n");
+
+    #if SYS_CLK_HZ == 250 * MHZ
+    // clock_configure_int_divider (clk_hstx, 0, 0, clock_get_hz(clk_sys), 2);
+    #endif
 
     uart_my_putcf("clk_hstx: %d\n", clock_get_hz (clk_hstx));
     // uart_my_putcf("HSTX Frequency: %d\n", clock_get_hz (CLK_DEST_HSTX));
@@ -4888,14 +4929,14 @@ int main() {
                     last_vga_capture_seconds_count = vga_capture_seconds_count;
                     last_vga_capture_time = time_us_64();
                     if (main_dvi_state == MDS_NO_SIGNAL) {
-                        uart_my_puts("VGA input signal detected - restarting DVI...\n");
+                        uart_my_puts("VGA input signal detected. Restarting DVI output...\n");
                         multicore_fifo_push_blocking(CORE1_CMD_INIT_DVI);
                         main_dvi_state = MDS_ACTIVE;
                     }
                 } else {
                     if (main_dvi_state == MDS_ACTIVE) {
                         if (time_us_64() - last_vga_capture_time >= (5 * 1000 * 1000)) {
-                            uart_my_puts("No VGA input signal.\n");
+                            uart_my_puts("No VGA input signal. Halting DVI output...\n");
                             // dvi_testbars();
 
                             // dvi_deinit();

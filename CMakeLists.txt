@@ -85,6 +85,19 @@ if (DEFINED VGA_TIMEOUT)
     add_compile_definitions(VGA_TIMEOUT=${VGA_TIMEOUT})
 endif()
 
+if (DEFINED SYS_CLK_HZ)
+
+    if ((SYS_CLK_HZ EQUAL 125000000))
+        message(STATUS "SYS_CLK set to 125 MHz")
+        add_compile_definitions(SYS_CLK_HZ=${SYS_CLK_HZ})
+    elseif ((SYS_CLK_HZ EQUAL 150000000))
+        message(STATUS "SYS_CLK set to 150 MHz")
+        add_compile_definitions(SYS_CLK_HZ=${SYS_CLK_HZ})
+    else()
+        message(STATUS "SYS_CLK left at default")
+    endif()
+endif()
+
 # Set the maximum number of milliseconds to wait during USB stdio 
 # initialization. Without this a number of transmissions are lost
 # because the host (PC) isn't ready to receive. 
