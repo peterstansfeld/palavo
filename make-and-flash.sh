@@ -10,6 +10,7 @@
 # adapter_serial_no=E663AC91D3139137
 # adapter_serial_no=E6614103E7440D2F
 adapter_serial_no=E6614103E71C4A2F
+# adapter_serial_no=E663AC91D3139137
 
 target_adapter_cmnd="adapter serial ${adapter_serial_no}"
 
