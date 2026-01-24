@@ -31,7 +31,7 @@
 
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 0
-#define VERSION_PATCH 6
+#define VERSION_PATCH 7
 
 #ifndef VGA_TIMEOUT
 // If the number of idle seconds before the VGA output is blanked and
@@ -83,6 +83,14 @@
 #define BAUD_RATE 115200
 
 #define DEBUG_PIN 28
+
+#define SOH 1
+#define EOT 4
+#define ACK 6
+#define DLE 16
+#define NAK 21
+
+#define CTRL_P DLE
 
 
 // Configuration settings, including bit locations for PALAVO_CONFIG
@@ -2229,7 +2237,9 @@ enum UI_COMMANDS {
     UIC_UPPER_S,
 
     UIC_CTRL_LESS_THAN,
-    UIC_CTRL_GREATER_THAN
+    UIC_CTRL_GREATER_THAN,
+
+    UIC_CTRL_P,
  };
 
 
@@ -2469,7 +2479,6 @@ uint check_keyboard() {
 #endif
         ui_command = UIC_ANY;
 
-        clear_statusbar_hint();
         // set_statusbar_text();
         // fillRect(1, SCREEN_HEIGHT - 1 - 8, SCREEN_WIDTH - 2, 8, BLUE);
         // setCursor(2, SCREEN_HEIGHT - 1 - 8);
@@ -2487,14 +2496,23 @@ uint check_keyboard() {
             last_uart_char = ch;
         }
 
+        char str[80];
+        if (ch != CTRL_P) {
+            // not ctrl-p
+            clear_statusbar_hint();
+            sprintf(str,"%d ", ch);
+            // itoa(ch, str, 10);
+            writeString(str);
+        }
+
         #define ESCAPE_SEQ_LEN 80
         uint8_t escape_seq[ESCAPE_SEQ_LEN + 1];
         escape_seq[0] = 0;
 
-        char str[80];
-        sprintf(str,"%d ", ch);
+        // char str[80];
+        // sprintf(str,"%d ", ch);
         // itoa(ch, str, 10);
-        writeString(str);
+        // writeString(str);
         // if (uart_is_writable(UART_ID)) {
         //     uart_putc(UART_ID, ch);
         // }
@@ -2685,6 +2703,10 @@ uint check_keyboard() {
 
                 case 46:
                     ui_command = UIC_CTRL_GREATER_THAN;
+                    break;
+
+                case CTRL_P:
+                    ui_command = UIC_CTRL_P;
                     break;
             }
          }
@@ -3360,6 +3382,87 @@ void test_DVI_framebuf() {
     dvi_testbars();
 }
 #endif
+
+
+// upload a screenshot (the VGA framebuffer) using the XMODEM protocol
+void print_screen() {
+
+    uint32_t* screen_buf_ptr = &vga_1bit_data_array[0];
+    uint8_t* screen_buf_byte_ptr = (uint8_t*)screen_buf_ptr;
+
+    #define XMODEM_DATA_BUF_LEN 128
+    uint8_t xm_buf[XMODEM_DATA_BUF_LEN];
+
+    uint8_t frame_no = 1;
+
+    int uart_int;
+
+    int l = 0;
+
+    #define NO_OF_PACKETS (((21 * 4) * 480) / 128)
+
+    uint32_t byte_index = 0;
+
+    // wait for upto 30 seconds for a NAK from the controller (e.g. minicom)
+    uart_int = stdio_getchar_timeout_us(30000 * 1000);
+    if (uart_int != NAK) {
+        // failed to get a NAK
+        writeString(" screenshot timeout");
+        return;
+    }
+
+    while (l < NO_OF_PACKETS) {
+        uint8_t checksum = 0;
+
+        stdio_putchar_raw(SOH);
+        stdio_putchar_raw(frame_no);
+        stdio_putchar_raw(~frame_no);
+
+        for (uint8_t i = 0; i < XMODEM_DATA_BUF_LEN ; i++) {
+            uint8_t b = *screen_buf_byte_ptr;
+
+            stdio_putchar_raw(b);
+            checksum += b;
+
+            screen_buf_byte_ptr++;
+            byte_index++;
+        }
+
+        stdio_putchar_raw(checksum);
+
+        // wait for ACK
+        uart_int = stdio_getchar_timeout_us(2000 * 1000);
+
+        if (uart_int == ACK) {
+            // the packet was ok
+            // writeString(".");
+            l += 1;
+            frame_no += 1;
+        } else if (uart_int == NAK) {
+            // the packet was not ok
+            // writeString("?");
+            // repeat the packet
+            screen_buf_byte_ptr -= XMODEM_DATA_BUF_LEN;
+
+        } else if (uart_int == PICO_ERROR_TIMEOUT) {
+            // timeout
+            // writeString(" - boo");
+            break;
+        }
+    }
+
+    if (uart_int == ACK) {
+        stdio_putchar_raw(EOT);
+        uart_int = stdio_getchar_timeout_us(2000 * 1000); // 1 second is not enough
+        if (uart_int == ACK) {
+            // writeString(" - yay");
+        } else if (uart_int == PICO_ERROR_TIMEOUT) {
+            // writeString(" - boo");
+        } else {
+            // writeString(" - ???");
+        }
+    }
+}
 
 
 void close_window() {
@@ -4080,12 +4183,12 @@ uint total_sample_bits;
         bool plot_required = false;
         bool mini_map_redraw_required = false;
         if (showing_window) {
-            // if (ui_command == UIC_ESC) {
-                // writeString("esc");
+            if (ui_command == UIC_CTRL_P) {
+                print_screen();
+            } else {
                 close_window();
                 plot_required = true;
-            // }
-
+            }
         } else {
 
 
@@ -4441,6 +4544,9 @@ uint total_sample_bits;
 #endif
 
 #endif
+                case UIC_CTRL_P:
+                    print_screen();
+                    break;
 
             }
         }

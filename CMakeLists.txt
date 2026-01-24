@@ -117,14 +117,13 @@ endif()
 # must match with executable name
 pico_add_extra_outputs(palavo)
 
-# Select stdio peripheral
+# Select stdio peripheral(s)
+
+message(STATUS "Use USB stdio")
+pico_enable_stdio_usb(palavo 1)
+
 if (PC_BIT5)
     message(STATUS "Use USB stdio")
     pico_enable_stdio_uart(palavo 1)
-    pico_enable_stdio_usb(palavo 0)
-else()
-    message(STATUS "Use UART stdio")
-    pico_enable_stdio_uart(palavo 0)
-    pico_enable_stdio_usb(palavo 1)
 endif()
 
