@@ -4,7 +4,7 @@
 
 # magick -size 640x480 -depth 8 rgb:SOURCE DEST
 
-# (where SOURCE if the DEST from this program)
+# (where SOURCE is the DEST from this program)
 
 import os
 import sys
@@ -60,9 +60,11 @@ def expand_2_bit_color(two_bits):
     if two_bits & 0x02 != 0:
         # r = 0xc0
         r = 0x80
+        # r = 170
     if two_bits & 0x01 != 0:
         # r = r | 0x3f
         r = r | 0x40
+        # r = r + 85
     return r
 
 # bytearray to hold all the 8-bit RGB values for the output file.

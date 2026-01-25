@@ -31,7 +31,7 @@
 
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 0
-#define VERSION_PATCH 7
+#define VERSION_PATCH 8
 
 #ifndef VGA_TIMEOUT
 // If the number of idle seconds before the VGA output is blanked and
@@ -2929,12 +2929,7 @@ bool showing_window = false;
 void show_help_window() {
     fillRect(HELP_WINDOW_LEFT, HELP_WINDOW_TOP, HELP_WINDOW_WIDTH, HELP_WINDOW_HEIGHT, LIGHT_BLUE);
 
-    // for (int y = 0; y < HELP_WINDOW_HEIGHT; y++) {
-    //     set_line_colors(HELP_WINDOW_TOP + y, BLACK, LIGHT_BLUE, 0, 0);
-    // }
-
     for (int y = 0; y <= SCREEN_HEIGHT; y++) {
-        // set_line_colors(y, BLACK, LIGHT_BLUE, 0, 0);
         set_line_colors(y, BLACK, WHITE, 0, 0);
     }
 
@@ -2943,16 +2938,11 @@ void show_help_window() {
     setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + FONT_HEIGHT + HELP_WINDOW_PADDING);
     set_text_padding(HELP_WINDOW_PADDING);
     writeString(help_strings);
-    // writeString(press_any_key_string);
-
-    // setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + HELP_WINDOW_HEIGHT - (2 * (FONT_HEIGHT + HELP_WINDOW_PADDING)));
-    setCursorX(HELP_WINDOW_LEFT + FONT_WIDTH);
     writeString(press_any_key_string);
 
     uart_my_puts("\nHELP\n\n");
     uart_my_puts(help_strings);
     uart_my_puts(press_any_key_string);
-    uart_my_puts("\n");
 
     showing_window = true;
 }
@@ -3205,15 +3195,16 @@ void logo_med(int x, int y, bool use_fore_col) {
 }
 
 
+char* about_name_str = 
+    "\n"
+    "ABOUT\n\n"
+    "PALAVO\n\n";
 
-char* name_string = "PALAVO";
-
-char* about_strings_description =
+char* about_description_str =
     "PIO-Assisted Logic Analyser with VGA Output\n"
     "Version: " STR(VERSION_MAJOR) "." STR(VERSION_MINOR) "." STR(VERSION_PATCH) "\n"
     "\n"
     "Developed by Peter Stansfeld.\n"
-    "\n"
     "\n"
     "Inspired by and using code from:\n"
     "\n"
@@ -3221,79 +3212,44 @@ char* about_strings_description =
     "\n"
     "* Hunter Adams's VGA Graphics Driver for RP2040 with\n"
     "  Bruce Land's 4-bit mod.\n"
-    // "vha3@cornell.edu\n"
     "\n"
     "\n";
 
-    char* board_str =
-    "Board: ";
 
-    char* config_str =
-    "Config: ";
+void show_about_info(bool on_window) {
 
+    char about_platform_str[128];
+    sprintf(about_platform_str, "Board: %s\nClock: %d MHz\nConfig: %d\n\n", PICO_BOARD, SYS_CLK_HZ / 1000000, PALAVO_CONFIG);
 
-void put_about_text() {
-    uart_my_puts(name_string);
-    uart_my_puts("\n\n");
-    uart_my_puts(about_strings_description);
-    uart_my_puts(board_str);
+    if (on_window) {
+        for (int y = 0; y <= SCREEN_HEIGHT; y++) {
+            set_line_colors(y, BLACK, WHITE, 0, 0);
+        }
 
-#ifdef PICO_BOARD
-    uart_my_puts(PICO_BOARD);
+        fillRect(HELP_WINDOW_LEFT, HELP_WINDOW_TOP, HELP_WINDOW_WIDTH, HELP_WINDOW_HEIGHT, LIGHT_BLUE);
+        logo_med(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + 20 - 11, false);
+        setTextSize(1);
+        setTextColor(BLACK);
+        setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + 20 + 8 + 4 + 4 + 4);
+        set_text_padding(HELP_WINDOW_PADDING);
+
+        writeString(about_description_str);
+        writeString(about_platform_str);
+        writeString(press_any_key_string);
+    }
+
+    uart_my_puts(about_name_str);
+    uart_my_puts(about_description_str);
+    uart_my_puts(about_platform_str);
+    if (on_window) {
+        uart_my_puts(press_any_key_string);
+    }
     uart_my_puts("\n");
-#endif
-
-    uart_my_puts(config_str);
-    uart_my_puts(STR(PALAVO_CONFIG));
-    uart_my_puts("\n\n");
 }
 
 
 void show_about_window() {
-    for (int y = 0; y <= SCREEN_HEIGHT; y++) {
-        // set_line_colors(y, BLACK, LIGHT_BLUE, 0, 0);
-        set_line_colors(y, BLACK, WHITE, 0, 0);
-    }
-
-    fillRect(HELP_WINDOW_LEFT, HELP_WINDOW_TOP, HELP_WINDOW_WIDTH, HELP_WINDOW_HEIGHT, LIGHT_BLUE);
-
-    // logo(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + 20 - 11, false);
-    logo_med(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + 20 - 11, false);
-
-    setTextSize(1);
-    setTextColor(BLACK);
-
-    // setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + FONT_HEIGHT + HELP_WINDOW_PADDING + );
-    setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + 20 + 8 + 4 + 4 + 4);
-    set_text_padding(HELP_WINDOW_PADDING);
-    writeString(about_strings_description);
-    // writeString(press_any_key_string);
-    // writeString("\n\n");
-    setCursorX(HELP_WINDOW_LEFT + FONT_WIDTH);
-    writeString(board_str);
-
-#ifdef PICO_BOARD
-    writeString(PICO_BOARD);
-#endif
-
-    writeString("\n");
-    setCursorX(HELP_WINDOW_LEFT + FONT_WIDTH);
-    writeString(config_str);
-    writeString(STR(PALAVO_CONFIG));
-
-    writeString("\n\n");
-
-    setCursorX(HELP_WINDOW_LEFT + FONT_WIDTH);
-
-    // HELP_WINDOW_TOP + HELP_WINDOW_HEIGHT - (2 * (FONT_HEIGHT + HELP_WINDOW_PADDING)));
-    writeString(press_any_key_string);
-
-    uart_my_puts("\nABOUT\n\n");
-    put_about_text();
-
-    uart_my_puts(press_any_key_string);
-    uart_my_puts("\n");
-
+    show_about_info(true);
     showing_window = true;
 }
 
@@ -4710,37 +4666,17 @@ int main() {
 
 #endif
 
+    // uart_my_putcf("GPIO Inputs: %x\n", GPIO_INPUT_MASK_0_31);
 
-    uart_my_putcf("GPIO Inputs: %x\n", GPIO_INPUT_MASK_0_31);
+    // uart_my_puts("\n\n");
 
-    uart_my_puts("\n\n");
+    show_about_info(false);
 
-    put_about_text();
-
-
-#ifdef SYS_CLK_HZ
-    int sys_clk_freq_hz = SYS_CLK_HZ;
-    uart_my_putcf("SYS_CLK_HZ: %d\n", sys_clk_freq_hz);
-#endif
-
-#ifdef PICO_SDK_VERSION_STRING
-    uart_my_puts("SDK Version: ");
-    uart_my_puts(PICO_SDK_VERSION_STRING);
-    uart_my_puts("\n");
-#endif
-
-#ifdef PICO_BOARD
-    uart_my_puts("Board: ");
-    uart_my_puts(PICO_BOARD);
-    uart_my_puts("\n");
-#endif
-
-
-#ifdef PICO_PLATFORM
-    uart_my_puts("Platform: ");
-    uart_my_puts(PICO_PLATFORM);
-    uart_my_puts("\n");
-#endif
+// #ifdef PICO_SDK_VERSION_STRING
+//     uart_my_puts("SDK Version: ");
+//     uart_my_puts(PICO_SDK_VERSION_STRING);
+//     uart_my_puts("\n");
+// #endif
 
 
 #if USE_DVI
