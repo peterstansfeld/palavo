@@ -2,15 +2,15 @@
 
 ### PIO-Assisted* Logic Analyser with VGA Output
 
-Palavo uses the PIO (Programmable Input Output) feature of Raspberry Pi's RP2040 or RP2350 microcontroller to capture the state of its GPIO pins over time. It then displays those captured states on a VGA monitor. Calling Palavo a logic analyser is a bit of a stretch, as it does very little analysis, but it does allow the user, via a simple interface, to analyse the logic themselves. The user interface is controlled using a serial terminal (on a PC), a keyboard to serial terminal adapter, and/or an infra-red remote control. The user can specify which GPIO pins to capture, the frequency at which they should be captured, which GPIO pin to use to trigger the capture, and what type of trigger that should be.
+Palavo uses the PIO (Programmable Input Output) feature of Raspberry Pi's RP2040 or RP2350 microcontroller to capture the state of its GPIO pins over time. It then displays those captured states on a VGA monitor. Calling Palavo a logic analyser is a bit of a stretch, as it does very little analysis, but it does allow the user, via a simple user interface, to analyse the logic themselves. The interface is controlled using a serial terminal (on a PC), a keyboard to serial terminal adapter, and/or an infra-red remote control. The user can specify which GPIO pins to capture, the frequency at which they should be captured, which GPIO pin should be used to trigger the capture, and what type of trigger that should be.
 
-When using hardware with the RP2350, Palavo can be configured to also output DVI. I thought about changing the project name to Palavodo, but decided against it.
+When using the RP2350, Palavo can be configured to mirror its VGA output to DVI. I thought about changing the project name to Palavocado, but decided against it.
 
-The project was inspired by, and uses code from, Raspberry Pi's [Logic Analyser example in the SDK.](https://github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser) as well as Hunter Adams' [PIO-Based VGA Graphics Driver for RP2040](https://github.com/vha3/Hunter-Adams-RP2040-Demos/blob/master/VGA_Graphics/README.md), and Raspberry Pi's [DVI Out HSTX Encoder example for the Pico 2.](github.com/raspberrypi/pico-examples/tree/master/hstx/dvi_out_hstx_encoder)
+The project was inspired by, and uses code from, Raspberry Pi's [Logic Analyser example in the SDK](https://github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser), Raspberry Pi's [DVI Out HSTX Encoder example for the Pico 2](https://github.com/raspberrypi/pico-examples/tree/master/hstx/dvi_out_hstx_encoder), and Hunter Adams' [PIO-Based VGA Graphics Driver for RP2040](https://github.com/vha3/Hunter-Adams-RP2040-Demos/blob/master/VGA_Graphics/README.md).
 
-The VGA output uses a resolution of 640 x 480 with 6-bit colour (2 red, 2 green, 2 blue). It can use either HSYNC (horizontal sync) and VSYNC (vertical sync) or, to save a GPIO pin, CSYNC (combined sync). Not all VGA monitors support CSYNC, but many do. More details about CSYNC can be found on this [HDRetrovision blog post](https://www.hdretrovision.com/blog/2018/10/22/engineering-csync-part-1-setting-the-stage).
+The VGA output uses a resolution of 640 x 480 with 6-bit colour (2 red, 2 green, 2 blue). It can use either HSYNC (horizontal sync) and VSYNC (vertical sync) or, to save a GPIO pin, CSYNC (combined sync). Not all VGA monitors support CSYNC, but many do. Some details about CSYNC can be found on this [HDRetrovision blog post](https://www.hdretrovision.com/blog/2019/10/10/engineering-csync-part-2-falling-short).
 
-\*The *Assisted* in *PIO-Assisted* doesn't really do PIO justice, as without PIO Palavo would simply not be possible.
+\*The *Assisted* in *PIO-Assisted* doesn't really do PIO justice, as without PIO, Palavo would simply not be possible. If anyone has any better suggestions (than *Assisted) they'd be gratefully received.
 
 
 ## How to build Palavo
@@ -18,11 +18,12 @@ The VGA output uses a resolution of 640 x 480 with 6-bit colour (2 red, 2 green,
 There are a number of configurations for Palavo, which can sample either any of the 32 GPIOs of the RP2040/RP2350A, or the 48 GPIOs of the RP2350B. Configurations are defined with the `PALAVO_CONFIG` variable in the `cmake` command line when creating a build directory.
 
 ## Configuration 0
+
 #### PALAVO_CONFIG=0
 
 ### Hardware
 
-At its simplest, a Raspberry Pi Pico or Pico 2 and a few resistors can be used:
+At its simplest, a [Raspberry Pi Pico or Pico 2](https://www.raspberrypi.com/documentation/microcontrollers/pico-series.html) and a few resistors can be used:
 
 ```
       VGA_Out_VSYNC  GP0  1       USB      40 VBUS
@@ -47,34 +48,36 @@ VGA_Out_Light_Green  GP5  7                34 GP28
                     GP15 20                21 GP16
 ```
 
-\* UART serial comms can be used instead of USB serial comms - add 32 to PALAVO_CONFIG  
+\* UART serial comms can be used in addition to USB serial comms - add 32 to PALAVO_CONFIG  
 \** To enable IR reception add 8 to PALAVO_CONFIG  
 
-The VGA_Out_signals need to be fed into a resistor network to provide the voltages for the Red, Green, and Blue colour pins on a 15 pin VGA socket or cable that's attached to a VGA monitor:
+The VGA_Out signals need to be fed into a resistor network to provide the voltages for the Red, Green, and Blue colour pins on a 15-pin VGA socket or cable that's attached to a VGA monitor:
 
 ```
 Pico or Pico 2 GPIO  Resistor  VGA 15-way Socket 
 ------------------------------------------------
+     VGA_Out_VSYNC*  ---47R--  13 VSYNC
 VGA_Out_HSYNC_CSYNC  ---47R--  13 HSYNC
                 GND  ---0R---  5 GND
-  VGA_Out_Dark Blue  ---1K---  3 Blue
- VGA_Out_Light Blue  --470R--  3 Blue
- VGA_Out_Dark Green  ---1K---  2 Green
-VGA_Out_Light Green  --470R--  2 Green
-   VGA_Out_Dark Red  ---1K---  1 Red
-  VGA_Out_Light Red  --470R--  1 Red
+  VGA_Out_Dark_Blue  ---1K---  3 Blue
+ VGA_Out_Light_Blue  --470R--  3 Blue
+ VGA_Out_Dark_Green  ---1K---  2 Green
+VGA_Out_Light_Green  --470R--  2 Green
+   VGA_Out_Dark_Red  ---1K---  1 Red
+  VGA_Out_Light_Red  --470R--  1 Red
 ```
+\* If CSYNC is being used instead of HSYNC & VSYNC, VSYNC need not be connected.
 
 If not using USB for serial comms, Serial_RX and Serial_TX can be connected to a PC via a 3.3V logic level UART to USB serial adapter. I use [Raspberry Pi's Debug Probe](https://www.raspberrypi.com/documentation/microcontrollers/debug-probe.html) as it can also be used to program and debug the Pico via its Debug interface.
 
-Alternatively the Serial_RX and Serial_TX can be connected to a keyboard to serial terminal adapter, which is a Pico or Pico 2 with its USB port in host mode, and which converts keyboard input to serial (UART) output. The details for this adapter can be found in this [keybuart repository](https://github.com/peterstansfeld/keybuart.git).
+Alternatively the Serial_RX and Serial_TX can be connected to a keyboard to serial terminal adapter, which is essentially a Pico or Pico 2 with its USB port in host mode, and which converts keyboard input to serial (UART) output. The details for this adapter can be found in this [keybuart repository](https://github.com/peterstansfeld/keybuart.git).
 
 The Infra_Red_RX pin, along with connections to 3.3V and GND, can be connected to an infra-red receiver, e.g. this [Grove IR Receiver](https://thepihut.com/products/grove-infrared-receiver), and Palavo accepts commands transmitted from this [Argon IR Remote control](https://argon40.com/products/argon-remote).
 
 
 ### Firmware
 
-There may be a simpler way, using Raspberry Pi's Pico Visual Studio Code Extension perhaps, but I haven't experimented with that enough yet (todo). This is how I currently build the firmware on a Raspberry Pi 5:
+There may be a simpler way to build Palavo's firmware, using Raspberry Pi's Pico Visual Studio Code Extension perhaps, but I haven't experimented with that enough yet (todo). This is how I currently build it on a Raspberry Pi 5 running Raspberry Pi OS:
 
 Follow the instructions in Appendix C: Manual toolchain setup of [Getting started with Raspberry Pi Pico-series](https://datasheets.raspberrypi.com/pico/getting-started-with-pico.pdf).
 
@@ -92,7 +95,7 @@ Create a `build` directory and enter it:
 
 `$ cd build`
 
-Create a suitably-named directory (the target for this example is a Raspberry Pi Pico 2) and enter that directory:
+Create a suitably-named directory (the target for this example is a Raspberry Pi Pico 2) and enter that it:
 
 `$ mkdir pico2`
 
@@ -109,30 +112,29 @@ Specify where the pico-sdk directory can be found on your PC, e.g.:
 
 `$ export PICO_SDK_PATH=~/pico/pico-sdk`
 
-Run `cmake` specifying where the top level CMakeLists.txt file can be found - in this case it's the great-grandparent directory `../../../`, specify the board `pico2`, 
-and specify the configuration `PALAVO_CONFIG=0`:
+Run `cmake` specifying where the top level CMakeLists.txt file can be found - in this case it's the great-grandparent directory `../../../`, specify the board `pico2`, and specify the configuration `PALAVO_CONFIG=0`:
 
 `$ cmake ../../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=0`
 
 Then build it:
 
-`$ make -j4`
+`$ make`
 
-This should generate, amongst other files, a `palavo.uf2` file and a `palavo.elf` file.
+This should generate, among other files, a `palavo.uf2` and a`palavo.elf`.
 
-To program the RP2350 on the Pico 2 with the `palavo.uf2` file, put the Pico into boot mode and copy the file onto the drive that appears on your PC. Alternatively, put the Pico into boot mode and use the `picotool` utility:
+To program the RP2350 on the Pico 2 with `palavo.uf2` put the Pico into boot mode and copy the file onto the drive that appears on your PC. Alternatively, put the Pico into boot mode and use the `picotool` utility:
 
 `$ picotool load palavo.uf2 -f`
 
-To program the RP2350 with the `palavo.elf` file, use `openocd` and a Raspberry Pi Debug Probe:
+To program the RP2350 with `palavo.elf` use `openocd` and a Raspberry Pi Debug Probe:
 
 `$ openocd -f interface/cmsis-dap.cfg -f target/rp2350.cfg -c "adapter speed 5000" -c "init; reset; program palavo.elf verify reset exit"`
 
-Instead of remembering the above command each time, you can copy the script file `make-and-flash.sh` from the palavo directory:
+Instead of remembering the above command each time, you can copy the script `make-and-flash.sh` from the palavo directory:
 
 `$ cp ../../../make-and-flash.sh .`
 
-Using a text editor modify the `adapter_serial_no` variable to that of your Debug Probe. If you don't want or need to specify a serial number (you only have one Debug Probe connected), blank the `target_adapter_cmnd` variable.
+Using a text editor open `make-and-flash.sh`, modify the `adapter_serial_no` variable to that of your Debug Probe. If you don't want or need to specify a serial number (you only have one Debug Probe connected), blank the `target_adapter_cmnd` variable.
 
 Then `make` the firmware and flash the RP2350:
 
@@ -143,7 +145,7 @@ Then `make` the firmware and flash the RP2350:
 
 If all went well, when Palavo starts you should see something like the following screen on your VGA monitor:
 
-![A monitor displaying the main coloured traces of a section of the captured data of various GPIO pins. Above the main traces, at the top of the screen is the Palavo logo on the left, and then various adjustable settings. Underneath the main traces is a minimap of traces of the whole of each captured channel. Beneath the minimap, at the bottom of the screen, is a status bar.](image.jpg)
+![A monitor displaying the main coloured traces of a section of the captured data of various GPIO pins. Above the main traces, at the top of the screen is the Palavo logo on the left, and then various adjustable settings. Underneath the main traces is a minimap of traces of the whole of each captured channel. Beneath the minimap, at the bottom of the screen, is a status bar.](images/config0_on_pico.png)
 
 Open a serial terminal on your PC. I use `minicom` with this command line (You may need to change the device - the bit after the `-D`.):
 
@@ -152,6 +154,10 @@ Open a serial terminal on your PC. I use `minicom` with this command line (You m
 (You may need to add carriage returns with 'Ctrl-A U'.)
 
 Press the 'h' key and something like the following help screen should appear:
+
+
+![A monitor displaying the main coloured traces of a section of the captured data of various GPIO pins. Above the main traces, at the top of the screen is the Palavo logo on the left, and then various adjustable settings. Underneath the main traces is a minimap of traces of the whole of each captured channel. Beneath the minimap, at the bottom of the screen, is a status bar.](images/config0_on_pico_help.png)
+
 
 
 ```
@@ -179,12 +185,14 @@ Press any key to close this window
 
 Hopefully, the above instructions are clear enough to be able to get started using Palavo. If so, congratulations! I hope you find it interesting, and maybe even useful.
 
+Note. After a period of inactivity (keyboard or infra-red) the VGA output will halt in order to allow the attached monitor to enter a power saving mode. Any keyboard or infra-red activity will restart the VGA output. This period of inactivity can be configured by adding the following to the `$ cmake ...` line, above: `-DVGA_TIMEOUT=` followed immediately by the number of seconds. To prevent the VGA output from ever being halted, except by pressing Shift-s (uppercase 'S'), use `-DVGA_TIMEOUT=0`. 
+
 
 ## Configuration 1
 
 #### PALAVO_CONFIG=1
 
-"That's all well and good" I hear you say ", but can't the Pico 2 output DVI with its RP2350's HSTX peripheral?". Well, yes it can. Try this:
+"That's all well and good", I hear you say, "but can't the Pico 2 output DVI with its RP2350's HSTX peripheral?". Well, yes it can. Try this:
 
 ### Hardware
 
@@ -210,7 +218,7 @@ VGA_Out_Light_Green  GP5  7                34 GP28
            DVI_CK+  GP14 19                22 GP17  DVI_D1+
            DVI_CK-  GP15 20                21 GP16  DVI_D1-
 ```
-\* UART serial comms can be used instead of USB serial comms - add 32 to PALAVO_CONFIG  
+\* UART serial comms can be used in addition to USB serial comms - add 32 to PALAVO_CONFIG  
 \** To enable IR reception add 8 to PALAVO_CONFIG  
 
 In addition to the previous configuration's hardware, the DVI pins (GP12-GP19) need to be connected to a [Pico DVI Sock](https://github.com/Wren6991/Pico-DVI-Sock), which can the be connected to a DVI monitor using an HDMI-shaped cable. Originally designed by Raspberry Pi's Luke Wren, Adafruit now make their own version called the [DVI Sock for Pico](https://www.adafruit.com/product/5957). Adafruit also make other products, such as their [DVI Breakout Board](https://www.adafruit.com/product/4984), and their [PiCowBell HSTX DVI Output for Pico](https://www.adafruit.com/product/6363), which could be used instead.
@@ -226,7 +234,7 @@ In the `build/pico2` directory create a different, but still suitably-named, dir
 
 `$ cd config1`
 
-Repeat the rest of the previous build process, only use this CMAKE command:
+Repeat the rest of the previous build process, except use this `cmake` command:
 
 `$ cmake ../../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=1`
 
@@ -237,28 +245,32 @@ If all went well, when Palavo starts you should see something like the following
 
 ![A monitor screen displaying lots of vertical coloured bars of various colours.](image.jpg)
 
-Shortly after that, you should see the same screen as you can see on the VGA monitor (assuming you have two monitors):
+Shortly after that, you should see the same screen as you can see on the VGA monitor (assuming you have two monitors), which should look very similar to the screen in Configuration 0. If you use the 'tab' key to highlight the pins setting and change it from 8 to 20 with the 'up-arrow' key and then press the 'c' key, you should see something like this:
 
-![A monitor displaying the main coloured traces of a section of the captured data of various GPIO pins. Above the main traces, at the top of the screen is the Palavo logo on the left, and then various adjustable settings. Underneath the main traces is a minimap of traces of the whole of each captured channel. Beneath the minimap, at the bottom of the screen, is a status bar.](image.jpg)
+![A monitor displaying the main coloured traces of a section of the captured data of various GPIO pins. Above the main traces, at the top of the screen is the Palavo logo on the left, and then various adjustable settings. Underneath the main traces is a minimap of traces of the whole of each captured channel. Beneath the minimap, at the bottom of the screen, is a status bar.](images/config1_on_pico2_pins_20.png)
 
-Press the 'h' key and the same help menu should appear with the addition of this item:
+Note the first 8 channels are VGA output signals, the next 4 are available GPIO, and the next 8 are the DVI output signals.
 
-![v to cycle DVI modes: mirror VGA out -> test -> VGA in ](image.jpg)
+
+Press the 'h' key and the same help window as Configuration 0 should appear with the addition of the 'v' item:
+
+![v to cycle DVI modes: mirror VGA out -> test -> VGA in ](images/config1_on_pico2_pins_20_help.png)
 
 In 'mirror VGA out' mode, whatever is displayed on VGA_Out is also displayed on DVI.  
 In 'test' mode, a test screen is displayed on DVI.  
+In 'mirror VGA in' mode, whatever is displayed on VGA_In is displayed on DVI.  
 
 
 ### Thoughts
 
-I find pretty amazing that the RP2350 can output a DVI signal. However, the DVI frame buffer currently uses a lot of SRAM and this reduces the amount of signal data we can capture. Also this configuration doesn't leave many pins (between 7 and 11) free to capture external signal data. We could lose the VGA output pins and gain a little SRAM by freeing up the VGA frame buffer, but if we had a second Pico 2...
+I find it amazing that the RP2350 can output a DVI signal without too much trouble. However, the DVI frame buffer currently uses a lot of SRAM and this reduces the amount of signal data we can capture. Also this configuration doesn't leave many pins (between 7 and 11) free to capture external signal data. We could lose the VGA output pins and gain a little SRAM by freeing up the VGA frame buffer, but if we had a second Pico 2...
 
 
 ## Configuration 21
 
 #### PALAVO_CONFIG=21
 
-If we use a second Pico 2, and change the VGA_Out\*s to VGA_In\*s we can make a [6-bit logic level] VGA - DVI Converter. We can also squeeze in VGA_Out_CSYNC and VGA_Out_RGB to provide a monochrome VGA output for testing purposes, which can be mirrored to the DVI output.
+If we have a second Pico 2, and change the VGA_Out\*s to VGA_In\*s we can make a [6-bit logic level] VGA - DVI Converter. We can also squeeze in VGA_Out_CSYNC and VGA_Out_RGB to provide a monochrome VGA output for testing purposes, which can also be mirrored to the DVI output.
 
 ```
        VGA_In_VSYNC  GP0  1       USB      40 VBUS
@@ -283,10 +295,10 @@ If we use a second Pico 2, and change the VGA_Out\*s to VGA_In\*s we can make a 
            DVI_CK-  GP15 20                21 GP16  DVI_D1-
 ```
 
-\* UART serial comms can be used instead of USB serial comms - add 32 to PALAVO_CONFIG  
+\* UART serial comms can be used in addition to USB serial comms - add 32 to PALAVO_CONFIG  
 \** To enable IR reception add 8 to PALAVO_CONFIG  
 
-This Pico 2 can then sit on top of, or underneath, the Pico [2] (Configuration 0) with *only* the connections we need, namely all the VGA_In pins (which connect to the VGA_Out pins), and the GNDs. N.B. If this Pico 2 (Configuration 26) is not being powered via its USB port, it can be powered by connecting its VSYS pin to the VSYS pin of the Pico [2] (Configuration 0). N.B. Do NOT power both Picos with USB (or another source) if their VSYS pins are connected.
+This Pico 2 can then sit on top of, or underneath, the Pico [2] (Configuration 0) with *only* the connections we need, namely all the VGA_In pins (which connect to the VGA_Out pins), and the GNDs. N.B. If this Pico 2 (Configuration 53) is not being powered via its USB port, it can be powered by connecting its VSYS pin to the VSYS pin of the Pico [2] (Configuration 0). N.B. Do NOT power both Picos with USB (or another source) if their VSYS pins are connected.
 
 ### Firmware
 
@@ -296,7 +308,7 @@ In the `build/pico2` directory create a different, but still suitably-named, dir
 
 `$ cd config21`
 
-Repeat the rest of the previous build process, only use this CMAKE command:
+Repeat the rest of the previous build process, except use this `cmake` command:
 
 `$ cmake ../../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=21`
 
@@ -324,11 +336,11 @@ Something fun to do here is get Hunter Adams' [VGA_Graphics_Primitives](https://
                     GP14 19                22 GP17 VGA_Out_VSYNC
                     GP15 20                21 GP16 VGA_Out_HSYNC
 
-And then connect it to a Pico 2 (or similar) running Palavo in Configuration 26:
+And then connect it to a Pico 2 (or similar) running Palavo in Configuration 21:
 
 ```
 RPi PICO running           RP2350 board running
-VGA Graphics Primitives    Palavo in Configuration 26
+VGA Graphics Primitives    Palavo in Configuration 21
 ----------------------------------------------------
 VGA_Out_VSYNC              VGA_In_VSYNC
 VGA_Out_HSYNC              VGA_In_HSYNC_CSYNC
@@ -386,7 +398,7 @@ The trouble with Configuration 0 is that we're using quite a few GPIO pins for t
 ```
 
 
-\* USB can be used instead of UART serial comms - add 32 to PALAVO_CONFIG  
+\* UART serial comms can be used in addition to USB serial comms - add 32 to PALAVO_CONFIG  
 \** To enable IR add 8 to PALAVO_CONFIG  
 
 
@@ -411,7 +423,7 @@ Create a suitably-named directory for this particular configuration of Palavo an
 `$ cd config2`
 
 
-Repeat the rest of the previous build process, only use this CMAKE command:
+Repeat the rest of the previous build process, except use this `cmake` command:
 
 `$ cmake ../../../ -DPICO_BOARD=pimoroni_pico_lipo2xl_w_rp2350 -DPALAVO_CONFIG=2`
 
@@ -456,7 +468,7 @@ What if we wanted to capture 32 contiguous channels? Unfortunately, it's not pos
 
 ```
 
-\* UART serial comms can be used instead of USB serial comms - add 32 to PALAVO_CONFIG  
+\* UART serial comms can be used in addition to USB serial comms - add 32 to PALAVO_CONFIG  
 \** To enable IR reception add 8 to PALAVO_CONFIG  
 
 As you can see the GPIOs GP8 to GP47 (40 GPIOs in total) are free to use and are conveniently and contiguously located.
@@ -477,9 +489,16 @@ Create a suitably-named directory for this particular configuration of Palavo an
 `$ cd config8`
 
 
-Repeat the rest of the previous build process, only use this CMAKE command:
+Repeat the rest of the previous build process, except use this `cmake` command:
 
 `$ cmake ../../../ -DPICO_BOARD=solderparty_rp2350_stamp_xl -DPALAVO_CONFIG=8`
+
+
+
+
+
+
+
 
 
 Here is I've paired this with a Pico 2, or another board with an RP2350 in Configuation 21
@@ -581,21 +600,21 @@ Here is I've paired this with a Pico 2, or another board with an RP2350 in Confi
 
 
 
-                                                           VGA_In_Dark Blue  GP0  1       USB        40 VBUS
-                                                          VGA_In_Light Blue  GP1  2                  39 VSYS
+                                                           VGA_In_Dark_Blue  GP0  1       USB        40 VBUS
+                                                          VGA_In_Light_Blue  GP1  2                  39 VSYS
                                                                              GND  3                  38 GND
                                                           VGA_In_Dark_Green  GP2  4                  37 3V3 EN
                                                          VGA_In_Light_Green  GP3  5                  36 3V3 OUT
                                                    |        VGA_In_Dark_Red  GP4  6                  35 ADC VREF
-                                             ------|------ VGA_In_Light Red  GP5  7                  34 GP28
+                                             ------|------ VGA_In_Light_Red  GP5  7                  34 GP28
                                                                              GND  8                  33 ADC GND
-                                                          VGA_Out_Dark Blue  GP6  9                  32 GP27  VGA_In_VSYNC
-                                                         VGA_Out_Light Blue  GP7 10      PICO  2     31 GP26  VGA_In_HSYNC_OR_CSYNC
-                                                         VGA_Out_Dark Green  GP8 11                  30 RUN
-                                                        VGA_Out_Light Green  GP9 12                  29 GP22  VGA_Out_CSYNC
+                                                          VGA_Out_Dark_Blue  GP6  9                  32 GP27  VGA_In_VSYNC
+                                                         VGA_Out_Light_Blue  GP7 10      PICO  2     31 GP26  VGA_In_HSYNC_OR_CSYNC
+                                                         VGA_Out_Dark_Green  GP8 11                  30 RUN
+                                                        VGA_Out_Light_Green  GP9 12                  29 GP22  VGA_Out_CSYNC
                                                                              GND 13                  28 GND
-                                                          VGA_Out_Dark Red  GP10 14                  27 GP21
-                                                         VGA_Out_Light Red  GP11 15                  26 GP20
+                                                          VGA_Out_Dark_Red  GP10 14                  27 GP21
+                                                         VGA_Out_Light_Red  GP11 15                  26 GP20
                                                                    DVI_D0+  GP12 16                  25 GP19  DVI_D2+
                                                                    DVI_D0-  GP13 17                  24 GP18  DVI_D2-
                                                                             GND  18                  23 GND
@@ -616,7 +635,7 @@ N.B. Available for capture does NOT mean you can put external signals into any G
 
 ## Palavo Config
 
-Palavo is configured by passing the additional define into the CMAKE command line, above:
+Palavo is configured by passing the additional define into the `cmake` command line, above:
 
 ` -DPALAVO_CONFIG=X` where X is a number between 0 and 7, although 4 is the same as 0, and 6 is the same as 2.
 
@@ -669,6 +688,32 @@ Solder Party version RP2xxx Basic Stamp version with RP2350B fitted using IR and
 AND a Pico2 with USE_DVI, USE_VGA_IN_TO_DVI and USE_CSYNC = 1 + 4 + 16 = 21 (still working; binary info too)
 
 
+Notes to self:
+
+Tags, and GitHub Releases and Assets
+
+Example
+
+tag
+    asset
+    asset
+
+palavo-v1.0.6
+    palavo_config0_on_pico.uf2
+    palavo_config0_on_pico2.uf2
+    palavo_config1_on_pico2.uf2
+    palavo_config21_on_pico2.uf2
+    palavo_config53_on_pico2.uf2
+    palavo_config53_at_125mhz_on_pico2.uf2
+    palavo_config2_on_pimoroni_pico_lipo2xl_w_rp2350.uf2
+    palavo_config8_on_solderparty_rp2350_stamp_xl.uf2
+
+1. Use `$ ./make-assets.sh` to `make` all the relevant `.uf2` files, rename them, and copy them to the `assets/` directory.
+
+2. Use `$ ls assets/ -xt | tac` to list the assets in the chronological order in which they were created.
+
+
+
 # End of Document
 
 Everything from here is stuff I may use and don't want to delete just yet
@@ -681,21 +726,21 @@ Everything from here is stuff I may use and don't want to delete just yet
 ## Pinout for Raspberry Pi Pico 2
 
 ```
-   VGA_In_Dark Blue  GP0  1       USB        40 VBUS
-  VGA_In_Light Blue  GP1  2                  39 VSYS
+   VGA_In_Dark_Blue  GP0  1       USB        40 VBUS
+  VGA_In_Light_Blue  GP1  2                  39 VSYS
                      GND  3                  38 GND
-  VGA_In_Dark Green  GP2  4                  37 3V3 EN
- VGA_In_Light Green  GP3  5                  36 3V3 OUT
-    VGA_In_Dark Red  GP4  6                  35 ADC VREF
-   VGA_In_Light Red  GP5  7                  34 GP28  Infra-red RX
+  VGA_In_Dark_Green  GP2  4                  37 3V3 EN
+ VGA_In_Light_Green  GP3  5                  36 3V3 OUT
+    VGA_In_Dark_Red  GP4  6                  35 ADC VREF
+   VGA_In_Light_Red  GP5  7                  34 GP28  Infra-red RX
                      GND  8                  33 ADC GND
-  VGA_Out_Dark Blue  GP6  9                  32 GP27  VGA_In_VSYNC
- VGA_Out_Light Blue  GP7 10     PICO 2       31 GP26  VGA_In_HSYNC_OR_CSYNC
- VGA_Out_Dark Green  GP8 11                  30 RUN  CAPTAIN RESETTI
-VGA_Out_Light Green  GP9 12                  29 GP22  VGA_Out_CSYNC
+  VGA_Out_Dark_Blue  GP6  9                  32 GP27  VGA_In_VSYNC
+ VGA_Out_Light_Blue  GP7 10     PICO 2       31 GP26  VGA_In_HSYNC_OR_CSYNC
+ VGA_Out_Dark_Green  GP8 11                  30 RUN  CAPTAIN RESETTI
+VGA_Out_Light_Green  GP9 12                  29 GP22  VGA_Out_CSYNC
                      GND 13                  28 GND
-  VGA_Out_Dark Red  GP10 14                  27 GP21  Serial_RX
- VGA_Out_Light Red  GP11 15                  26 GP20  Serial_TX
+  VGA_Out_Dark_Red  GP10 14                  27 GP21  Serial_RX
+ VGA_Out_Light_Red  GP11 15                  26 GP20  Serial_TX
            DVI D0+  GP12 16                  25 GP19  DVI D2+
            DVI D0-  GP13 17                  24 GP18  DVI D2-
                     GND  18                  23 GND
@@ -729,13 +774,13 @@ VGA_Out_Light Green  GP9 12                  29 GP22  VGA_Out_CSYNC
                    GND 3V3 21                  40 BT
        VGA_Out_CSYNC  GP31 22                  39 GP47
                        GND 23                  38 GND
-   VGA_Out_Dark Blue  GP32 24                  37 GP46  Infra-red RX
-  VGA_Out_Light Blue  GP33 25        XL        36 GP45
-  VGA_Out_Dark Green  GP34 26                  34 GP44
- VGA_Out_Light Green  GP35 27                  33 GP43
+   VGA_Out_Dark_Blue  GP32 24                  37 GP46  Infra-red RX
+  VGA_Out_Light_Blue  GP33 25        XL        36 GP45
+  VGA_Out_Dark_Green  GP34 26                  34 GP44
+ VGA_Out_Light_Green  GP35 27                  33 GP43
                        GND 28                  32 GND
-    VGA_Out_Dark Red  GP36 29                  31 GP39  Serial_RX
-   VGA_Out_Light Red  GP37 30                  31 GP38  Serial_TX
+    VGA_Out_Dark_Red  GP36 29                  31 GP39  Serial_RX
+   VGA_Out_Light_Red  GP37 30                  31 GP38  Serial_TX
 ```
 
 `hello`
@@ -746,12 +791,12 @@ VGA_Out_Light Green  GP9 12                  29 GP22  VGA_Out_CSYNC
 | :---                |   :---:  | :---              |
 |       VGA_Out_CSYNC |    47R   | 13 HSYNC          |
 |                 GND |    0R    | 5 GND             |
-|   VGA_Out_Dark Blue |    1K    | 3 Blue            |
-|  VGA_Out_Light Blue |   470R   | 3 Blue            |
-|  VGA_Out_Dark Green |    1K    | 2 Green           |
-| VGA_Out_Light Green |   470R   | 2 Green           |
-|    VGA_Out_Dark Red |    1K    | 1 Red             |
-|   VGA_Out_Light Red |   470R   | 1 Red             |
+|   VGA_Out_Dark_Blue |    1K    | 3 Blue            |
+|  VGA_Out_Light_Blue |   470R   | 3 Blue            |
+|  VGA_Out_Dark_Green |    1K    | 2 Green           |
+| VGA_Out_Light_Green |   470R   | 2 Green           |
+|    VGA_Out_Dark_Red |    1K    | 1 Red             |
+|   VGA_Out_Light_Red |   470R   | 1 Red             |
 
 
 ## UART Comms
@@ -946,7 +991,7 @@ the same UF2 as the Pico 2, and it (Pimoroni's Pico Plus 2) seems to work fine, 
 
 
 
-The way I have my system setup is PALAVO_CONFIG=2 on a Pimoroni Pico LiPo 2 W XL, and for DVI output I use PLAVO_TYPE=5 on a Raspberry Pi Pico 2. This allows more contiguous GPIO pins free as inputs for capture. It will also allow for lots of RAM to be freed up for longer captures (not yet implemented - todo).
+The way I have my system setup is PALAVO_CONFIG=2 on a Pimoroni Pico LiPo 2 W XL, and for DVI output I use PALAVO_CONFIG=5 on a Raspberry Pi Pico 2. This allows more contiguous GPIO pins free as inputs for capture. It will also allow for lots of RAM to be freed up for longer captures (not yet implemented - todo).
 
 
 
@@ -959,7 +1004,7 @@ The way I have my system setup is PALAVO_CONFIG=2 on a Pimoroni Pico LiPo 2 W XL
 | :---                |   :---:  | :---              |
 |       VGA_Out_CSYNC |    47R   | 13 HSYNC          |
 |                 GND |    0R    | 5 GND             |
-|   VGA_Out_Dark Blue |    1K   
+|   VGA_Out_Dark_Blue |    1K   
 How many combinations of Palavo are there?
 
 1. Using an RP2350A or RP2350B with VGA output, DVI output, and with GPIOs 0-31 available for capture (PALAVO_CONFIG=0 (0b000))
@@ -972,7 +1017,7 @@ N.B. Available for capture does NOT mean you can put external signals into any G
 
 ## Palavo Config
 
-Palavo can be configured, depending on the variant of the RP2350, in one of 5 modes and the mode is selected by passing the additional define into the CMAKE command line, above:
+Palavo can be configured, depending on the variant of the RP2350, in one of 5 modes and the mode is selected by passing the additional define into the `cmake` command line, above:
 
 ` -DPALAVO_CONFIG=X` where X is a number between 0 and 7, although 4 is the same as 0, and 6 is the same as 2.
 ```
@@ -1008,11 +1053,11 @@ Currently only Types 0, 1, 2 and 4, and 5 have been tested (4 is the same as 0).
 000
 
 ``` | 3 Blue            |
-|  VGA_Out_Light Blue |   470R   | 3 Blue            |
-|  VGA_Out_Dark Green |    1K    | 2 Green           |
-| VGA_Out_Light Green |   470R   | 2 Green           |
-|    VGA_Out_Dark Red |    1K    | 1 Red             |
-|   VGA_Out_Light Red |   470R   | 1 Red             |
+|  VGA_Out_Light_Blue |   470R   | 3 Blue            |
+|  VGA_Out_Dark_Green |    1K    | 2 Green           |
+| VGA_Out_Light_Green |   470R   | 2 Green           |
+|    VGA_Out_Dark_Red |    1K    | 1 Red             |
+|   VGA_Out_Light_Red |   470R   | 1 Red             |
 
 
 
@@ -1033,7 +1078,7 @@ In the `build` directory create a different, but still suitably-named, directory
 
 `$ cd solderparty_rp2350_stamp_xl-DVI`
 
-Repeat the rest of the previous build process, only use this CMAKE command:
+Repeat the rest of the previous build process, except use this `cmake` command:
 
 `$ cmake ../../../ -DPICO_BOARD=solderparty_rp2350_stamp_xl -DPALAVO_CONFIG=1`
 

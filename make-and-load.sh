@@ -21,7 +21,7 @@ else
     
     # picotool load palavo.uf2 --ser  -f -x
 
-    picotool load palavo.uf2 --ser E66044304368642B -f -x
+    picotool load palavo.uf2 --ser 2B11EBC23AEB60F8 -f -x
 
     # To find the serial number of a device:
     # 1. Unplug the device.
@@ -44,4 +44,10 @@ else
     # E0C9125B0D9B - rpi pico (hunter adams's vga graphics primitives demo)
 
     # E0C912D24340 - rpi pico (macintosh video out simulator) 
+
+    # B99FD5FA9526D4F9 rpi pico (config 1)
+
+    # 23DB745C5E72831D solderparty rp2350_stamp_xl (config 40)
+    # 2B11EBC23AEB60F8 rpi pico2 (config 53)
+
 fi
