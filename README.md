@@ -8,7 +8,7 @@ When using the RP2350, Palavo can be configured to mirror its VGA output to DVI.
 
 The project was inspired by, and uses code from, Raspberry Pi's [Logic Analyser example in the SDK](https://github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser), Raspberry Pi's [DVI Out HSTX Encoder example for the Pico 2](https://github.com/raspberrypi/pico-examples/tree/master/hstx/dvi_out_hstx_encoder), and Hunter Adams' [PIO-Based VGA Graphics Driver for RP2040](https://github.com/vha3/Hunter-Adams-RP2040-Demos/blob/master/VGA_Graphics/README.md).
 
-The VGA output uses a resolution of 640 x 480 with 6-bit colour (2 red, 2 green, 2 blue). It can use either HSYNC (horizontal sync) and VSYNC (vertical sync) or, to save a GPIO pin, CSYNC (combined sync). Not all VGA monitors support CSYNC, but many do. Some details about CSYNC can be found on this [HDRetrovision blog post](https://www.hdretrovision.com/blog/2019/10/10/engineering-csync-part-2-falling-short).
+The VGA output uses a resolution of 640 x 480 with 6-bit colour (2 red, 2 green, 2 blue). It can use either HSYNC (horizontal sync) and VSYNC (vertical sync), or CSYNC (combined sync). Not all VGA monitors support CSYNC, but many do. Some details about CSYNC can be found on this [HDRetrovision blog post](https://www.hdretrovision.com/blog/2019/10/10/engineering-csync-part-2-falling-short).
 
 \*The *Assisted* in *PIO-Assisted* doesn't really do PIO justice, as without PIO, Palavo would simply not be possible. If anyone has any better suggestions (than *Assisted) they'd be gratefully received.
 
@@ -49,7 +49,7 @@ VGA_Out_Light_Green  GP5  7                34 GP28
 ```
 
 \* UART serial comms can be used in addition to USB serial comms - add 32 to PALAVO_CONFIG  
-\** To enable IR reception add 8 to PALAVO_CONFIG  
+\** To enable IR reception - add 8 to PALAVO_CONFIG  
 
 The VGA_Out signals need to be fed into a resistor network to provide the voltages for the Red, Green, and Blue colour pins on a 15-pin VGA socket or cable that's attached to a VGA monitor:
 
@@ -68,7 +68,7 @@ VGA_Out_Light_Green  --470R--  2 Green
 ```
 \* If CSYNC is being used instead of HSYNC & VSYNC, VSYNC need not be connected.
 
-If not using USB for serial comms, Serial_RX and Serial_TX can be connected to a PC via a 3.3V logic level UART to USB serial adapter. I use [Raspberry Pi's Debug Probe](https://www.raspberrypi.com/documentation/microcontrollers/debug-probe.html) as it can also be used to program and debug the Pico via its Debug interface.
+If using UART for serial comms, Serial_RX and Serial_TX can be connected to a PC via a 3.3V logic level UART to USB serial adapter. I use [Raspberry Pi's Debug Probe](https://www.raspberrypi.com/documentation/microcontrollers/debug-probe.html) as it can also be used to program and debug the Pico via its Debug interface.
 
 Alternatively the Serial_RX and Serial_TX can be connected to a keyboard to serial terminal adapter, which is essentially a Pico or Pico 2 with its USB port in host mode, and which converts keyboard input to serial (UART) output. The details for this adapter can be found in this [keybuart repository](https://github.com/peterstansfeld/keybuart.git).
 
@@ -147,11 +147,14 @@ If all went well, when Palavo starts you should see something like the following
 
 ![A monitor displaying the main coloured traces of a section of the captured data of various GPIO pins. Above the main traces, at the top of the screen is the Palavo logo on the left, and then various adjustable settings. Underneath the main traces is a minimap of traces of the whole of each captured channel. Beneath the minimap, at the bottom of the screen, is a status bar.](images/config0_on_pico.png)
 
+
+The first 8 channels are the VGA Out pins, namely VSYNC, HSYNC, Dark Blue, Light Blue, Dark Green, Light Green, Dark Red and Light Red. This section is scrollable using the keys listed in the 'help' window in the next image. Underneath the 8th channel (channel 7) is a small white marker and a minimap of the whole of all of the captured channels. The small marker indicates the length and position of the scrollable section relative to the mimimap.
+
 Open a serial terminal on your PC. I use `minicom` with this command line (You may need to change the device - the bit after the `-D`.):
 
 `$ minicom -b 115200 -w -D /dev/ttyACM0`
 
-(You may need to add carriage returns with 'Ctrl-A U'.)
+(After minicom opens you may also need to add carriage returns with 'Ctrl-A U'.)
 
 Press the 'h' key and something like the following help screen should appear:
 
@@ -221,9 +224,9 @@ VGA_Out_Light_Green  GP5  7                34 GP28
 \* UART serial comms can be used in addition to USB serial comms - add 32 to PALAVO_CONFIG  
 \** To enable IR reception add 8 to PALAVO_CONFIG  
 
-In addition to the previous configuration's hardware, the DVI pins (GP12-GP19) need to be connected to a [Pico DVI Sock](https://github.com/Wren6991/Pico-DVI-Sock), which can the be connected to a DVI monitor using an HDMI-shaped cable. Originally designed by Raspberry Pi's Luke Wren, Adafruit now make their own version called the [DVI Sock for Pico](https://www.adafruit.com/product/5957). Adafruit also make other products, such as their [DVI Breakout Board](https://www.adafruit.com/product/4984), and their [PiCowBell HSTX DVI Output for Pico](https://www.adafruit.com/product/6363), which could be used instead.
+In addition to the previous configuration's hardware, the DVI pins (GP12-GP19) need to be connected to a [Pico DVI Sock](https://github.com/Wren6991/Pico-DVI-Sock), which can the be connected to a DVI monitor using an HDMI-shaped cable. Originally designed by Raspberry Pi's Luke Wren, Adafruit now make their own version called the [DVI Sock for Pico](https://www.adafruit.com/product/5957). Adafruit also make other products, such as their [DVI Breakout Board](https://www.adafruit.com/product/4984). Their [PiCowBell HSTX DVI Output for Pico](https://www.adafruit.com/product/6363) however, would need to have its SDA (GPIO4) and SCL (GPIO5) traces cut as they go to the Mini HDMI socket. I hope to offer another PALAVO_CONFIG option which will move the VGA Out RGB pins to GPIO6-GPIO11 so that the PiCowBell can be used without modification.
 
-With this configuration the VGA_Out output is mirrored to the DVI output.
+With Configuration 1 the VGA_Out output is mirrored to the DVI output.
 
 
 ### Firmware
@@ -249,7 +252,7 @@ Shortly after that, you should see the same screen as you can see on the VGA mon
 
 ![A monitor displaying the main coloured traces of a section of the captured data of various GPIO pins. Above the main traces, at the top of the screen is the Palavo logo on the left, and then various adjustable settings. Underneath the main traces is a minimap of traces of the whole of each captured channel. Beneath the minimap, at the bottom of the screen, is a status bar.](images/config1_on_pico2_pins_20.png)
 
-Note the first 8 channels are VGA output signals, the next 4 are available GPIO, and the next 8 are the DVI output signals.
+The first 8 channels are VGA Out signals, the next 4 are available GPIO, and the next 8 are the DVI output signals.
 
 
 Press the 'h' key and the same help window as Configuration 0 should appear with the addition of the 'v' item:
@@ -430,7 +433,7 @@ Repeat the rest of the previous build process, except use this `cmake` command:
 
 ## Testing
 
-The screen on the VGA monitor should look the same as it does in the first configuration, except that the 'base' and 'trig.' settings can be set to use GP0 to GP47 (rather than just GP0 to GP31).
+The screen on the VGA monitor should look the same as it does in Configuration 1, except that the 'base' and 'trig.' settings can be set to use GP0 to GP47 (rather than just GP0 to GP31).
 
 
 ## Configuration 8

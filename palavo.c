@@ -30,7 +30,7 @@
 
 
 #define VERSION_MAJOR 0
-#define VERSION_MINOR 9
+#define VERSION_MINOR 10
 #define VERSION_PATCH 0
 
 #ifndef VGA_TIMEOUT
@@ -1253,7 +1253,7 @@ char palette_text[] = "plt.";
 char mag_text[] = "zoom";
 #define MAG_LEFT PALETTE_LEFT + PALETTE_WIDTH + TOOLBAR_ITEM_PADDING
 #define MAG_LABEL_CHARS 4
-#define MAG_INPUT_CHARS 7   
+#define MAG_INPUT_CHARS 8
 #define MAG_WIDTH (FONT_WIDTH * (MAG_LABEL_CHARS + 1 + MAG_INPUT_CHARS)) + TOOLBAR_ITEM_PADDING
 
 char freq_text[] = "freq.div";
@@ -2230,17 +2230,28 @@ enum UI_COMMANDS {
     UIC_DOWN,
     UIC_PAGE_UP,
     UIC_PAGE_DOWN,
-    UIC_0,
     UIC_TAB,
     UIC_SHIFT_TAB,
     UIC_ESC,
     UIC_UPPER_S,
 
-    UIC_CTRL_LESS_THAN,
-    UIC_CTRL_GREATER_THAN,
-
     UIC_CTRL_P,
- };
+
+    UIC_SHIFT_COMMA,
+    UIC_SHIFT_FULL_STOP,
+
+    UIC_0,
+    UIC_1,
+    UIC_2,
+    UIC_3,
+    UIC_4,
+    UIC_5,
+    UIC_6,
+    UIC_7,
+    UIC_8,
+    UIC_9,
+
+};
 
 
 void draw_hint(char *s) {
@@ -2572,11 +2583,9 @@ uint check_keyboard() {
                 if ((char)escape_seq[0] == '[') {
                     switch ((char)escape_seq[1]) {
                         case 'A':
-                            // writeString("up");
                             ui_command = UIC_UP;
                             break;
                         case 'B':
-                            // writeString("down");
                             ui_command = UIC_DOWN;
                             break;
                         case 'C':
@@ -2619,7 +2628,7 @@ uint check_keyboard() {
             }
 
          } else {
-            switch ((char)ch) {
+            switch (ch) {
 
                 case ' ':
                     ui_command = UIC_SPACEBAR;
@@ -2638,31 +2647,22 @@ uint check_keyboard() {
                     break;
 
                 case 'c':
-                // case 'C':
                     ui_command = UIC_C;
                     break;
 
                 case 'z':
-                // case 'Z':
                     ui_command = UIC_Z;
                     break;
 
                 case 'm':
-                // case 'M':
                     ui_command = UIC_M;
                     break;
 
-                case '0':
-                    ui_command = UIC_0;
-                    break;
-
                 case 'h':
-                // case 'H':
                     ui_command = UIC_H;
                     break;
 
                 case 'a':
-                // case 'A':
                     ui_command = UIC_A;
                     break;
 
@@ -2697,17 +2697,31 @@ uint check_keyboard() {
                     ui_command = UIC_UPPER_S;
                     break;
 
-                case 44:
-                    ui_command = UIC_CTRL_LESS_THAN;
+                case '<':
+                    ui_command = UIC_SHIFT_COMMA;
                     break;
 
-                case 46:
-                    ui_command = UIC_CTRL_GREATER_THAN;
+                case '>':
+                    ui_command = UIC_SHIFT_FULL_STOP;
                     break;
 
                 case CTRL_P:
                     ui_command = UIC_CTRL_P;
                     break;
+
+                case '0':
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9':
+                    ui_command = UIC_0 + ch - '0';
+                    break;
+
             }
          }
     }
@@ -2887,16 +2901,16 @@ void set_settings_state(uint8_t state) {
 
 
 char* help_strings =
-    "Press...\n"
-    "\n"
     "LEFT / RIGHT to scroll one sample period left / right\n"
     "CTRL-LEFT / CTRL-RIGHT to scroll to previous / next edge\n"
     "  on the selected channel (ch)\n"
+    "< / > to scroll to previous / next edge but one\n"
     "PGUP / PGDN to scroll one page left / right\n"
     "HOME / END to scroll to the beginning / end\n"
     "\n"
     "TAB / SHIFT-TAB to select the next / previous setting\n"
     "UP / DOWN to increase / decrease the selected setting\n"
+    "0..9 to set the selected numeric setting\n" 
     "c to capture a sample using the settings\n"
     "z to zoom to fit all the samples on one page\n"
     "+ / - to zoom in / out\n"
@@ -2904,6 +2918,8 @@ char* help_strings =
     "m to measure VGA timings\n"
     "h to show this help window\n"
     "a to show the about window\n"
+    "P to upload a screenshot using xmodem\n"
+    "S to start the screensaver\n"
 
 #if USE_DVI
     "v to cycle DVI modes: mirror VGA out -> test -> VGA in\n"
@@ -2911,7 +2927,7 @@ char* help_strings =
     "\n"
 #endif
 
-    "\n\n";
+    "";
 
 char* press_any_key_string = 
     "Press any key to close this window\n";
@@ -4134,6 +4150,12 @@ uint total_sample_bits;
     uint8_t main_dvi_state = MDS_ACTIVE;
 
     void handle_command(uint ui_command) {
+
+    bool update_last_numeric_key_time = false;
+
+    static uint64_t last_numeric_key_time;
+    static uint32_t numeric_value;
+
     if (ui_command) {
         last_event_time = time_us_64();
         bool plot_required = false;
@@ -4147,6 +4169,78 @@ uint total_sample_bits;
             }
         } else {
 
+            if ((ui_command >= UIC_0) && (ui_command <= UIC_9)) {
+
+                uint64_t time_now = time_us_64();
+                uint8_t this_numeric_value = ui_command - UIC_0;
+
+                if ((time_now - last_numeric_key_time) < 750000) {
+                    // Two or more number keys have been pressed in quick succession
+                    numeric_value = (numeric_value * 10) + this_numeric_value;
+                } else {
+                    // It's been a while since the last number key was pressed
+                    numeric_value = this_numeric_value;
+                }
+                last_numeric_key_time = time_now;
+
+                switch (settings_state) {
+                    case SS_CHANNEL:
+                        if (numeric_value < g_no_of_captured_pins) {
+                            set_channel(numeric_value);
+                        } else if (this_numeric_value < g_no_of_captured_pins) {
+                            set_channel(this_numeric_value);
+                        }
+                        break;
+
+                    case SS_FREQ:
+                        // set_sample_frequency(MAX(g_sample_frequency - 1, 1));
+                        if ((numeric_value > 0) && (numeric_value <= 10000)) {
+                            set_sample_frequency(numeric_value);
+                        }
+
+                        break;
+
+                    case SS_NO_OF_PINS:
+                        if (numeric_value > 0) {
+                            if (numeric_value <= MAX_NO_OF_PINS) {
+                                set_no_of_pins(numeric_value);
+                            } else if (this_numeric_value <= MAX_NO_OF_PINS) {
+                                set_no_of_pins(this_numeric_value);
+                            }
+                        }
+                        break;
+
+                    case SS_PINS_BASE:
+                        if (numeric_value <= MAX_BASE_PIN_NO) {
+                            set_pins_base(numeric_value);
+                        } else if (this_numeric_value <= MAX_BASE_PIN_NO) {
+                            set_pins_base(this_numeric_value);
+                        }
+                        break;
+
+                    case SS_TRIGGER_PIN_BASE:
+                        if (numeric_value <= MAX_BASE_PIN_NO) {
+                            set_trigger_pin_base(numeric_value);
+                        } else if (this_numeric_value <= MAX_BASE_PIN_NO) {
+                            set_trigger_pin_base(this_numeric_value);
+                        }
+                        break;
+
+                    // case SS_TRIGGER_TYPE:
+                    //     set_trigger_type(MAX(g_trigger_type - 1, 0));
+                    //     break;
+
+                    case SS_ZOOM:
+                        if ((numeric_value > 0) && (numeric_value < 10000)) {
+                            plot_required = set_mag(1 - numeric_value);
+                            update_last_numeric_key_time = true;
+                        }
+                        break;
+                }
+
+            } else {
+                last_numeric_key_time = 0;
+                numeric_value = 0;
 
             switch (ui_command) {
 
@@ -4436,14 +4530,14 @@ uint total_sample_bits;
                     start_screensaver();
                     break;
 
-                case UIC_CTRL_LESS_THAN:
-                case UIC_CTRL_GREATER_THAN:
-                    writeString(ui_command == UIC_CTRL_GREATER_THAN ? "next" : "previous");
+                case UIC_SHIFT_COMMA:
+                case UIC_SHIFT_FULL_STOP:
+                    writeString(ui_command == UIC_SHIFT_FULL_STOP ? "next" : "previous");
                     writeString(" two edges");
                     plot_required = set_scroll_x(
                         find_transition(capture_buf, g_channel, 
-                            find_transition(capture_buf, g_channel, g_scrollx, ui_command == UIC_CTRL_GREATER_THAN), 
-                            ui_command == UIC_CTRL_GREATER_THAN));
+                            find_transition(capture_buf, g_channel, g_scrollx, ui_command == UIC_SHIFT_FULL_STOP), 
+                            ui_command == UIC_SHIFT_FULL_STOP));
                     break;
 #if USE_DVI
 
@@ -4504,6 +4598,7 @@ uint total_sample_bits;
                     print_screen();
                     break;
 
+                }
             }
         }
 
@@ -4520,6 +4615,11 @@ uint total_sample_bits;
             // A brief nap
             // sleep_ms(10);
             // busy_wait_us(10000);
+
+            // Because it can take a long time to perform a plot we should update the timer.
+            if (update_last_numeric_key_time) {
+                last_numeric_key_time = time_us_64();
+            }
         }
 
     }
