@@ -2913,21 +2913,27 @@ char* help_strings =
     "0..9 to set the selected numeric setting\n" 
     "c to capture a sample using the settings\n"
     "z to zoom to fit all the samples on one page\n"
-    "+ / - to zoom in / out\n"
-    "= to set zoom to 1:1\n"
-    "m to measure VGA timings\n"
+    "+ / - / = to zoom in / out / to 1:1\n"
+    // "m to measure VGA timings\n"
     "h to show this help window\n"
     "a to show the about window\n"
-    "P to upload a screenshot using xmodem\n"
-    "S to start the screensaver\n"
 
 #if USE_DVI
     "v to cycle DVI modes: mirror VGA out -> test -> VGA in\n"
+#endif
+    "S to start the screensaver\n"
+
+#if USE_DVI
+    "CTRL-P to upload the DVI framebuffer using xmodem\n"
 #else
+    "CTRL-P to upload the VGA framebuffer using xmodem\n"
+#endif
+
+#if !USE_DVI
     "\n"
 #endif
 
-    "";
+    "\n\n";
 
 char* press_any_key_string = 
     "Press any key to close this window\n";
@@ -3350,40 +3356,56 @@ void mirror_VGA_data_to_DVI() {
 }
 
 
+#if USE_VGA_CAPTURE
+enum vc_modes {VC_NONE, VC_VGA_IN, VC_VGA_OUT};
+uint8_t vga_capture_mode = VC_NONE;
+#endif
+
+
 void test_DVI_framebuf() {
     dvi_testbars();
 }
 #endif
 
 
-// upload a screenshot (the VGA framebuffer) using the XMODEM protocol
+// upload a screenshot (the VGA or DVI framebuffer) using the XMODEM protocol
 void print_screen() {
-
-    uint32_t* screen_buf_ptr = &vga_1bit_data_array[0];
-    uint8_t* screen_buf_byte_ptr = (uint8_t*)screen_buf_ptr;
+    #define XMODEM_MAX_FRAME_NAKS 9
 
     #define XMODEM_DATA_BUF_LEN 128
     uint8_t xm_buf[XMODEM_DATA_BUF_LEN];
 
+    // assume we're going to upload the VGA framebuffer
+    uint8_t* screen_buf_byte_ptr = (uint8_t*)&vga_1bit_data_array[0];
+    uint32_t no_of_packets = no_of_packets = ((21 * 4) * 480) / XMODEM_DATA_BUF_LEN;
+
+#if USE_VGA_CAPTURE
+    // If we're mirroring VGA Out to DVI we should upload the VGA framebuffer
+    // as its much smaller, otherwise upload the DVI framebuffer.
+    if (vga_capture_mode != VC_VGA_OUT) {
+        screen_buf_byte_ptr = &dvi_framebuf[0];
+        no_of_packets = ((640 * 4) / 5) * 480 / XMODEM_DATA_BUF_LEN;
+    }
+#endif
+
     uint8_t frame_no = 1;
+    uint8_t frame_naks = 0;
 
     int uart_int;
 
     int l = 0;
 
-    #define NO_OF_PACKETS (((21 * 4) * 480) / 128)
-
     uint32_t byte_index = 0;
 
     // wait for upto 30 seconds for a NAK from the controller (e.g. minicom)
-    uart_int = stdio_getchar_timeout_us(30000 * 1000);
+    uart_int = stdio_getchar_timeout_us(30 * 1000 * 1000);
     if (uart_int != NAK) {
         // failed to get a NAK
         writeString(" screenshot timeout");
         return;
     }
 
-    while (l < NO_OF_PACKETS) {
+    while (l < no_of_packets) {
         uint8_t checksum = 0;
 
         stdio_putchar_raw(SOH);
@@ -3402,19 +3424,27 @@ void print_screen() {
 
         stdio_putchar_raw(checksum);
 
-        // wait for ACK
-        uart_int = stdio_getchar_timeout_us(2000 * 1000);
+        // wait for upto 2 seconds for an ACK
+        uart_int = stdio_getchar_timeout_us(2 * 1000 * 1000);
 
         if (uart_int == ACK) {
             // the packet was ok
             // writeString(".");
             l += 1;
             frame_no += 1;
+            frame_naks = 0;
         } else if (uart_int == NAK) {
             // the packet was not ok
             // writeString("?");
-            // repeat the packet
-            screen_buf_byte_ptr -= XMODEM_DATA_BUF_LEN;
+            // we're allowed a certain number of attempts
+            if (frame_naks++ < XMODEM_MAX_FRAME_NAKS)  {
+                // repeat the packet
+                screen_buf_byte_ptr -= XMODEM_DATA_BUF_LEN;
+            } else {
+                // give up
+                // writeString(" - too many attempts");
+                break;
+            }
 
         } else if (uart_int == PICO_ERROR_TIMEOUT) {
             // timeout
@@ -3425,7 +3455,7 @@ void print_screen() {
 
     if (uart_int == ACK) {
         stdio_putchar_raw(EOT);
-        uart_int = stdio_getchar_timeout_us(2000 * 1000); // 1 second is not enough
+        uart_int = stdio_getchar_timeout_us(5 * 1000 * 1000); // 1 second is not enough
         if (uart_int == ACK) {
             // writeString(" - yay");
         } else if (uart_int == PICO_ERROR_TIMEOUT) {
@@ -3449,9 +3479,6 @@ void close_window() {
 char * start_help_text = "Press h for help.\n";
 
 #if USE_VGA_CAPTURE
-
-enum vc_modes {VC_NONE, VC_VGA_IN, VC_VGA_OUT} ;
-uint8_t vga_capture_mode = VC_NONE;
 
 PIO vga_capture_pio = pio0;
 uint vga_capture_sm = 0;
@@ -4082,7 +4109,7 @@ uint total_sample_bits;
 
 
     void start_screensaver() {
-        uart_my_puts("Saving the screen...\n");
+        uart_my_puts("Saving VGA screen...\n");
         main_state = MS_SCREENSAVE;
         last_event_time = time_us_64();
         screensaver_line = 0;
@@ -4115,17 +4142,18 @@ uint total_sample_bits;
 
 
     void start_screen_blanking() {
-        uart_my_puts("Blanking the screen...\n");
+        uart_my_puts("Blanking VGA screen...\n");
         main_state = MS_BLANK;
         last_event_time = time_us_64();
     }
 
 
     void halt_vga_out() {
-        uart_my_puts("Halting VGA OUT...\n");
+        uart_my_puts("Halting VGA output...\n");
         vga_pause();
         main_state = MS_VGA_HALTED;
     }
+
 
     void restart_vga_out() {
         // clear_screen();
@@ -4135,7 +4163,7 @@ uint total_sample_bits;
         // plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
         // draw_statusbar_info();
 
-        uart_my_puts("Restarting VGA OUT...\n");
+        uart_my_puts("Restarting VGA output...\n");
         init_line_colours();
         if (!showing_window) {
             set_plot_line_colors(g_no_of_captured_pins);
@@ -4174,7 +4202,7 @@ uint total_sample_bits;
                 uint64_t time_now = time_us_64();
                 uint8_t this_numeric_value = ui_command - UIC_0;
 
-                if ((time_now - last_numeric_key_time) < 750000) {
+                if ((time_now - last_numeric_key_time) < 750 * 000) {
                     // Two or more number keys have been pressed in quick succession
                     numeric_value = (numeric_value * 10) + this_numeric_value;
                 } else {
@@ -4193,11 +4221,9 @@ uint total_sample_bits;
                         break;
 
                     case SS_FREQ:
-                        // set_sample_frequency(MAX(g_sample_frequency - 1, 1));
                         if ((numeric_value > 0) && (numeric_value <= 10000)) {
                             set_sample_frequency(numeric_value);
                         }
-
                         break;
 
                     case SS_NO_OF_PINS:
@@ -5079,15 +5105,10 @@ int main() {
                     if (main_dvi_state == MDS_ACTIVE) {
                         if (time_us_64() - last_vga_capture_time >= (5 * 1000 * 1000)) {
                             uart_my_puts("No VGA input signal. Halting DVI output...\n");
-                            // dvi_testbars();
-
-                            // dvi_deinit();
-                            // dvi_reinit();
-                        // !!! cant' talk to dvi via core 0 !!!
-
                             multicore_fifo_push_blocking(CORE1_CMD_DEINIT_DVI);
-
                             main_dvi_state = MDS_NO_SIGNAL;
+                            led_state = 0;
+                            gpio_put(PICO_DEFAULT_LED_PIN, led_state);
                         }
                     }
                 }
@@ -5108,7 +5129,6 @@ int main() {
 #else
 
     #if USE_MULTI_CORE
-
             sleep_ms(10); // testing to see if this still randomly crashes the hstx-dvi now that it's on core 1 - it doesn't
 
     #endif
