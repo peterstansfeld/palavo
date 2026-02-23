@@ -1,7 +1,7 @@
 /* 
 * PALAVO
 *
-* PIO-Assisted Logic Analyser with VGA Output
+* PIO-Accomplished Logic Analyser with VGA Output
 *
 * Developed by Peter Stansfeld
 *   (pstansfeld@redcreations.co.uk)
@@ -28,9 +28,8 @@
 *   `$ picotool info -a palavo.uf2`
 */
 
-
 #define VERSION_MAJOR 0
-#define VERSION_MINOR 10
+#define VERSION_MINOR 12
 #define VERSION_PATCH 0
 
 #ifndef VGA_TIMEOUT
@@ -102,7 +101,7 @@
 #define ENABLE_GRAPHICS_DEMO 0
 
 bi_decl(bi_program_version_string(STR(VERSION_MAJOR) "." STR(VERSION_MINOR) "." STR(VERSION_PATCH)));
-bi_decl(bi_program_description("PIO-Assisted Logic Analyser with VGA Output"));
+bi_decl(bi_program_description("PIO-Accomplished Logic Analyser with VGA Output"));
 bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
 
 // Maybe make this a feature?...
@@ -2251,6 +2250,8 @@ enum UI_COMMANDS {
     UIC_8,
     UIC_9,
 
+    UIC_F1,
+
 };
 
 
@@ -2580,8 +2581,8 @@ uint check_keyboard() {
             }
 
             if (strlen(escape_seq) == 2) {
-                if ((char)escape_seq[0] == '[') {
-                    switch ((char)escape_seq[1]) {
+                if (escape_seq[0] == '[') {
+                    switch (escape_seq[1]) {
                         case 'A':
                             ui_command = UIC_UP;
                             break;
@@ -2601,21 +2602,35 @@ uint check_keyboard() {
                         default:
                             break;
                     }
-                } else if ((char)escape_seq[0] == 'O') {
-                    if ((char)escape_seq[1] == 'F') {
-                        ui_command = UIC_END;
+                } else if (escape_seq[0] == 'O') {
+                    switch (escape_seq[1]) {
+                        case 'F':
+                            ui_command = UIC_END;
+                            break;
+                        case 'P':
+                            ui_command = UIC_F1;
+                            break;
+
+                        default:
+                            break;
                     }
                 }
             } else if (strlen(escape_seq) == 3) {
-                if ((char)escape_seq[2] == '~') {
-                    if ((char)escape_seq[1] == '1') {
-                        ui_command = UIC_HOME;
+                if (escape_seq[2] == '~') {
 
-                    } else if ((char)escape_seq[1] == '5') {
-                        ui_command = UIC_PAGE_UP;
+                    switch (escape_seq[1]) {
+                        case '1':
+                            ui_command = UIC_HOME;
+                            break;
+                        case '5':
+                            ui_command = UIC_PAGE_UP;
+                            break;
+                        case '6':
+                            ui_command = UIC_PAGE_DOWN;
+                            break;
 
-                    } else if ((char)escape_seq[1] == '6') {
-                        ui_command = UIC_PAGE_DOWN;
+                        default:
+                            break;
                     }
                 }
             } else if (strlen(escape_seq) == 5) {
@@ -2901,6 +2916,8 @@ void set_settings_state(uint8_t state) {
 
 
 char* help_strings =
+    "HELP\n"
+    "\n"
     "LEFT / RIGHT to scroll one sample period left / right\n"
     "CTRL-LEFT / CTRL-RIGHT to scroll to previous / next edge\n"
     "  on the selected channel (ch)\n"
@@ -2912,10 +2929,9 @@ char* help_strings =
     "UP / DOWN to increase / decrease the selected setting\n"
     "0..9 to set the selected numeric setting\n" 
     "c to capture a sample using the settings\n"
-    "z to zoom to fit all the samples on one page\n"
-    "+ / - / = to zoom in / out / to 1:1\n"
+    "+ / - / = / z to zoom in / out / to 1:1 / to fit width\n"
     // "m to measure VGA timings\n"
-    "h to show this help window\n"
+    "h or F1 to show this help window\n"
     "a to show the about window\n"
 
 #if USE_DVI
@@ -2933,7 +2949,7 @@ char* help_strings =
     "\n"
 #endif
 
-    "\n\n";
+    "\n";
 
 char* press_any_key_string = 
     "Press any key to close this window\n";
@@ -2962,9 +2978,10 @@ void show_help_window() {
     writeString(help_strings);
     writeString(press_any_key_string);
 
-    uart_my_puts("\nHELP\n\n");
+    uart_my_puts("\n");
     uart_my_puts(help_strings);
     uart_my_puts(press_any_key_string);
+    uart_my_puts("\n\n");
 
     showing_window = true;
 }
@@ -3219,11 +3236,11 @@ void logo_med(int x, int y, bool use_fore_col) {
 
 char* about_name_str = 
     "\n"
-    "ABOUT\n\n"
-    "PALAVO\n\n";
+    "PALAVO\n"
+    "\n";
 
 char* about_description_str =
-    "PIO-Assisted Logic Analyser with VGA Output\n"
+    "PIO-Accomplished Logic Analyser with VGA Output\n"
     "Version: " STR(VERSION_MAJOR) "." STR(VERSION_MINOR) "." STR(VERSION_PATCH) "\n"
     "\n"
     "Developed by Peter Stansfeld.\n"
@@ -3266,7 +3283,7 @@ void show_about_info(bool on_window) {
     if (on_window) {
         uart_my_puts(press_any_key_string);
     }
-    uart_my_puts("\n");
+    uart_my_puts("\n\n\n");
 }
 
 
@@ -3397,8 +3414,8 @@ void print_screen() {
 
     uint32_t byte_index = 0;
 
-    // wait for upto 30 seconds for a NAK from the controller (e.g. minicom)
-    uart_int = stdio_getchar_timeout_us(30 * 1000 * 1000);
+    // wait for upto 60 seconds for a NAK from the controller (e.g. minicom)
+    uart_int = stdio_getchar_timeout_us(60 * 1000 * 1000);
     if (uart_int != NAK) {
         // failed to get a NAK
         writeString(" screenshot timeout");
@@ -4202,7 +4219,7 @@ uint total_sample_bits;
                 uint64_t time_now = time_us_64();
                 uint8_t this_numeric_value = ui_command - UIC_0;
 
-                if ((time_now - last_numeric_key_time) < 750 * 000) {
+                if ((time_now - last_numeric_key_time) < 750 * 1000) {
                     // Two or more number keys have been pressed in quick succession
                     numeric_value = (numeric_value * 10) + this_numeric_value;
                 } else {
@@ -4542,6 +4559,7 @@ uint total_sample_bits;
                     break;
 
                 case UIC_H:
+                case UIC_F1:
                     writeString("help");
                     show_help_window();
                     break;
@@ -5107,8 +5125,10 @@ int main() {
                             uart_my_puts("No VGA input signal. Halting DVI output...\n");
                             multicore_fifo_push_blocking(CORE1_CMD_DEINIT_DVI);
                             main_dvi_state = MDS_NO_SIGNAL;
+#if defined(PICO_DEFAULT_LED_PIN)
                             led_state = 0;
                             gpio_put(PICO_DEFAULT_LED_PIN, led_state);
+#endif
                         }
                     }
                 }
