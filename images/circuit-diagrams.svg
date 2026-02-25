@@ -263,7 +263,7 @@
 
     <g id="resistor">
         <path class="res-wire" d="m0,1 h8.12"/>
-        <rect class= "res-body" x="1.25" width="5.62" height="2" rx=".5"/>
+        <rect class="res-body" x="1.25" width="5.62" height="2" rx=".5"/>
         <path class="res-band res-gold" d="m5.75,0 v2"/>
     </g>
 

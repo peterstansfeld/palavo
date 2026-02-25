@@ -1,9 +1,9 @@
 # Optimises an svg by doing the following:
 # - Removing comments
 # - Removing unused defs
+# - Removing unused styles
+# - Can optionally remove all leading whitespace
 
-# Todo
-# - Remove unused styles
 
 import os
 import sys
@@ -24,11 +24,6 @@ if os.path.isfile(src_filename) == False:
 line_list = []
 
 # Read the input file.
-# f = open(src_filename, "r")
-# src_contents = f.read()
-# f.close()
-
-
 f = open(src_filename, "r")
 line_list = f.readlines()
 f.close()
@@ -45,6 +40,7 @@ for line in line_list:
         commentless_line_list.append(line)
 
 used_defs = []
+used_classes = []
 
 def find_groups(group_id):
     if used_defs.count(group_id) == 0:
@@ -60,6 +56,7 @@ def find_groups(group_id):
                 if stripped_line.startswith(group_id_str):
                     group_nest_level += 1
             else:
+                # we're in a group
                 if stripped_line.startswith('<g '):
                     group_nest_level += 1
                 elif stripped_line.startswith('</g>'):
@@ -70,6 +67,14 @@ def find_groups(group_id):
                     id_str = stripped_line[12:stripped_line.find('"', 12)]
                     find_groups(id_str)
 
+            if group_nest_level > 0:
+                class_start = stripped_line.find(' class="')
+                if class_start > 0:
+                    classes_str = stripped_line[class_start + 8:stripped_line.find('"', class_start + 8)]
+                    class_strs = classes_str.rsplit()
+                    for class_str in class_strs:
+                        if used_classes.count(class_str) == 0:
+                            used_classes.append(class_str)
 
 def find_main_use_refs():
     global dest_contents
@@ -88,6 +93,15 @@ def find_main_use_refs():
                         used_defs.append(id_str)
                         find_groups(id_str)
                         dest_filename = id_str + '-circuit.svg'
+
+                class_start = stripped_line.find(' class="')
+                if class_start > 0:
+                    classes_str = stripped_line[class_start + 8:stripped_line.find('"', class_start + 8)]
+                    class_strs = classes_str.rsplit()
+                    for class_str in class_strs:
+                        if used_classes.count(class_str) == 0:
+                            used_classes.append(class_str)
+
             else:
                 if stripped_line.startswith('</defs>'):
                     found_end_of_defs = True
@@ -95,7 +109,7 @@ def find_main_use_refs():
 
 output_lines = []
 
-def trim():
+def trim(minify = False):
     st_pre_defs = 0
     st_pre_style = 1
     st_in_style = 2
@@ -116,8 +130,43 @@ def trim():
                 if stripped_line.startswith('<style>'):
                     state = st_in_style
             elif state == st_in_style:
-                if stripped_line.startswith('</style>'):
-                    state = st_post_style
+                if group_nest_level == 0:
+                    if stripped_line.startswith('</style>'):
+                        state = st_post_style
+                    else:
+                        add_line = False
+                        if stripped_line.startswith('.'):
+                            if stripped_line.find(',') < 0:
+                                # assume single class - do we use it?
+                                class_str = stripped_line[1:stripped_line.find('{', 1)].strip()
+                                if used_classes.count(class_str) == 1:
+                                    # we do use it
+                                    add_line = True
+                                    group_nest_level += 1
+                            else:
+                                # assume multi class
+                                # add_line = True
+                                class_strs = stripped_line.split(',')
+                                cleaned_line = ''
+                                # clean
+                                for class_str in class_strs:
+                                    clean_str = class_str.replace('.', ' ').replace('{', ' ').strip()
+                                    if used_classes.count(clean_str) == 1:
+                                        if cleaned_line != '':
+                                            cleaned_line = cleaned_line + ', '
+                                        cleaned_line = cleaned_line + '.' + clean_str
+                                if cleaned_line != '':
+                                    # add_line = True
+
+                                    if not minify:
+                                        cleaned_line = '      ' + cleaned_line
+                                    output_lines.append(cleaned_line + ' {\n')
+                                    group_nest_level += 1
+
+                else:
+                    if stripped_line.endswith('}'):
+                        group_nest_level -= 1
+
             elif state == st_post_style:
                 if group_nest_level == 0:
                     if stripped_line.startswith('<g id="'):
@@ -137,8 +186,10 @@ def trim():
                         group_nest_level -= 1
 
             if add_line:
-                output_lines.append(line)
-                # output_lines.append(stripped_line + '\n')
+                if minify:
+                    output_lines.append(stripped_line + '\n')
+                else:
+                    output_lines.append(line)
 
 
 # we should now have a list of id'ed groups that we need to include in the defs section
@@ -150,12 +201,15 @@ find_main_use_refs()
 
 print("Trimming `" + src_filename + "` and saving as `" + dest_filename + "` ...")
 
-trim()
+trim(False)
 
 # print(dest_contents)
 # print('\n')
 # for used_def in used_defs:
 #     print(used_def)
+
+# for used_class in used_classes:
+#     print(used_class)
 
 # Write the output file
 f = open(dest_filename, "w")
