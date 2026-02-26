@@ -777,14 +777,24 @@
       <g class="wire" transform="translate(9 1)">
         <path class="s-orange" d="m0,0 l1-1 h45 l5.08 5.08 h6.63 l1,1"/>
         <path class="s-yellow" d="m0,2.54 l1-1 h45 l5.08 5.08 h6.63 l1,1"/>
-        <path class="s-white-s " d="m55.5,30.48 h.98"/>
-        <path class="s-black" d="m28,30.48 h28.5"/>
+        <path class="s-white-s " d="m55.5,38.1 h.98"/>
+        <path class="s-black" d="m28,30.48 h15.24 v7.62 h13.26"/>
         <path class="s-blue" d="m0,7.62 l1-1 h46 l2.54 2.54 h8.2 l1,1"/>
         <path class="s-light-blue" d="m0,10.16 l1,-1 h46 l2.54 2.54 h8.2 l1,1"/>
         <path class="s-green" d="m0,12.7 l1-1 h46 l2.54,2.54 h8.2 l1,1"/>
         <path class="s-light-green" d="m0,15.24 l1-1 h46 l2.54,2.54 h8.2 l1,1"/>
         <path class="s-red" d="m0,20.32 l1-1 h56.7 l1,1"/>
         <path class="s-light-red" d="m0,22.86 l1-1 h56.7 l1,1"/>
+        <g transform="translate(52 24.4)">
+          <path class="s-orange" d="m1,0 h4.71 l1,1"/>
+          <path class="s-yellow" d="m1,2.54 h4.71 l1,1"/>
+          <path class="s-yellow" d="m1,5.08 h4.71 l1,1"/>
+          <g class="gpio-label gpio-label-right black-label" style="font-size: 1.75px;">
+            <text>UART_TX</text>
+            <text y="2.54">UART_RX</text>
+            <text y="5.08"> IR_RX</text>
+          </g>
+        </g>
       </g>
     </g>
 

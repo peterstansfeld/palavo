@@ -86,7 +86,6 @@ if (DEFINED VGA_TIMEOUT)
 endif()
 
 if (DEFINED SYS_CLK_HZ)
-
     if ((SYS_CLK_HZ EQUAL 125000000))
         message(STATUS "SYS_CLK set to 125 MHz")
         add_compile_definitions(SYS_CLK_HZ=${SYS_CLK_HZ})
