@@ -19,7 +19,7 @@ else
     # it will refuse to program any of them - and rightly so. In which
     # case the serial number of the target MCU can be specified.:
     
-    # picotool load palavo.uf2 --ser  -f -x
+    # picotool load palavo.uf2 -f -x
 
     picotool load palavo.uf2 --ser 2B11EBC23AEB60F8 -f -x
 
@@ -31,7 +31,7 @@ else
     # 5. run `lsusb -s[[bus]]:[devnum] -v | grep iSerial
     # 6. The serial number is the long number.
 
-    # Here's a current list of picos' serial numbers:
+    # Here's a list of my picos' serial numbers:
 
     # E66044304368642B - rpi pico (config 0)
     # E2CD6B985F314CA0 - rpi pico2 (config53 @150 MHz)

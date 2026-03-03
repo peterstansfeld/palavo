@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 
-# add_compile_definitions(SYS_CLK_KHZ=125000u)
+# add `./boards` directory to the list of directories in which to search for the <PICO_BOARD>.h file.
+set(PICO_BOARD_HEADER_DIRS "${CMAKE_CURRENT_LIST_DIR}/boards")
 
 include(pico_sdk_import.cmake)
 
@@ -122,7 +123,7 @@ message(STATUS "Use USB stdio")
 pico_enable_stdio_usb(palavo 1)
 
 if (PC_BIT5)
-    message(STATUS "Use USB stdio")
+    message(STATUS "Use UART stdio")
     pico_enable_stdio_uart(palavo 1)
 endif()
 

@@ -252,14 +252,11 @@
 
 #endif
 
+#pragma message "Using USB STDIO"
 
 #if USE_UART_STDIO
 
     #pragma message "Using UART STDIO"
-
-#else
-
-    #pragma message "Using USB STDIO"
 
 #endif
 

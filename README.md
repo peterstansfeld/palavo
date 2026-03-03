@@ -7,7 +7,7 @@ TODO
 ![A Raspberry Pi Pico displaying some logic on a VGA monitor. A long description follows.](config0-on-pico-photo.png "Raspberry Pi Pico displaying some logic on a VGA monitor.")
 
 
-Palavo uses the PIO (Programmable Input Output) feature of Raspberry Pi's RP2040 or RP2350 microcontroller to capture the state of its GPIO pins over time, and then uses PIO to display those captured states on a VGA monitor. Calling Palavo a logic analyser is a bit of a stretch, as it does very little analysis, but it does allow the user, via a simple interface, to analyse the logic themselves. The interface is controlled using a serial terminal (on a PC), a keyboard to serial terminal adapter, and/or an infra-red remote control. The user can specify which GPIO pins to capture, the frequency at which they should be captured, which GPIO pin should be used to trigger the capture, and what type of trigger should be used.
+Palavo uses the PIO (Programmable Input Output) feature of Raspberry Pi's RP2040 or RP2350 microcontroller to capture the state of its GPIO pins over time, and then uses PIO to display those captured states on a VGA monitor. Calling Palavo a logic analyser is a bit of a stretch as it does very little analysis, but it does allow the user, via a simple interface, to analyse the logic themselves. The interface is controlled using a serial terminal (on a PC), a keyboard to serial terminal adapter, and/or an infra-red remote control. The user can specify which GPIO pins to capture, the frequency at which they should be captured, which GPIO pin should be used to trigger the capture, and what type of trigger should be used.
 
 When using the RP2350, Palavo can be configured to mirror its VGA output to DVI. I thought about changing the project name to Palavocado, but decided against it - mainly because I couldn't come up with anything for the 'c' to stand for, and because I wanted to be taken at least a little seriously. Also, I believe [palavo](https://en.wiktionary.org/wiki/palavo) means 'I shovelled' in Italian, and shovelling is very much what I felt I was doing when working on the source code.
 
@@ -56,13 +56,13 @@ At its simplest, a [Raspberry Pi Pico or Pico 2](https://www.raspberrypi.com/doc
 |   GP9    | UART_RX  |
 |   GP10   | IR_RX    |
 
-*Also not shown in the above diagram is the abilty to use CSYNC instead of HSYNC & VSYNC by adding 16 to PALAVO_CONFIG. When using CSYNC VGA_Out_VSYNC (GP0) is not used and configured as an input.*
+*Also not shown in the diagram is the abilty to use CSYNC instead of HSYNC & VSYNC by adding 16 to PALAVO_CONFIG. When using CSYNC VGA_Out_VSYNC (GP0) is not used and configured as an input.*
 
 ### Firmware
 
 #### Using pre-built Firmware
 
-Place the Pico or Pico 2 in BOOTSEL mode (hold the BOOTSEL button down during board power-up) and copy the appropriate `.uf2` file to the drive that appears on your PC:
+Place the Pico or Pico 2 in BOOTSEL mode (hold the BOOTSEL button down during board power-up or a reset) and copy the appropriate `.uf2` file to the drive that appears on your PC:
 
 For the Pico use [palavo_config0_on_pico.uf2](assets/palavo_config0_on_pico.uf2).  
 For the Pico 2 use [palavo_config0_on_pico2.uf2](assets/palavo_config0_on_pico2.uf2).
@@ -76,56 +76,72 @@ There may be a simpler way to build Palavo's firmware, using Raspberry Pi's Pico
 
 Follow the instructions in Appendix C: Manual toolchain setup of [Getting started with Raspberry Pi Pico-series](https://datasheets.raspberrypi.com/pico/getting-started-with-pico.pdf).
 
-Clone this repository (palavo) into a suitable location on your PC:
+Clone this repository (palavo) to a suitable location on your PC:
 
-`$ git clone https://github.com/peterstansfeld/palavo.git`
+```bash
+git clone https://github.com/peterstansfeld/palavo.git
+```
 
 Enter the `palavo` directory:
 
-`$ cd palavo`
+```bash
+cd palavo
+```
 
 Create a `build` directory and enter it:
 
-`$ mkdir build`
-
-`$ cd build`
+```bash
+mkdir build
+cd build
+```
 
 In the rest of this example the original Raspberry Pi Pico is used. If you'e using a Pico 2, replace any 'pico' references with 'pico2', and any 'rp2040' references with 'rp2350'. 
 
 Create a suitably-named directory and enter it:
 
-`$ mkdir pico`
-
-`$ cd pico`
+```bash
+mkdir pico
+cd pico
+```
 
 Create a suitably-named directory for this particular configuration of Palavo and enter it:
 
-`$ mkdir config0`
-
-`$ cd config0`
-
-
+```bash
+mkdir config0
+cd config0
+```
+<a id="prepare-the-cmake-build-directory"></a>
 Specify where the pico-sdk directory can be found on your PC, e.g.:
 
-`$ export PICO_SDK_PATH=~/pico/pico-sdk`
+```bash
+export PICO_SDK_PATH=~/pico/pico-sdk
+```
 
-Run `cmake` specifying where the top level CMakeLists.txt file can be found - in this case it's the great-grandparent directory `../../../`, the board `pico`, and the configuration `PALAVO_CONFIG=0`:
+Run `cmake` specifying where the top level CMakeLists.txt file can be found - in this case it's the great-grandparent directory `../../../`, the board `pico`, and the configuration number `0`:
 
-`$ cmake ../../../ -DPICO_BOARD=pico -DPALAVO_CONFIG=0`
+```bash
+cmake ../../../ -DPICO_BOARD=pico -DPALAVO_CONFIG=0
+```
 
 Then build it:
 
-`$ make`
+```bash
+make
+```
 
 This should generate, among other files, a `palavo.uf2` and a`palavo.elf`.
 
-To program the Pico with `palavo.uf2` put the Pico into BOOTSEL mode as described above. Alternatively, use the `picotool` utility:
+To program the Pico with `palavo.uf2` put the Pico into BOOTSEL mode (hold the BOOTSEL button down during board power-up or a reset) and either copy the `.uf2`as described above, or use the `picotool` utility:
 
-`$ picotool load palavo.uf2 -f`
+```bash
+picotool load palavo.uf2 -f
+```
 
 To program the Pico with `palavo.elf` use `openocd` and a [Raspberry Pi Debug Probe](https://www.raspberrypi.com/documentation/microcontrollers/debug-probe.html), or suitable alternative:
 
-`$ openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000" -c "init; reset; program palavo.elf verify reset exit"`
+```bash
+openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000" -c "init; reset; program palavo.elf verify reset exit"
+```
 
 
 ### Testing Configuration 0
@@ -143,7 +159,9 @@ The channels captured in this screenshot are the GPIO pins used to generate the 
 
 Open a serial terminal on your PC. I use `minicom` with this command line:
 
-`$ minicom -b 115200 -w -D /dev/ttyACM0`
+```bash
+minicom -b 115200 -w -D /dev/ttyACM0
+```
 
 (You may need to change the device - the bit after the `-D`. After minicom opens you may also need to add carriage returns with 'Ctrl-A U'.)
 
@@ -178,7 +196,7 @@ Press any key to close this window
 
 Hopefully, the above instructions are clear enough to be able to get started using Palavo. If so, congratulations! I hope you find it interesting, and maybe even useful.
 
-Note. After a period of inactivity (keyboard and infra-red) the VGA output will halt in order to allow the attached monitor to enter a power saving mode. Any keyboard or infra-red activity will restart the VGA output. This period of inactivity (5 minutes in the following example) can be configured by adding `-DVGA_TIMEOUT=300` to the appropriate `$ cmake ...` line, above. To prevent the VGA output from ever being halted, except by pressing 'S' (uppercase), add `-DVGA_TIMEOUT=0`.
+Note. After a period of inactivity (keyboard and infra-red) the VGA output will halt in order to allow the attached monitor to enter a power saving mode. Any keyboard or infra-red activity will restart the VGA output. This period of inactivity (5 minutes in the following example) can be configured by adding `-DVGA_TIMEOUT=300` to the `$ cmake` command line, above. To prevent the VGA output from ever being halted, except by pressing 'S' (uppercase), add `-DVGA_TIMEOUT=0`.
 
 
 ## Configuration 1
@@ -223,19 +241,23 @@ Skip to [Testing Configuration 1](#testing-configuration-1).
 
 In the `build/` directory create a `pico2` directory, and enter it:
 
-`$ mkdir pico2`
-
-`$ cd pico2`
+```bash
+mkdir pico2
+cd pico2
+```
 
 Create a suitably-named directory for this particular configuration of Palavo and enter it:
 
-`$ mkdir config1`
+```bash
+mkdir config1
+cd config1
+```
 
-`$ cd config1`
+Repeat the rest of the [previous build process](#prepare-the-cmake-build-directory), except use this `cmake` command:
 
-Repeat the rest of the previous build process, except use this `cmake` command:
-
-`$ cmake ../../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=1`
+```bash
+cmake ../../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=1
+```
 
 
 ### Testing Configuration 1
@@ -317,19 +339,24 @@ Skip to [Testing Configuration 21](#testing-configuration-21).
 
 In the `build/pico2` directory create a different, but still suitably-named, directory, and enter it:
 
-`$ mkdir config21`
+```bash
+mkdir config21
+cd config21
+```
 
-`$ cd config21`
-
-Repeat the rest of the build process as described in the Configuration 0 example, except use **one** of the following `cmake` commands:
+Repeat the rest of the build process as described in the [Configuration 0 example](#prepare-the-cmake-build-directory), except use **one** of the following `cmake` commands:
 
 For the 72 Hz refresh rate use:
 
-`$ cmake ../../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=21`
+```bash
+cmake ../../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=21
+```
 
 **Or** for the 60 Hz refresh rate use:
 
-`$ cmake ../../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=21 -DSYS_CLK_HZ=125000000`
+```bash
+cmake ../../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=21 -DSYS_CLK_HZ=125000000
+```
 
 
 ### Testing Configuration 21
@@ -360,16 +387,19 @@ For the Pico use [vga_demo_on_pico.uf2](assets/vga_demo_on_pico.uf2).
 For the Pico 2 use  [vga_demo_on_pico2.uf2](assets/vga_demo_on_pico2.uf2).
 
 
+<a id="vga-demo-screenshot"></a>
 Start both devices and hopefully you should see Hunter's demo on your DVI monitor:
 
 ![A frame from Hunter Adams' VGA demo. A long description follows.](images/ha-vga-demo-paused.png "Hunter Adams' VGA demo")
 
-*A frame of an animated demo of various graphical primitives drawn in 15 colours on a black background. The primitives are filled rectangles, filled circles, unfilled rectangles, unfilled squares, horizontal lines, vertical lines, and diagonal lines. There are four lines of small text in the left of three filled rectangles at the top of the screen, and they read "Raspberry Pi Pico Graphics Primitives demo", "Hunter Adams", "vha@cornell.edu" and "4-bit mod by Bruce Land". The middle filled rectangle has two lines of large text, which read "Time Elapsed:" and "189". When animated this number increments every second, and below the three filled rectangles the rest of the primitives are being redrawn in different colours, sizes and/or locations every 20 milliseconds.*
+*A screenshot of various graphical primitives drawn in 15 colours on a black background. At the top of the screen are three filled rectangles: one blue, one red, and one green. Text has been drawn on five lines in the the blue rectangle, which read "Raspberry Pi Pico", "Graphics Primitives demo", "Hunter Adams", "vha@cornell.edu" and "4-bit mod by Bruce Land". The red rectangle has two lines of large text, which read "Time Elapsed:" and "189". When animated this area of the screen remains static except for the number, which increments every second. Below the rectangles are filled circles; unfilled circles; unfilled squares; and horizontal, vertical, and diagonal lines drawn on different sections of the screen, which get redrawn in various colours, locations and sizes every 20 milliseconds.*
 
 I said it was fun.
 
-If you've been wondering why Palavo uses 6-bit colour (RRGGBB), it's because when converting the VGA output to DVI, using the HSTX peripheral on the RP2350, the colours remain the same as the VGA output. This is due to each colour being made up of the same number of bits, which is not the case with Hunter's and Bruce's 4-bit colour (RGGB). To save SRAM used by Palavo's VGA driver, each horizontal line consists of a maximum of two 6-bit colours.
+<a id="removing-vsync-jumper-wire"></a>
+Oh, and in order to obtain this screenshot I had to remove the VSYNC jumper wire because transmitting the DVI screen buffer using the [xmodem](https://en.wikipedia.org/wiki/XMODEM) protocol at 115,200 bps takes quite a long time - a good deal longer than 20 milliseconds. If you'd like to see the result of not removing the VSYNC jumper wire, take a look at the image in the section of this document titled [How to Download a Screenshot](#vsync-jumper-wire-attached).
 
+Before we finish with Configuration 1, if you've been wondering why Palavo uses 6-bit colour (RRGGBB) it's because when converting the VGA output to DVI, using the HSTX peripheral on the RP2350, the colours remain the same as the VGA output. This is due to each colour being made up of the same number of bits, which is not the case with Hunter's and Bruce's 4-bit colour (RGGB). To save SRAM used by Palavo's VGA driver, each horizontal line consists of a maximum of two 6-bit colours.
 
 ## Configuration 2
 
@@ -422,24 +452,30 @@ Skip to [Testing Configuration 2](#testing-configuration-2).
 
 In the `build` directory create a suitably-named directory, and enter that directory:
 
-`$ mkdir pimoroni_pico_lipo2xl_w`
-
-`$ cd pimoroni_pico_lipo2xl_w`
+```bash
+mkdir pimoroni_pico_lipo2xl_w
+cd pimoroni_pico_lipo2xl_w
+```
 
 Create a suitably-named directory for this particular configuration of Palavo and enter that directory:
 
-`$ mkdir config2`
+```bash
+mkdir config2
+cd config2
+```
 
-`$ cd config2`
+Repeat the rest of the build process as described in the [Configuration 0 example](#prepare-the-cmake-build-directory), except use this `cmake` command:
 
-Repeat the rest of the build process as described in the Configuration 0 example, except use this `cmake` command:
+```bash
+cmake ../../../ -DPICO_BOARD=pimoroni_pico_lipo2xl_w_rp2350 -DPALAVO_CONFIG=2
+```
 
-`$ cmake ../../../ -DPICO_BOARD=pimoroni_pico_lipo2xl_w_rp2350 -DPALAVO_CONFIG=2`
+Note. At the time of writing, there wasn't an official `pimoroni_pico_lipo2xl_w_rp2350.h` board definition file in the pico SDK (2.2.0), so I cobbled one together, placed it in the `boards` directory and modified `CMakeLists.txt` to look for board definition files there (as well as in the pico SDK). I'm sure an official one will be available the future, and when that time comes it may be best to delete or rename my unofficial one and recreate the build directory.
 
 
 ### Testing Configuration 2
 
-The screen on the DVI monitor should look the same as it does in Configuration 1, except that the 'base' and 'trig.' settings can be set to use GP0 to GP47 (rather than just GP0 to GP31).
+The screen on the DVI monitor should look the same as it does in Configuration 1, except that the 'base' and 'trig.' settings can be set to use GP0 to GP47 (rather than GP0 to GP31).
 
 
 ## Configuration 40
@@ -489,19 +525,23 @@ Skip to [Testing Configuration 40](#testing-configuration-40).
 
 In the `build` directory create a suitably-named directory, and enter it:
 
-`$ mkdir solderparty_rp2350_stamp_xl`
-
-`$ cd solderparty_rp2350_stamp_xl`
+```bash
+mkdir solderparty_rp2350_stamp_xl
+cd solderparty_rp2350_stamp_xl
+```
 
 Create a suitably-named directory for this particular configuration of Palavo and enter it:
 
-`$ mkdir config40`
+```bash
+mkdir config40
+cd config40
+```
 
-`$ cd config40`
+Repeat the rest of the build process as described in the [Configuration 0 example](#prepare-the-cmake-build-directory), except use this `cmake` command:
 
-Repeat the rest of the build process as described in the Configuration 0 example, except use this `cmake` command:
-
-`$ cmake ../../../ -DPICO_BOARD=solderparty_rp2350_stamp_xl -DPALAVO_CONFIG=40`
+```bash
+cmake ../../../ -DPICO_BOARD=solderparty_rp2350_stamp_xl -DPALAVO_CONFIG=40
+```
 
 
 ### Testing Configuration 40
@@ -512,11 +552,11 @@ As the UART has been enabled we can control Palavo with any 3.3V logic level UAR
 
 Alternatively the UART_RX pin can be connected to a keyboard-to-serial-terminal adapter, which is essentially a Pico or Pico 2 with its USB port in host mode, and which converts keyboard input to UART serial output. Details of the adapter can be found in this [keybuart repository](https://github.com/peterstansfeld/keybuart.git).
 
-The infra-red receive pin (IR_RX), along with connections to 3.3V and GND, can be connected to an infra-red receiver, e.g. this [Grove IR Receiver](https://thepihut.com/products/grove-infrared-receiver). Palavo accepts commands transmitted from this [Argon IR Remote control](https://argon40.com/products/argon-remote). This is currently an experimental feature and is limited in fuction, but it's a bit of fun.
+The infra-red receive pin (IR_RX), along with connections to 3.3V and GND, can be connected to an infra-red receiver, e.g. this [Grove IR Receiver](https://thepihut.com/products/grove-infrared-receiver). Palavo accepts commands transmitted from this [Argon IR Remote control](https://argon40.com/products/argon-remote). This is currently an experimental feature and is limited in function, but it's a bit of fun.
 
 That's it for the example configurations with pre-built firmware. If you want to build other configurations it's helpful to understand PALAVO_CONFIG. 
 
-### PALAVO_CONFIG
+## PALAVO_CONFIG
 
 When we add `-DPALAVO_CONFIG=[number]` to a `$ cmake ...` command CMake passes this definition to the c compiler, which has the same effect as if we'd #define'd it in the source code, like this:
 
@@ -538,38 +578,115 @@ Depending on the value of each bit in the \[number\], Palavo will have the follo
 \*\*\* Automatically set if USE_GPIO_31_47 is set.  
 
 
-### Tips and Tricks
+## Picotool
 
-#### Picotool
-
-Besides flashing a Pico or Pico2 or other RP2xxx-equipped device, Raspberry Pi's `picotool` utility is very useful for finding out what's on the device, or what's in a `.uf2` or `.elf` file before flashing it to a device.
+Besides flashing a Pico or Pico2 or other RP2xxx-equipped device, Raspberry Pi's `picotool` utility is very useful for finding out what's on the device, and for finding out what's in a `.uf2` or `.elf` file before flashing it to a device.
 
 To find out what's on the device place it in BOOTSEL mode and enter:
 
-`$ picotool info -a`
+```bash
+picotool info -a
+```
 
 To find out what's in a firmware file (e.g. palavo.uf2) enter:
 
-`$ picotool info -a palavo.uf2`
+```bash
+picotool info -a palavo.uf2
+```
 
-<hr>
+## Scripts
 
-#### Useful script files
+These two scripts are mainly used when developing Palavo:
 
-When in a build/device/config directory, instead of remembering the `openocd` command each time, you can copy the script `make-and-flash.sh` from the palavo directory:
+### make-and-flash.sh
 
-`$ cp ../../../make-and-flash.sh .`
+This is simple script to be run from a build directory that builds the firmware and then uses `openocd` and the Raspberry Pi Debug Probe to flash the firmware to an RP2xxxx device.  
 
-Using a text editor open `make-and-flash.sh`, modify the `adapter_serial_no` variable to that of your Debug Probe. If you don't want or need to specify a serial number (you only have one Debug Probe connected), blank the `target_adapter_cmnd` variable.
+When in a `build/[device]/[config]` directory copy the script from the palavo directory:
 
-Then `make` the firmware and flash the RP2040:
+```bash
+cp ../../../make-and-flash.sh .
+```
 
-`$ ./make-and-flash.sh`
+Using a text editor open `make-and-flash.sh` and modify the `adapter_serial_no` variable to that of your Debug Probe. If you don't want or need to specify a serial number (you only have one Debug Probe connected), blank the `target_adapter_cmnd` variable.
+
+Then `make` the firmware and flash it to an RP2xxx device:
+
+```bash
+./make-and-flash.sh
+```
+
+### make-and-build.sh
+
+Similarly, this is simple script to be run from a build directory that builds the firmware and then uses `picotool` and `USB` to flash the firmware to an RP2xxxx device.  
+
+When in a `build/[device]/[config]` directory copy the script from the palavo directory:
+
+```bash
+cp ../../../make-and-load.sh .
+```
+Using a text editor open `make-and-load.sh` and modify the long hexadecimal number following the `--ser ` part of the `picotool` command line to that of your RP2xxx-equipped device. If you don't want or need to specify a serial number (you only have one device connected), blank the `target_adapter_cmnd` variable.
+
+Then `make` the firmware and flash the RP2xxx device:
+
+```bash
+./make-and-load.sh
+```
+
+To find the serial number of an RP2xxx device (including a Debug Probe, which uses an RP2040):
+
+1. Unplug the device.
+2. run `lsusb` to list all usb devices.
+3. Plug the device back in.
+4. run `lsusb` and note the new device's Bus and Device numbers.
+5. run `lsusb -s[[bus]]:[devnum] -v | grep iSerial`. The serial number is the long number.
+
+
+
+## How to Download a Screenshot
+
+To download a screenshot, or more accurately Palavo's VGA (or DVI) frame buffer, use a communication program that can receive files using the xmodem protocol. This example uses `minicom`:
+
+Press `Ctrl-P` to tell Palavo to expect a request from minicom to transmit its frame buffer (within the next 60 seconds).  
+
+Press `Ctrl-A`, then `R` (for Receive files), then select `xmodem` and press `Enter`.  
+
+Choose a suitable file name (e.g. `image1`) and press `Enter`.  
+
+In a while the file should have been received and saved to the directory from where minicom was run. This example assumes it's the `palavo` directory.  
+
+The received file has an unusual format and needs to be persuaded into a recognisable one for viewing. This is a two stage process. The first stage is to use a python program in the `utils` directory called `expand-pss.py` (expand palavo screenshot) to convert our `image1` to a raw colour file:
+
+```bash
+python3 /utils/expand-pss.py image1 image.raw
+```
+
+The second stage is to use the application [ImageMagick, ](https://imagemagick.org/) to convert the raw image file, which is huge, to a much smaller `.png` file:
+
+```bash
+magick -size 640x480 -depth 8 rgb:image1.raw image1.png
+```
+
+Finally, to view `image1.png`:
+
+```bash
+display image1.png
+```
+
+<a id="vsync-jumper-wire-attached"></a>
+The download is slow, especially when it's the DVI frame buffer, and this is why when I first tried to take a screenshot of Hunter Adams' VGA Demo, which updates every 20 milliseconds, it ended up looking like this:
+
+![A screenshot of Hunter Adams' VGA demo. A long description follows.](images/ha-vga-demo-playing.png "A screenshot of Hunter Adams' VGA demo")
+
+*A screenshot of various graphical primitives drawn in 15 colours on a black background. At the top of the screen are three filled rectangles: one blue, one red, and one green. Text has been drawn on five lines in the the blue rectangle, which read "Raspberry Pi Pico", "Graphics Primitives demo", "Hunter Adams", "vha@cornell.edu" and "4-bit mod by Bruce Land". The red rectangle has two lines of large text, which read "Time Elapsed:" and "90". When animated this area of the screen remains static except for the number, which increments every second. Below is the animation section that gets updated every 20 milliseconds. Here, the filled circles, which should each be filled with a single colour, are filled with roughly 10 horizontal blocks of various colours. Horizontal lines are generally of the same colour, but vertical lines are not. The section made up of random diagonal lines looks like it's instead made up of random pixels.*
+
+<!-- If you clicked on a link to end up in this section, click this link to go back to [where you were](#removing-vsync-jumper-wire). -->
+If you clicked on a link to end up here and you'd like to go back to to that link, click this link to the original [VGA Demo Screenshot](#vga-demo-screenshot).
 
 
 ### End of Document
 
-<hr>
+---
 
 ### Notes to self
 
@@ -595,17 +712,19 @@ palavo-v1.0.6
 
 2. Use `$ ls assets/ -xt | tac` to list the assets in the chronological order in which they were created.
 
-<hr>
+---
 
  To make a script file (e.g. `filename.sh`) executable, enter:
 
-`chmod +x filename.sh`
+```bash
+chmod +x filename.sh
+```
 
-<hr>
+---
 
 To build and install `pioasm` so that it's not downloaded and built on each `make` of a new pico SDK project build folder, I followed [these instructions](https://forums.raspberrypi.com/viewtopic.php?p=2329581&hilit=pioasm+keeps+building#p2329581):
 
-```
+```bash
 cd ~/pico/pico-sdk/tools/pioasm
 mkdir build
 cd build
@@ -620,4 +739,4 @@ Although, the last instruction reported this error:
 
 Thanks, hippy (the person who shared the instructions).
 
-<hr>
+---
