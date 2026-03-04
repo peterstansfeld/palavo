@@ -29,7 +29,7 @@
 */
 
 #define VERSION_MAJOR 0
-#define VERSION_MINOR 12
+#define VERSION_MINOR 13
 #define VERSION_PATCH 0
 
 #ifndef VGA_TIMEOUT
@@ -2933,19 +2933,12 @@ char* help_strings =
     // "m to measure VGA timings\n"
     "h or F1 to show this help window\n"
     "a to show the about window\n"
+    "S to start the screensaver\n"
+    "CTRL-P to upload the framebuffer using xmodem\n"
 
 #if USE_DVI
     "v to cycle DVI modes: mirror VGA out -> test -> VGA in\n"
-#endif
-    "S to start the screensaver\n"
-
-#if USE_DVI
-    "CTRL-P to upload the DVI framebuffer using xmodem\n"
 #else
-    "CTRL-P to upload the VGA framebuffer using xmodem\n"
-#endif
-
-#if !USE_DVI
     "\n"
 #endif
 
@@ -5119,17 +5112,15 @@ int main() {
                         multicore_fifo_push_blocking(CORE1_CMD_INIT_DVI);
                         main_dvi_state = MDS_ACTIVE;
                     }
-                } else {
-                    if (main_dvi_state == MDS_ACTIVE) {
-                        if (time_us_64() - last_vga_capture_time >= (5 * 1000 * 1000)) {
-                            uart_my_puts("No VGA input signal. Halting DVI output...\n");
-                            multicore_fifo_push_blocking(CORE1_CMD_DEINIT_DVI);
-                            main_dvi_state = MDS_NO_SIGNAL;
+                } else if (main_dvi_state == MDS_ACTIVE) {
+                    if (time_us_64() - last_vga_capture_time >= (5 * 1000 * 1000)) {
+                        uart_my_puts("No VGA input signal. Halting DVI output...\n");
+                        multicore_fifo_push_blocking(CORE1_CMD_DEINIT_DVI);
+                        main_dvi_state = MDS_NO_SIGNAL;
 #if defined(PICO_DEFAULT_LED_PIN)
-                            led_state = 0;
-                            gpio_put(PICO_DEFAULT_LED_PIN, led_state);
+                        led_state = 0;
+                        gpio_put(PICO_DEFAULT_LED_PIN, led_state);
 #endif
-                        }
                     }
                 }
             }
