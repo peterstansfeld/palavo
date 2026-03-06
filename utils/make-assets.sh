@@ -1,7 +1,9 @@
 #! /bin/bash
 
-# Compiles (`make`s) all the source code in the $srcs array, renames them,
-# and copies them to the `assets/` directory.
+# Compiles (`make`s) all the source code in the directories in the $srcs array,
+# renames them, and copies them to the `../assets/` directory.
+
+# It should be run from the `utils` directory.
 
 working_dir=${PWD}
 # echo ${working_dir}
@@ -40,7 +42,7 @@ IFS=$old_ifs
 all_src_dirs_exist=1
 
 for i in ${!srcs[@]}; do
-    src_dir=build/${srcs[$i]}
+    src_dir=../build/${srcs[$i]}
     if [ ! -d $src_dir ]; then
         echo $src_dir does not exist.
         all_src_dirs_exist=0
@@ -57,7 +59,7 @@ if [ $all_src_dirs_exist = 1 ]; then
         dest=${dests[$i]}
 
         # Enter the source directory.
-        cd $working_dir/build/$src/
+        cd ${working_dir}/../build/$src/
         pwd
         make
         if [ $? -ne 0 ]; then
@@ -74,9 +76,9 @@ if [ $all_src_dirs_exist = 1 ]; then
             src=${srcs[$i]}
             dest=${dests[$i]}
 
-            # Copy and rename palavo.uf2 to assets folder.
-            echo cp build/$src/palavo.uf2 assets/palavo_$dest.uf2
-            cp build/$src/palavo.uf2 assets/palavo_$dest.uf2
+            # Copy and rename palavo.uf2 and palavo.elf to assets folder.
+            cp ../build/$src/palavo.uf2 ../assets/palavo_$dest.uf2 -v
+            cp ../build/$src/palavo.elf ../assets/palavo_$dest.elf -v
 
             # A short delay so that the file timestamps are different enough to
             # be sorted in order of writing when listing the `assets`` directory

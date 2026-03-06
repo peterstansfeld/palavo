@@ -13,13 +13,12 @@ else
     # no MCU is found it will attempt to force any MCU that has USB stdio
     # enabled. Once successfully loaded the MCU is returned to an
     # executing state.:
+
     # picotool load palavo.uf2 -f -x
 
     # If `picotool` detects multiple MCUs that have USB stdio enabled,
     # it will refuse to program any of them - and rightly so. In which
     # case the serial number of the target MCU can be specified.:
-    
-    # picotool load palavo.uf2 -f -x
 
     picotool load palavo.uf2 --ser 2B11EBC23AEB60F8 -f -x
 

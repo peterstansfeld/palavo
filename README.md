@@ -11,10 +11,9 @@ Palavo uses the PIO (Programmable Input Output) feature of Raspberry Pi's RP2040
 
 When using the RP2350, Palavo can be configured to mirror its VGA output to DVI. I thought about changing the project name to Palavocado, but decided against it - mainly because I couldn't come up with anything for the 'c' to stand for, and because I wanted to be taken at least a little seriously. Also, I believe [palavo](https://en.wiktionary.org/wiki/palavo) means 'I shovelled' in Italian, and shovelling is very much what I felt I was doing when working on the source code.
 
-Palavo can also be configured to forward a 6-bit logic-level VGA input signal (e.g. from another Palavo device) to DVI.
+Palavo can also be configured to forward logic-level VGA input signals (e.g. the VGA output signals from a differently configured Palavo device) to DVI.
 
-
-The project was inspired by, and uses code from, Raspberry Pi's [Logic Analyser (Pico SDK) Example](https://github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser), Hunter Adams' [PIO-Based VGA Graphics Driver for RP2040](https://github.com/vha3/Hunter-Adams-RP2040-Demos/blob/master/VGA_Graphics/README.md), and Raspberry Pi's [DVI Out HSTX Encoder example for the Pico 2](https://github.com/raspberrypi/pico-examples/tree/master/hstx/dvi_out_hstx_encoder).
+The project was inspired by, and uses code from, Raspberry Pi's [Logic Analyser (Pico SDK) example](https://github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser), Hunter Adams' [PIO-Based VGA Graphics Driver for RP2040](https://github.com/vha3/Hunter-Adams-RP2040-Demos/blob/master/VGA_Graphics/README.md), and Raspberry Pi's [DVI Out HSTX Encoder example for the Pico 2](https://github.com/raspberrypi/pico-examples/tree/master/hstx/dvi_out_hstx_encoder).
 
 The VGA output uses a resolution of 640 x 480. It can use either HSYNC (horizontal sync) and VSYNC (vertical sync), or CSYNC (combined sync). Not all VGA monitors support CSYNC, but many do. Some details about CSYNC can be found on this [HDRetrovision blog post](https://www.hdretrovision.com/blog/2019/10/10/engineering-csync-part-2-falling-short).
 
@@ -28,7 +27,7 @@ If you plan to build your own firmware, configurations are defined by adding the
 
 ## Configuration 0
 
-(PALAVO_CONFIG=0)
+__(PALAVO_CONFIG=0)__
 
 
 ### Hardware
@@ -205,7 +204,7 @@ Note. After a period of inactivity (keyboard and infra-red) the VGA output will 
 
 ## Configuration 1
 
-#### PALAVO_CONFIG=1
+__(PALAVO_CONFIG=1)__
 
 "That's all well and good", I hear you say, "but can't the Pico 2 output DVI with its RP2350's HSTX peripheral?". Well, yes it can. Try this:
 
@@ -293,9 +292,11 @@ I find it amazing that the RP2350 can output a DVI signal without too much troub
 
 ## Configuration 21
 
-#### PALAVO_CONFIG=21
+__(PALAVO_CONFIG=21)__
 
 If we have a second Pico 2, and change the VGA_Out\*s to VGA_In\*s we can make a 6-bit logic level VGA - DVI converter. We can also squeeze in a VGA_Out_CSYNC and a VGA_Out_RGB to provide a monochrome VGA output for testing purposes, which can also be mirrored to the DVI output.
+
+### Hardware
 
 ![A circuit diagram showing example hardware for Configuration 21. A long description follows.](images/config21-circuit.svg "Raspberry Pi Pico in Configuration 21")
 
@@ -369,9 +370,11 @@ cmake ../../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=21 -DSYS_CLK_HZ=125000000
 
 Something fun to do here is to get Hunter Adams' [VGA_Graphics_Primitives Demo](https://github.com/vha3/Hunter-Adams-RP2040-Demos/tree/master/VGA_Graphics/VGA_Graphics_Primitives) working on a Pico or a Pico 2, and then connect it to a Pico 2 in Configuration 21:
 
+### Hardware
+
 ![A circuit diagram showing example hardware for all this fun. A long description follows.](images/config21-with-ha-vga-demo-circuit.svg "A Raspberry Pi Pico running Hunter Adams' VGA Demo connected to a Pico 2 in Configuration 21")
 
-*A Raspberry Pi Pico or Pico 2 running Hunter Adams' VGA Graphics Primitives Demo, which housed in a half-sized breadboard. Nine of its pins are connected to corresponding pins on a Pico 2 in Configuration 21, which is housed in another half-sized breadboard and connected to a DVI Sock ([as described in Configuration 1](#connecting-a-pico-2-to-a-dvi-sock)). Here are the connections between the Pico or Pico2 running the demo and the Pico 2:*
+*A Raspberry Pi Pico or Pico 2 running Hunter Adams' VGA Graphics Primitives Demo, which housed in a half-sized breadboard. Seven of its pins are connected to corresponding pins on a Pico 2 in Configuration 21, which is housed in another half-sized breadboard and connected to a DVI Sock ([as described in Configuration 1](#connecting-a-pico-2-to-a-dvi-sock)). Here are the connections between the Pico or Pico2 running the demo and the Pico 2:*
 
 | Demo Pico or Pico 2 Pin | Function            | Pico 2 in Configuration 21 Pin | Function           |
 |         :---:           | ---:                |              :---:             | :---               |
@@ -410,7 +413,7 @@ Before we finish with Configuration 1, if you've been wondering why Palavo uses 
 
 ## Configuration 2
 
-#### PALAVO_CONFIG=2
+__(PALAVO_CONFIG=2)__
 
 The trouble with [Configuration 0](#configuration-0) is that we're using quite a few GPIO pins for the VGA_Out signals, and optionally for UART_TX, UART_RX, and IR_RX. What if we wanted to capture 24 external inputs? We can't with a Pico or Pico 2. But we can with a board that uses the B variant of the RP2350. The RP2350B has 48 GPIO pins, and we only need 7 or 8 for VGA_Out, or 8 for DVI_Out. The slight incovenience with DVI_Out (using HSTX) is that it's fixed on pins GP12-GP19, whereas with VGA_Out we can put its 7 or 8 outputs on whichever pins we like. Allow me introduce you to the [Pimoroni Pico LiPo 2 XL W](https://shop.pimoroni.com/products/pimoroni-pico-lipo-2-xl-w):
 
@@ -487,7 +490,7 @@ The screen on the DVI monitor should look the same as it does in Configuration 1
 
 ## Configuration 40
 
-#### PALAVO_CONFIG=40
+__(PALAVO_CONFIG=40)__
 
 What if we wanted to capture 32 contiguous channels? Unfortunately, it's not possible with the Pimoroni Pico LiPo 2 XL W because some GPIO pins are not broken out, and others are used for the on-board PSRAM and others are used for the wireless module. The answer is to use something that breaks out every GPIO pin, and the only boards which do that, that I know of, are the [Solder Party RP2350 Stamp XL](https://www.solder.party/docs/rp2350-stamp-xl/) and the [Pimoroni PGA2350](https://shop.pimoroni.com/products/pga2350). Here's the Stamp XL housed in a [Solder Party RP2xxx Stamp Carrier Basic](https://www.solder.party/docs/rp2xxx-stamp-carrier-basic/):
 
@@ -547,7 +550,7 @@ cd config40
 Repeat the rest of the build process as described in the [Configuration 0 example](#prepare-the-cmake-build-directory), except use this `cmake` command:
 
 ```bash
-cmake ../../../ -DPICO_BOARD=solderparty_rp2350_stamp_xl -DPALAVO_CONFIG=40
+cmake ../../../ -DPICO_BOARD=solderparty_rp2350_stamp_xl -D 40
 ```
 
 
@@ -601,55 +604,6 @@ To find out what's in a firmware file (e.g. palavo.uf2) enter:
 picotool info -a palavo.uf2
 ```
 
-## Scripts
-
-These two scripts are mainly used when developing Palavo:
-
-### make-and-flash.sh
-
-This is simple script to be run from a build directory that builds the firmware and then uses `openocd` and the Raspberry Pi Debug Probe to flash the firmware to an RP2xxxx device.  
-
-When in a `build/[device]/[config]` directory copy the script from the palavo directory:
-
-```bash
-cp ../../../utils/make-and-flash.sh .
-```
-
-Using a text editor open `make-and-flash.sh` and modify the `adapter_serial_no` variable to that of your Debug Probe. If you don't want or need to specify a serial number (you only have one Debug Probe connected), blank the `target_adapter_cmnd` variable.
-
-Then `make` the firmware and flash it to an RP2xxx device:
-
-```bash
-./make-and-flash.sh
-```
-
-### make-and-build.sh
-
-Similarly, this is simple script to be run from a build directory that builds the firmware and then uses `picotool` and `USB` to flash the firmware to an RP2xxxx device.  
-
-When in a `build/[device]/[config]` directory copy the script from the palavo directory:
-
-```bash
-cp ../../../utils/make-and-load.sh .
-```
-Using a text editor open `make-and-load.sh` and modify the long hexadecimal number following the `--ser ` part of the `picotool` command line to that of your RP2xxx-equipped device. If you don't want or need to specify a serial number (you only have one device connected), blank the `target_adapter_cmnd` variable.
-
-Then `make` the firmware and flash the RP2xxx device:
-
-```bash
-./make-and-load.sh
-```
-
-To find the serial number of an RP2xxx device (including a Debug Probe, which uses an RP2040):
-
-1. Unplug the device.
-2. run `lsusb` to list all usb devices.
-3. Plug the device back in.
-4. run `lsusb` and note the new device's Bus and Device numbers.
-5. run `lsusb -s[[bus]]:[devnum] -v | grep iSerial`. The serial number is the long number.
-
-
-
 ## How to Download a Screenshot
 
 To download a screenshot, or more accurately Palavo's VGA (or DVI) frame buffer, use a serial communication program that can receive files using the xmodem protocol. This example uses `minicom`:
@@ -660,12 +614,12 @@ Press `Ctrl-A`, then `R` (for Receive files), then select `xmodem` and press `En
 
 Choose a suitable file name (e.g. `image1`) and press `Enter`.  
 
-In a while the file should have been received and saved to the directory from where minicom was run. This example assumes it's the `palavo` directory.  
+In a while the file should have been received and saved to the directory from where minicom was run. This example assumes it's the `utils` directory.  
 
 The received file has an unusual format and needs to be persuaded into a recognisable one for viewing. This is a two stage process. The first stage is to use a python program in the `utils` directory called `expand-pss.py` (expand palavo screenshot) to convert our `image1` to a raw colour file:
 
 ```bash
-python3 /utils/expand-pss.py image1 image.raw
+python3 expand-pss.py image1 image1.raw
 ```
 
 The second stage is to use the application [ImageMagick, ](https://imagemagick.org/) to convert the raw image file, which is huge, to a much smaller `.png` file:
@@ -691,59 +645,78 @@ The download is slow, especially when it's the DVI frame buffer, and this is why
 If you clicked on a link to end up here and you'd like to go back to to that link, click this link to the original [VGA Demo Screenshot](#vga-demo-screenshot).
 
 
-### End of Document
+## Scripts
+These scripts are mainly used when developing Palavo and can be found in the `utils` directory:
 
----
+### expand-convert-and-display.sh
 
-### Notes to self
+This combines the two stage process of expanding and converting a screenshot to a PNG file as described above in [How to Download a Screenshot](#how-to-download-a-screenshot) and adds displaying the PNG. Use with caution as files are overwritten and one is deleted during the process.
 
-Tags, and GitHub Releases and Assets and Licenses
-
-Example
-```
-tag
-    asset
-    asset
-
-palavo-v1.0.6
-    palavo_config0_on_pico.uf2
-    palavo_config0_on_pico2.uf2
-    palavo_config1_on_pico2.uf2
-    palavo_config21_on_pico2.uf2
-    palavo_config21_at_125mhz_on_pico2.uf2
-    palavo_config2_on_pimoroni_pico_lipo2xl_w_rp2350.uf2
-    palavo_config8_on_solderparty_rp2350_stamp_xl.uf2
-```
-
-1. Use `$ ./make-assets.sh` to `make` all the relevant `palavo.uf2` files, rename them, and copy them to the `assets/` directory.
-
-2. Use `$ ls assets/ -xt | tac` to list the assets in the chronological order in which they were created.
-
----
-
- To make a script file (e.g. `filename.sh`) executable, enter:
+When in the `utils` directory, and with a screenshot named `image1` in the same `utils` directory:
 
 ```bash
-chmod +x filename.sh
+./expand-convert-and-display.sh image1
 ```
 
----
+This will result in `image1.png` being generated and displayed, and `image1.raw` being overwritten then deleted.
 
-To build and install `pioasm` so that it's not downloaded and built on each `make` of a new pico SDK project build folder, I followed [these instructions](https://forums.raspberrypi.com/viewtopic.php?p=2329581&hilit=pioasm+keeps+building#p2329581):
+
+### make-and-flash.sh
+
+This is a simple script to be run from a `build/[board]/[config]/` directory that builds the firmware and then uses `openocd` and the Raspberry Pi Debug Probe to flash the firmware to an RP2xxxx device.  
+
+When in a `build/[board]/[config]` directory copy the script from the `utils` directory:
 
 ```bash
-cd ~/pico/pico-sdk/tools/pioasm
-mkdir build
-cd build
-cmake -DPIOASM_VERSION_STRING="2.2.0" ..
-make
-sudo make install
-sudo ln -s ~/pico/pico-sdk/tools/pioasm/build/pioasm /usr/local/bin/pioasm
+cp ../../../utils/make-and-flash.sh .
 ```
-Although, the last instruction reported this error:
 
-`ln: failed to create symbolic link '/usr/local/bin/pioasm': File exists`
+Using a text editor open `make-and-flash.sh` and modify the `adapter_serial_no` variable to that of your Debug Probe. If you don't want or need to specify a serial number (you only have one Debug Probe connected), blank the `target_adapter_cmnd` variable.
 
-Thanks, hippy (the person who shared the instructions).
+Then `make` the firmware and flash it to an RP2xxx device:
 
----
+```bash
+./make-and-flash.sh
+```
+
+
+### make-and-load.sh
+
+Similarly, this is a simple script to be run from a `build/[board]/[config]/` directory that builds the firmware, but then uses `picotool` and a USB cable to flash the firmware to an RP2xxxx device.  
+
+When in a `build/[board]/[config]` directory copy the script from the `utils` directory:
+
+```bash
+cp ../../../utils/make-and-load.sh .
+```
+
+Using a text editor open `make-and-load.sh` and modify the long hexadecimal number following the `--ser ` part of the `picotool` command line to that of your RP2xxx-equipped device. If you don't want or need to specify a serial number (you only have one device connected), delete the `--ser ` and the long hexadecimal number that follows it.
+
+Then `make` the firmware and flash the RP2xxx device:
+
+```bash
+./make-and-load.sh
+```
+
+To find the serial number of an RP2xxx device (including a Debug Probe, which uses an RP2040):
+
+```bash
+lsusb | grep "Raspberry Pi"
+```
+
+Make a note of the device's `Bus` and `Device` numbers and then:
+
+```bash
+lsusb -s[[Bus]]:[Device] -v | grep iSerial
+```
+
+The serial number is the long hexadecimal number.
+
+
+### make-assets.sh
+
+This builds the firmware of each of the configurations mentioned in this document and then copies and renames their `palavo.uf2` and `palavo.elf` files to the `assets` directory.
+
+```bash
+./make-assets.sh
+```
