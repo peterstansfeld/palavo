@@ -1,7 +1,7 @@
 /* 
 * PALAVO
 *
-* PIO-Accomplished Logic Analyser with VGA Output
+* PIO-Assisted Logic Analyser with VGA Output
 *
 * Developed by Peter Stansfeld
 *   (pstansfeld@redcreations.co.uk)
@@ -11,15 +11,15 @@
 * * Raspberry Pi's Logic Analyser example for the Pico.
 *   (github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser)
 *
-* * Hunter Adams's (vha3@cornell.edu) VGA Graphics Driver for RP2040 with
-*   Bruce Land's 4-bit mod.
-*   (github.com/vha3/Hunter-Adams-RP2040-Demos/blob/master/VGA_Graphics)
+* * Hunter Adams's (vha3@cornell.edu) VGA Graphics Primitives for RP2040
+*   (github.com/vha3/Hunter-Adams-RP2040-Demos/tree/master/VGA_Graphics/VGA_Graphics_Primitives)
+*   which uses Hunter's VGA Driver with Bruce Land's 4-bit mod.
 *
 * * Raspberry Pi's DVI Out HSTX Encoder example for the Pico 2.
 *   (github.com/raspberrypi/pico-examples/tree/master/hstx/dvi_out_hstx_encoder)
 *
-* There are many possible hardware configurations; please see README.md for
-* details. To view the information on a programmed device (in BOOTSEL mode)
+* There are many configurations of Palavo; please see README.md for details.
+* To view information on a programmed device (in BOOTSEL mode)
 * Raspberry Pi's `picotool` utility can be used:
 *
 *   `$ picotool info -a`
@@ -29,7 +29,7 @@
 */
 
 #define VERSION_MAJOR 0
-#define VERSION_MINOR 13
+#define VERSION_MINOR 14
 #define VERSION_PATCH 0
 
 #ifndef VGA_TIMEOUT
@@ -101,7 +101,7 @@
 #define ENABLE_GRAPHICS_DEMO 0
 
 bi_decl(bi_program_version_string(STR(VERSION_MAJOR) "." STR(VERSION_MINOR) "." STR(VERSION_PATCH)));
-bi_decl(bi_program_description("PIO-Accomplished Logic Analyser with VGA Output"));
+bi_decl(bi_program_description("PIO-Assisted Logic Analyser with VGA Output"));
 bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
 
 // Maybe make this a feature?...
@@ -3233,20 +3233,33 @@ char* about_name_str =
     "\n";
 
 char* about_description_str =
-    "PIO-Accomplished Logic Analyser with VGA Output\n"
+    "PIO-Assisted Logic Analyser with VGA Output\n"
     "Version: " STR(VERSION_MAJOR) "." STR(VERSION_MINOR) "." STR(VERSION_PATCH) "\n"
     "\n"
     "Developed by Peter Stansfeld.\n"
     "\n"
     "Inspired by and using code from:\n"
-    "\n"
-    "* Raspberry Pi's Logic Analyser example for the Pico.\n"
-    "\n"
-    "* Hunter Adams's VGA Graphics Driver for RP2040 with\n"
-    "  Bruce Land's 4-bit mod.\n"
-    "\n"
-    "\n";
 
+#if !USE_DVI
+    "\n"
+#endif
+
+    "* Raspberry Pi's Logic Analyser example for the Pico.\n"
+
+#if !USE_DVI
+    "\n"
+#endif
+
+    "* Hunter Adams's VGA Graphics Primitives demo, which\n"
+    "  uses his VGA Driver for the RP2040 with\n"
+    "  Bruce Land's 4-bit mod.\n"
+
+#if USE_DVI
+    "* Raspberry Pi's DVI Out HSTX Encoder example for the\n"
+    "  Pico 2.\n"
+#endif
+
+    "\n";
 
 void show_about_info(bool on_window) {
 
