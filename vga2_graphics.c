@@ -31,8 +31,8 @@
 // Our assembled programs:
 // Each gets the name <pio_filename.pio.h>
 
-#include "hsync5.pio.h"
-#include "rgb5.pio.h"
+#include "hsync_vsync.pio.h"
+#include "rgb.pio.h"
 
 
 #if SYS_CLOCK_FREQ_KHZ == 250000u
