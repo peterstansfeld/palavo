@@ -411,8 +411,8 @@ Something fun to do here is to get Hunter Adams' [VGA Graphics Primitives demo](
 
 Place the Pico or Pico 2 in BOOTSEL mode (hold the BOOTSEL button down during board power-up) and copy the appropriate `.uf2` file to the drive that appears on your PC:
 
-For the Pico use [vga_graphics_primitives_demo_on_pico.uf2](assets/vga_graphics_primitives_demo_on_pico.uf2).  
-For the Pico 2 use [vga_graphics_primitives_demo_on_pico2.uf2](assets/vga_graphics_primitives_demo_on_pico2.uf2).
+For the Pico use [vga_graphics_primitives_demo_on_pico.uf2](http://github.com/peterstansfeld/palavo/releases/download/tag_name/vga_graphics_primitives_demo_on_pico.uf2).  
+For the Pico 2 use [vga_graphics_primitives_demo_on_pico2.uf2](http://github.com/peterstansfeld/palavo/releases/download/tag_name/vga_graphics_primitives_demo_on_pico2.uf2).
 
 <a id="vga-demo-screenshot"></a>
 Start both devices and hopefully you should see Hunter's demo on your DVI monitor:
