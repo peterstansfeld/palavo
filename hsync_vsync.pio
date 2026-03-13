@@ -1,0 +1,124 @@
+; Peter Stansfeld
+; HSync & VSync generation for VGA driver
+; Inspired by Hunter Adams (vha3@cornell.edu)
+
+.program hsync5
+;.side_set 1 opt     ; used to control vsync. Max delay is 7 cycles
+;.origin 0           ; we modify the PC, which needs absolute addresseses
+
+; Horizontal Specifications
+
+;                time (us)   clocks @ 25 MHz   clocks @ 25/8 = 3.125 MHz
+; front porch:        0.64                16                           2
+; sync pulse:         3.84                96                          12
+; back porch:         1.92                48                           6
+; active for:         25.6               640                          80
+;                    -----              ----                        ----
+; total:              32.0               800                         100
+
+
+; Vertical Specifications
+
+;              lines
+; front porch:    10
+; sync pulse:      2
+; back porch:     33
+; active for:    480
+;               ----
+; total:         525
+
+
+; 32-bit word to drive vsync & hsync
+; bit(s)    description
+; --------------------------------
+; 31..23    delay1 (9 bits 0..511)
+; 22        vsync1
+; 21        hsync1
+; 20        rgb_flag
+; 19..11    delay0 (9 bits 0..511)
+; 10        vsync0
+; 9         hsync0
+; 8..0      repeat_count (9 bits 0..511)
+
+; psuedo code
+; for (i = repeat_count; i >= 0; i--) {
+;     vsync & hsync GPIO pins = vsync0 & hsync0 respectively
+;     wait for delay0 + 1 cycle(s)
+;     vsync & hsync GPIO pins = vsync1 & hsync1 respectively
+;     if (rgb_flag) {
+;         set IRQ to trigger pixel data in `rgb5.pio` 
+;     }
+;     wait for delay1 + 1 cycle(s)
+; }
+
+.wrap_target
+
+start:
+    pull block                  ; load 32-bit word from TX FIFO into OSR
+    out y, 9                    ; load repeat_count into Y
+    mov isr, osr                ; save OSR (except the repeat_count)
+set_syncs0:
+    out pins, 2                 ; set vsync & hsync
+    out x, 9                    ; load delay cycles into X
+delay_loop0:
+    jmp x-- delay_loop0         ; perform the delay
+
+    out x, 1                    ; load rgb_flag into X
+    out pins, 2                 ; set vsync & hsync
+    jmp !x, load_delay_cycles   ; skip next line if rgb_flag == 0
+    irq 5                       ; set IRQ to trigger pixel data in `rgb4.pio`
+load_delay_cycles:
+    out x, 9                    ; load delay2 cycles into X
+delay_loop1:
+    jmp x-- delay_loop1         ; perform the delay
+
+    jmp y-- repeat              ; if Y isn't zero repeat
+
+.wrap                           ; if Y is zero instantly jump to the start
+
+repeat:
+    mov osr, isr                ; restore the original word (minus the repeat count)
+    jmp set_syncs0 [1]          ; and repeat
+
+
+% c-sdk {
+static inline void hsync5_program_init(PIO pio, uint sm, uint offset, uint pin, uint no_of_pins) {
+
+    // Creates state machine configuration object c, and sets it to
+    // default values.
+    pio_sm_config c = hsync5_program_get_default_config(offset);
+
+    // We can't use autopull as we're re-using OSR values when
+    // repeat_count is not zero.
+    // sm_config_set_out_shift (
+    //     &c,
+    //     true, // shift direction: right
+    //     true, // autopull: enabled
+    //     32 // autopull threshold: 32 bits
+    // );
+
+    // Map the state machine's SET pin group to two pins, namely the `pin`
+    // parameter of this function.
+    sm_config_set_out_pins(&c, pin, no_of_pins);
+
+    // Set PIO clock frequency to 25 MHz / 4 = 6,250 kHz
+    // At either 125 MHz for the rp2040 or 150 MHz for the rp235x the clock divisor
+    // is a whole number, ie either 20 or 24
+    float div = (float)clock_get_hz(clk_sys) / (25000000 / 4);
+    sm_config_set_clkdiv(&c, div);
+
+    // Set this pin's GPIO function (connect PIO to the pad)
+    for (int i = 0; i < no_of_pins; i++) {
+        pio_gpio_init(pio, pin + i);
+    }
+    
+    // Set the pin direction to output at the PIO
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, no_of_pins, true);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+
+    // Set the state machine running (commented out so can be synchronized w/ vsync)
+    // pio_sm_set_enabled(pio, sm, true);
+}
+%}

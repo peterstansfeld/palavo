@@ -1,0 +1,427 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" width="640">
+  <defs>
+    <style>
+      .pcb, .background {
+        stroke-width: 0;
+      }
+      .construction-line {
+        stroke: #888;
+        stroke-width: 0;
+      }
+      .pcb {
+        fill: #063;
+      }
+      .f-black {
+        fill: #000;
+      }
+      .background {
+        fill: #f6f6f6;
+      }
+      .bb-label, .gpio-label, .pico-label, .dvi-sock-label, .stamp-label {
+        font-family: Helvetica;
+        font-size: 1.5px;
+        fill: #ffffff;
+        dominant-baseline: middle;
+        stroke-width: 1;
+      }
+      .bb-holes, .wire, .pad-2mm {
+        fill: none;
+      }
+      .bb-label {
+        fill: #aaa;
+        /* text-anchor: end; does not like this */
+      }
+      .pico-label {
+        font-size: 2.5px;
+        text-anchor: middle;
+      }
+      .dvi-sock-label {
+        font-size: 2px;
+        text-anchor: middle;
+      }
+      .stamp-label {
+        font-size: 2px;
+      }
+      .gpio-label-right {
+        text-anchor: end;
+      }
+      .gpio-label-middle {
+        text-anchor: middle;
+      }
+      .breadboard {
+        fill: #ebebeb;
+      }
+      .bb-holes {
+        stroke: #999;
+        stroke-width: 1;
+        stroke-dasharray: 1 1.54;
+      }
+      .bb-line {
+        stroke: #bbb;
+        stroke-width: .1;
+      }
+      .micro-usb, .usb-c, .dvi-sock-usb-socket {
+        fill: #bbbbbb;
+      }
+      .rp2 {
+        fill: #333333;
+      }
+      .wire {
+        stroke-width: .5;
+      }
+      .s-orange {
+        stroke: #ff7f00;
+      }
+      .s-orange {
+        stroke: #ff7f00;
+      }
+      .s-white-s {
+        stroke: #ffffff;
+        stroke-width: .8;
+      }
+      .s-white {
+        stroke: #ffffff;
+      }
+      .s-yellow {
+        stroke: #f8dc21;
+      }
+      .s-black {
+        stroke: #000;
+      }
+      .s-red {
+        stroke: #c00000;
+      }
+      .s-light-red {
+        stroke: #f00;
+      }
+      .s-brown {
+        stroke: #977b67;
+      }
+      .s-light-brown {
+        stroke: #ffd071;
+      }
+      .s-green {
+        stroke: #0c0;
+      }
+      .s-light-green {
+        stroke: #0f0;
+      }
+      .s-blue {
+        stroke: #0000c0;
+      }
+      .s-light-blue {
+        stroke: #00f;
+      }
+      .s-dashed {
+        stroke-dasharray: 1 .5;
+      }
+      .black-label {
+        fill: #222222;
+      }
+      .pad-2mm {
+        stroke-width: 2;
+        stroke-dasharray: 1.5 .5;
+      }
+    </style>
+    <g id="bb-pin-nos">
+      <g transform="translate(0 1.37)" class="bb-label">
+        <text>1</text>
+        <text y="2.54">2</text>
+        <text y="5.08">3</text>
+        <text y="7.62">4</text>
+        <text y="10.16">5</text>
+        <text y="12.7">6</text>
+        <text y="15.24">7</text>
+        <text y="17.78">8</text>
+        <text y="20.32">9</text>
+        <text y="22.86">10</text>
+        <text y="25.4">11</text>
+        <text y="27.94">12</text>
+        <text y="30.48">13</text>
+        <text y="33.02">14</text>
+        <text y="35.56">15</text>
+        <text y="38.1">16</text>
+        <text y="40.64">17</text>
+        <text y="43.18">18</text>
+        <text y="45.72">19</text>
+        <text y="48.26">20</text>
+        <text y="50.8">21</text>
+        <text y="53.34">22</text>
+        <text y="55.88">23</text>
+        <text y="58.42">24</text>
+        <text y="60.96">25</text>
+        <text y="63.5">26</text>
+        <text y="66.04">27</text>
+        <text y="68.58">28</text>
+        <text y="71.12">29</text>
+        <text y="73.66">30</text>
+      </g>
+    </g>
+    <g id="bb-holes-5x30">
+        <path class="bb-holes" d="m1,1 v74.66 M3.54,1 v74.66 M6.08,1 v74.66 M8.62,1 v74.66 M11.16,1 v74.66"/>
+    </g>
+    <g id="bb-holes-2x5">
+      <path class="bb-holes" d="m1,1 v11.16 M3.54,1 v11.16"/>
+    </g>
+    <g id="bb-power-holes">
+      <use href="#bb-holes-2x5"/>
+      <use href="#bb-holes-2x5" y="15.24"/>
+      <use href="#bb-holes-2x5" y="30.48"/>
+      <use href="#bb-holes-2x5" y="45.72"/>
+      <use href="#bb-holes-2x5" y="60.96"/>
+    </g>
+    <g id="half-size-bb">
+      <rect class="breadboard" width="55" height="82"/>
+      <path class="bb-line" d="m9.3,0 v82"/>
+      <path class="construction-line" d="m27.5,0 v82 M0,41 h55"/>
+      <path class="bb-line" d="m46.2,0 v82"/>
+      <g transform="translate(0 3.67)">
+        <g transform="translate(0.5 -0.6)">
+          <use href="#bb-pin-nos" x="10"/>
+          <use href="#bb-pin-nos" x="43"/>
+        </g>
+        <use href="#bb-power-holes" x="2.54" y="0.27"/>
+        <use href="#bb-power-holes" x="48.42" y="0.27"/>
+        <g transform="translate(12.53 -1)">
+          <use href="#bb-holes-5x30"/>
+          <use href="#bb-holes-5x30" x="17.78"/>
+        </g>
+      </g>
+    </g>
+    <g id="rpi-pico-footprint">
+      <rect class="pcb" width="21" height="51"/>
+      <path class="construction-line" d="m10.5,0 v51"/>
+      <rect class="micro-usb" x="6.75" y="-1" width="7.5" height="5"/>
+      <rect class="rp2" x="7" y="22.5" width="7" height="7"/>
+      <g class="gpio-label" transform="translate(0.5 1.54)">
+        <text>GP0</text>
+        <text y="2.54">GP1</text>
+        <text y="5.08">GND</text>
+        <text y="7.62">GP2</text>
+        <text y="10.16">GP3</text>
+        <text y="12.7">GP4</text>
+        <text y="15.24">GP5</text>
+        <text y="17.78">GND</text>
+        <text y="20.32">GP6</text>
+        <text y="22.86">GP7</text>
+        <text y="25.4">GP8</text>
+        <text y="27.94">GP9</text>
+        <text y="30.48">GND</text>
+        <text y="33.02">GP10</text>
+        <text y="35.56">GP11</text>
+        <text y="38.1">GP12</text>
+        <text y="40.64">GP13</text>
+        <text y="43.18">GND</text>
+        <text y="45.72">G14</text>
+        <text y="48.26">G15</text>
+        <g class="gpio-label-right" transform="translate(20 0)">
+          <text>VBUS</text>
+          <text y="2.54">VSYS</text>
+          <text y="5.08">GND</text>
+          <text y="7.62">3V3EN</text>
+          <text y="10.16">3V3(OUT)</text>
+          <text y="12.7">ADC_REF</text>
+          <text y="15.24">GP28</text>
+          <text y="17.78">GND</text>
+          <text y="20.32">GP27</text>
+          <text y="22.86">GP26</text>
+          <text y="25.4">RUN</text>
+          <text y="27.94">GP22</text>
+          <text y="30.48">GND</text>
+          <text y="33.02">GP21</text>
+          <text y="35.56">GP20</text>
+          <text y="38.1">GP19</text>
+          <text y="40.64">GP18</text>
+          <text y="43.18">GND</text>
+          <text y="45.72">G17</text>
+          <text y="48.26">G16</text>
+        </g>
+      </g>
+    </g>
+    <g id="rpi-pico2">
+      <use href="#rpi-pico-footprint"/>
+      <g class="pico-label" transform="translate(10.5 37)">
+        <text>Pico 2</text>
+      </g>
+    </g>
+    <g id="solderparty-rp2350-stamp-xl">
+      <rect class="pcb" width="25" height="45"/>
+      <path class="pad-2mm s-light-brown" d="m2.75,1 h20 m1.25,1.75 v40 m-1.75,1.25 h-20 m-1.25,-1.75 v-40"/>
+      <path class="construction-line" d="m12.5,0 v45 m-12.5,-22.5 h25"/>
+      <rect class="rp2" x="9" y="19" width="7" height="7"/>
+      <g class="gpio-label-middle stamp-label" transform="translate(12.5 30)">
+        <text>RP2350</text>
+        <text y="2">Stamp XL</text>
+      </g>
+    </g>
+    <g id="solderparty-rp2xxxx-stamp-carrier-basic">
+      <rect class="pcb f-black" width="50.5" height="72" rx="2"/>
+      <path class="construction-line" d="m25.25,0 v72 m-25.25,-36 h 50.5"/>
+      <rect class="usb-c" x="20.75" y="-1" width="9" height="7"/>
+      <g class="gpio-label" transform="translate(1.27 9)">
+        <text>G  0</text>
+        <text y="2.54">G  1</text>
+        <text y="5.08">G  2</text>
+        <text y="7.62">G  3</text>
+        <text y="10.16">G  4</text>
+        <text y="12.7">G  5</text>
+        <text y="15.24">G  6</text>
+        <text y="17.78">G  7</text>
+        <text y="20.32">G  8</text>
+        <text y="22.86">G  9</text>
+        <text y="25.4">G  10</text>
+        <text y="27.94">G  11</text>
+        <text y="30.48">G  12</text>
+        <text y="33.02">G  13</text>
+        <text y="35.56">G  14</text>
+        <text y="38.1">G  15</text>
+        <text y="40.64">G  16</text>
+        <text y="43.18">G  17</text>
+        <text y="45.72">G  18</text>
+        <text y="48.26">G  19</text>
+        <text y="50.8">G  20</text>
+        <text y="53.34">G  21</text>
+        <g class="gpio-label-middle" transform="translate(7.47 58.42)">
+          <text>22</text>
+          <text x="2.54">23</text>
+          <text x="5.08">24</text>
+          <text x="7.62">25</text>
+          <text x="10.16">26</text>
+          <text x="12.7">27</text>
+          <text x="15.24">28</text>
+          <text x="17.78">29</text>
+          <text x="20.32">30</text>
+          <text x="22.86">31</text>
+          <text x="25.4">32</text>
+          <text x="27.94">33</text>
+          <text x="30.48">34</text>
+          <text x="33.02">35</text>
+          <g class="gpio-label-middle" transform="translate(0 2.54)">
+            <text>G</text>
+            <text x="2.54">G</text>
+            <text x="5.08">G</text>
+            <text x="7.62">G</text>
+            <text x="10.16">G</text>
+            <text x="12.7">G</text>
+            <text x="15.24">G</text>
+            <text x="17.78">G</text>
+            <text x="20.32">G</text>
+            <text x="22.86">G</text>
+            <text x="25.4">G</text>
+            <text x="27.94">G</text>
+            <text x="30.48">G</text>
+            <text x="33.02">G</text>
+          </g>
+        </g>
+        <g class="gpio-label-right" transform="translate(47.96 0)">
+          <text>GND  G</text>
+          <text y="2.54">3V  G</text>
+          <text y="5.08">5V  G</text>
+          <text y="7.62">BAT  G</text>
+          <text y="10.16">BOOT  G</text>
+          <text y="12.7">RST  G</text>
+          <text y="15.24">CLK  G</text>
+          <text y="17.78">IO  G</text>
+          <text y="20.32">EN  G</text>
+          <text y="22.86">BAT STAT  G</text>
+          <text y="25.4">47  G</text>
+          <text y="27.94">46  G</text>
+          <text y="30.48">45  G</text>
+          <text y="33.02">44  G</text>
+          <text y="35.56">43  G</text>
+          <text y="38.1">42  G</text>
+          <text y="40.64">41  G</text>
+          <text y="43.18">40  G</text>
+          <text y="45.72">39  G</text>
+          <text y="48.26">38  G</text>
+          <text y="50.8">37  G</text>
+          <text y="53.34">36  G</text>
+        </g>
+      </g>
+      <g class="stamp-label" transform="translate(5.08 2.54)">
+        <text>RP2xxx Stamp</text>
+        <text y="2">Basic Carrier</text>
+        <text y="4">by arturo182</text>
+      </g>
+    </g>
+    <g id="dvi-sock">
+      <rect class="dvi-sock-pcb" width="23" height="28" rx="1"/>
+      <path class="construction-line" d="m11.5,0 v28"/>
+      <rect class="dvi-sock-usb-socket" x="4" y="20" width="15" height="11" rx=".5"/>
+      <g class="dvi-sock-label" transform="translate(11.5 1.37)">
+        <text y="5.08" >DVI SOCK</text>
+      </g>
+      <g class="gpio-label" transform="translate(1.5 1.37)">
+        <text>12/D0+</text>
+        <text y="2.54">13/D0-</text>
+        <text y="5.08">GND</text>
+        <text y="7.62">14/CK+</text>
+        <text y="10.16">15/CK-</text>
+        <g class="gpio-label-right" transform="translate(20 0)">
+          <text>D1-/19</text>
+          <text y="2.54">D1+/18</text>
+          <text y="5.08">GND</text>
+          <text y="7.62">D2-/17</text>
+          <text y="10.16">D2+/16</text>
+        </g>
+      </g>
+      <path class="construction-line" d="m11.5,0 v31"/>
+    </g>
+    <g id="wires-stamp-carrier-to-pico2">
+      <g class="wire" transform="translate(9 1)">
+        <path class="s-orange" d="m0,0 l1-1 h45 l5.08 5.08 h6.63 l1,1"/>
+        <path class="s-yellow" d="m0,2.54 l1-1 h45 l5.08 5.08 h6.63 l1,1"/>
+        <path class="s-white-s " d="m55.5,38.1 h.98"/>
+        <path class="s-black" d="m28,30.48 h15.24 v7.62 h13.26"/>
+        <path class="s-blue" d="m0,7.62 l1-1 h46 l2.54 2.54 h8.2 l1,1"/>
+        <path class="s-light-blue" d="m0,10.16 l1,-1 h46 l2.54 2.54 h8.2 l1,1"/>
+        <path class="s-green" d="m0,12.7 l1-1 h46 l2.54,2.54 h8.2 l1,1"/>
+        <path class="s-light-green" d="m0,15.24 l1-1 h46 l2.54,2.54 h8.2 l1,1"/>
+        <path class="s-red" d="m0,20.32 l1-1 h56.7 l1,1"/>
+        <path class="s-light-red" d="m0,22.86 l1-1 h56.7 l1,1"/>
+        <g transform="translate(52 24.4)">
+          <path class="s-orange" d="m1,0 h4.71 l1,1"/>
+          <path class="s-yellow" d="m1,2.54 h4.71 l1,1"/>
+          <path class="s-yellow" d="m1,5.08 h4.71 l1,1"/>
+          <g class="gpio-label gpio-label-right black-label" style="font-size: 1.75px;">
+            <text>UART_TX</text>
+            <text y="2.54">UART_RX</text>
+            <text y="5.08"> IR_RX</text>
+          </g>
+        </g>
+      </g>
+    </g>
+    <g id="wires-pico-to-dvi-sock" class="wire">
+      <path class="s-blue" d="m12.7,38.1 h-2.54 v12.7 h2.54"/>
+      <path class="s-white" d="m12.7,40.64 h-5.08 v12.7h5.08"/>
+      <path class="s-blue s-dashed" d="m12.7,40.64 h-5.08 v12.7h5.08"/>
+      <path class="s-black" d="m12.7,43.18 h-7.62 v12.7 h7.62"/>
+      <path class="s-brown" d="m12.7,45.72 h-10.6 v12.7 h10.16"/>
+      <path class="s-white" d="m12.7,48.26 h-12.6 v12.7 h12.7"/>
+      <path class="s-brown s-dashed" d="m12.7,48.26 h-12.6 v12.7 h12.7"/>
+      <g transform="translate(40.88 0)">
+        <path class="s-white" d="m0,38.1 h2.54 v12.7 h-2.54"/>
+        <path class="s-green s-dashed" d="m0,38.1 h2.54 v12.7 h-2.54"/>
+        <path class="s-green" d="m0,40.64 h5.08 v12.7h-5.08"/>
+        <path class="s-black" d="m0,43.18 h7.62 v12.7 h-7.62"/>
+        <path class="s-white" d="m0,45.72 h10.16 v12.7 h-10.16"/>
+        <path class="s-red s-dashed" d="m0,45.72 h10.16 v12.7 h-10.16"/>
+        <path class="s-red" d="m0,48.26 h12.7 v12.7 h-12.7"/>
+      </g>
+    </g>
+    <g id="config8">
+      <use href="#half-size-bb" x="1"/>
+      <use href="#rpi-pico2" x="18" y="2.67"/>
+      <use href="#dvi-sock" x="17" y="53.8"/>
+      <use href="#wires-pico-to-dvi-sock" x="1.8" y="4.1"/>
+      <use href="#solderparty-rp2xxxx-stamp-carrier-basic" x="70" y=".5"/>
+      <use href="#solderparty-rp2350-stamp-xl" x="82.75" y="14"/>
+      <use href="#wires-stamp-carrier-to-pico2" x="5.5" y="3.1"/>
+    </g>
+  </defs>
+  <rect class="background" width="640" height="480"/>
+  <path class="construction-line" d="m320,0 v480 m-320,-240 h640"/>
+  <g transform="translate(2 25) scale(5.25 5.25)">
+    <use href="#config8"/>
+  </g>
+</svg>

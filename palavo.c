@@ -1,0 +1,5164 @@
+/* 
+* PALAVO
+*
+* PIO-Assisted Logic Analyser with VGA Output
+*
+* Developed by Peter Stansfeld
+*   (pstansfeld@redcreations.co.uk)
+*
+* Inspired by and using code from:
+*
+* * Raspberry Pi's Logic Analyser example for the Pico.
+*   (github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser)
+*
+* * Hunter Adams's (vha3@cornell.edu) VGA Graphics Primitives for RP2040
+*   (github.com/vha3/Hunter-Adams-RP2040-Demos/tree/master/VGA_Graphics/VGA_Graphics_Primitives)
+*   which uses Hunter's VGA Driver with Bruce Land's 4-bit mod.
+*
+* * Raspberry Pi's DVI Out HSTX Encoder example for the Pico 2.
+*   (github.com/raspberrypi/pico-examples/tree/master/hstx/dvi_out_hstx_encoder)
+*
+* There are many configurations of Palavo; please see README.md for details.
+* To view information on a programmed device (in BOOTSEL mode)
+* Raspberry Pi's `picotool` utility can be used:
+*
+*   `$ picotool info -a`
+*
+* To view the information in a firmware file:
+*   `$ picotool info -a palavo.uf2`
+*/
+
+#define VERSION_MAJOR 0
+#define VERSION_MINOR 14
+#define VERSION_PATCH 0
+
+#ifndef VGA_TIMEOUT
+// If the number of idle seconds before the VGA output is blanked and
+// then halted hasn't been defined on the CMake command line, then
+// define one here
+#define VGA_TIMEOUT 60
+#endif
+
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+
+// Use core 1 for the DVI output (initialisation and interrupt service routine)
+#define USE_MULTI_CORE 1
+
+#define USE_STDIO_UART 1
+
+#include "hardware/clocks.h"
+#include "nec_ir_rx.pio.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+// #include "pico/malloc.h"
+#include "pico/stdlib.h"
+#include "hardware/pio.h"
+#include "hardware/dma.h"
+
+#if !USE_STDIO_UART
+
+#include "hardware/uart.h"
+#else
+// #include "pico/stdio_uart.h"
+// #include "pico/stdio_usb.h"
+#endif
+
+#include "pico/binary_info.h"
+
+// #include "hardware/timer.h"
+// #include "hardware/structs/bus_ctrl.h"
+#include <string.h>
+
+// VGA graphics library
+#include "vga2_graphics.h"
+
+#if !USE_STDIO_UART
+
+#define UART_ID uart1
+
+#endif
+#define BAUD_RATE 115200
+
+#define DEBUG_PIN 28
+
+#define SOH 1
+#define EOT 4
+#define ACK 6
+#define DLE 16
+#define NAK 21
+
+#define CTRL_P DLE
+
+
+// Configuration settings, including bit locations for PALAVO_CONFIG
+#include "config.h"
+
+// Pins that are not available on the Pico, Pico 2, and others which are based are based of the Pico.
+#define PICO_RESERVED_GPIO_0_31 ((1 << 31) | (1 << 30) | (1 << 29) | (1 << 25) | (1 << 24)  | (1 << 23))
+
+#define ENABLE_GRAPHICS_DEMO 0
+
+bi_decl(bi_program_version_string(STR(VERSION_MAJOR) "." STR(VERSION_MINOR) "." STR(VERSION_PATCH)));
+bi_decl(bi_program_description("PIO-Assisted Logic Analyser with VGA Output"));
+bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
+
+// Maybe make this a feature?...
+bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
+
+// We're always outputting VGA, either on 6 pins of RRGGBB or 1 pin of monochrome.
+// Sometimes we're using CSYNC, and other times HSYNC and VSYNC.
+
+// There's no need to include this as a feature as it's already in the description
+// bi_decl(bi_program_feature("VGA output"));
+
+#if USE_GPIO_31_47 || (USE_DVI && USE_VGA_IN_TO_DVI)
+
+    #if USE_GPIO_31_47
+
+        #define VGA_IN_VSYNC_PIN 0
+        #define VGA_IN_HSYNC_CSYNC_PIN 1
+        #define VGA_IN_RGB_BASE_PIN 2
+        #define VGA_IN_RGB_PIN_COUNT 6
+
+        #define VGA_OUT_HSYNC_CSYNC_PIN 31
+        #define VGA_OUT_RGB_BASE_PIN 32
+        #define VGA_OUT_RGB_PIN_COUNT 6
+
+        bi_decl(bi_1pin_with_name(31, "VGA Out - CSYNC"));
+        bi_decl(bi_1pin_with_name(32, "VGA Out - Dark Blue"));
+        bi_decl(bi_1pin_with_name(33, "VGA Out - Light Blue"));
+        bi_decl(bi_1pin_with_name(34, "VGA Out - Dark Green"));
+        bi_decl(bi_1pin_with_name(35, "VGA Out - Light Green"));
+        bi_decl(bi_1pin_with_name(36, "VGA Out - Dark Red"));
+        bi_decl(bi_1pin_with_name(37, "VGA Out - Light Red"));
+
+        // this is applied only if USE_IR is true
+        #define IR_RX_PIN 46
+
+    #else
+        // USE_DVI && USE_VGA_IN_TO_DVI
+
+        // these shouldn't really here, but for now...
+        #define VGA_IN_VSYNC_PIN 0
+        #define VGA_IN_HSYNC_CSYNC_PIN 1
+        #define VGA_IN_RGB_BASE_PIN 2
+
+        // these should
+        #define VGA_OUT_HSYNC_CSYNC_PIN 10
+        #define VGA_OUT_RGB_BASE_PIN 11
+        #define VGA_OUT_RGB_PIN_COUNT 1
+
+        bi_decl(bi_1pin_with_name(10, "VGA Out - CSYNC"));
+        bi_decl(bi_1pin_with_name(11, "VGA Out - RGB"));
+
+        // this is applied only if USE_IR is true
+        #define IR_RX_PIN 28
+
+    #endif
+
+#else
+
+    // for now just include these VGA In pins which will capture the same as the VGA Out pins
+    // ideally disable them in the main() as it is just less confusing. todo
+
+    #define VGA_IN_VSYNC_PIN 0
+    #define VGA_IN_HSYNC_CSYNC_PIN 1
+    #define VGA_IN_RGB_BASE_PIN 2
+
+    // end of for now
+
+    #if USE_CSYNC
+
+        #define VGA_OUT_HSYNC_CSYNC_PIN 1
+
+        bi_decl(bi_1pin_with_name(1, "VGA Out - CSYNC"));
+
+    #else
+
+        #define VGA_OUT_VSYNC_PIN 0
+        #define VGA_OUT_HSYNC_CSYNC_PIN 1
+
+        bi_decl(bi_1pin_with_name(0, "VGA Out - VSYNC"));
+        bi_decl(bi_1pin_with_name(1, "VGA Out - HSYNC"));
+
+    #endif
+
+    #define VGA_OUT_RGB_BASE_PIN 2
+    #define VGA_OUT_RGB_PIN_COUNT 6
+
+    bi_decl(bi_1pin_with_name(2, "VGA Out - Dark Blue"));
+    bi_decl(bi_1pin_with_name(3, "VGA Out - Light Blue"));
+    bi_decl(bi_1pin_with_name(4, "VGA Out - Dark Green"));
+    bi_decl(bi_1pin_with_name(5, "VGA Out - Light Green"));
+    bi_decl(bi_1pin_with_name(6, "VGA Out - Dark Red"));
+    bi_decl(bi_1pin_with_name(7, "VGA Out - Light Red"));
+
+    // this is applied only if USE_IR is true
+    #define IR_RX_PIN 10
+
+    // #define VGA_OUT_RGB_BASE_PIN 2
+    // #define VGA_OUT_RGB_PIN_COUNT 6
+
+#endif
+
+
+// we're sometimes outputting DVI
+
+#if USE_DVI
+    bi_decl(bi_program_feature("DVI output"));
+
+    bi_decl(bi_1pin_with_name(12, "DVI Out - D0+"));
+    bi_decl(bi_1pin_with_name(13, "DVI Out - D0-"));
+    bi_decl(bi_1pin_with_name(14, "DVI Out - CK+"));
+    bi_decl(bi_1pin_with_name(15, "DVI Out - CK-"));
+    bi_decl(bi_1pin_with_name(16, "DVI Out - D1-"));
+    bi_decl(bi_1pin_with_name(17, "DVI Out - D1+"));
+    bi_decl(bi_1pin_with_name(18, "DVI Out - D2-"));
+    bi_decl(bi_1pin_with_name(19, "DVI Out - D2+"));
+
+
+    // we're sometimes capturing VGA In and mirroring it to DVI, in which case
+    // it's always on GPIO 0 - 7
+
+    #if (USE_VGA_IN_TO_DVI || USE_GPIO_31_47)
+
+        bi_decl(bi_program_feature("VGA input"));
+
+        bi_decl(bi_1pin_with_name(0, "VGA In - VSYNC"));
+        bi_decl(bi_1pin_with_name(1, "VGA In - HSYNC / CSYNC"));
+        bi_decl(bi_1pin_with_name(2, "VGA In - Dark Blue"));
+        bi_decl(bi_1pin_with_name(3, "VGA In - Light Blue"));
+        bi_decl(bi_1pin_with_name(4, "VGA In - Dark Green"));
+        bi_decl(bi_1pin_with_name(5, "VGA In - Light Green"));
+        bi_decl(bi_1pin_with_name(6, "VGA In - Dark Red"));
+        bi_decl(bi_1pin_with_name(7, "VGA In - Light Red"));
+
+    #endif
+
+#endif
+
+// we're sometimes using IR
+
+#if USE_IR
+
+    bi_decl(bi_program_feature("Infra-red control"));
+    bi_decl(bi_1pin_with_name(IR_RX_PIN, "IR RX"));
+
+#endif
+
+
+#if BOARD_HAS_SAME_RESERVED_GPIO_AS_PICO
+
+    #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~PICO_RESERVED_GPIO_0_31)
+
+#else
+
+    #define GPIO_INPUT_MASK_0_31 0xffffffff
+
+#endif
+
+
+#if PICO_PIO_USE_GPIO_BASE
+
+    #define GPIO_INPUT_MASK_32_47 (0xffff)
+
+#endif
+
+
+#if USE_UART_STDIO
+
+    #if PICO_DEFAULT_UART_TX_PIN >= 32
+
+        bi_decl(bi_1pin_with_name(PICO_DEFAULT_UART_TX_PIN, "UART1 - TX"));
+        bi_decl(bi_1pin_with_name(PICO_DEFAULT_UART_RX_PIN, "UART1 - RX"));
+
+    #endif
+
+#endif
+
+
+#if USE_DVI 
+
+    #if USE_MULTI_CORE
+
+        #include "pico/multicore.h"
+
+    #endif
+
+    #include "dvi64_graphics.h"
+
+    #if USE_VGA_CAPTURE
+
+        #include "vga_capture.pio.h"
+
+    #endif
+
+    #define USE_DVI_DEBUG 0
+
+#endif
+
+uint8_t last_uart_char = 0;
+
+#define MAX_NO_OF_CHANNELS 32
+
+#define MAX_NO_OF_PINS 32
+
+
+#if PICO_PIO_USE_GPIO_BASE
+
+    #define MAX_BASE_PIN_NO 47
+
+#else
+
+    #define MAX_BASE_PIN_NO 31
+
+#endif
+
+// Some globals for storing timer information
+
+int g_mag = 0;
+int g_scrollx = 0;
+uint8_t g_channel = 0;
+
+int g_prev_scrollx = 0;
+
+enum SETTINGS_STATES {SS_CHANNEL, SS_PALETTE, SS_ZOOM, SS_FREQ, SS_PINS_BASE, SS_NO_OF_PINS, SS_TRIGGER_PIN_BASE, SS_TRIGGER_TYPE, SS_COUNT};
+
+uint8_t settings_state = SS_CHANNEL;
+
+#define SCREEN_WIDTH 640
+#define SCREEN_HEIGHT 480
+
+enum COLOUR_PALETTE_TYPES {COLOUR_PALETTE_JUMPER_JERKY, COLOUR_PALETTE_VGA, COLOUR_PALETTE_GREEN, COLOUR_PALETTE_RASPBERRY, CT_COUNT};
+
+enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE,
+    TT_VGA_VSYNC, TT_VGA_RGB, TT_VGA_VFRONT_PORCH, TT_VGA_CSYNC, TT_VGA_CRGB, TT_VGA_CVFRONT_PORCH, TT_COUNT};
+
+#define SETTINGS 1
+
+#if SETTINGS == 0
+
+// const uint CAPTURE_PIN_BASE = HSYNC2; // 16 = hsync, 17 = vsync // 22 = hsync2
+// #define CAPTURE_PIN_BASE HSYNC2 // 16 = hsync, 17 = vsync // 22 = hsync2
+// #define CAPTURE_PIN_BASE HSYNC2 // 16 = hsync, 17 = vsync // 22 = hsync2
+#define CAPTURE_PIN_BASE 6 // 16 = hsync, 17 = vsync // 22 = hsync2
+
+// const uint CAPTURE_PIN_COUNT = 4;
+#define CAPTURE_PIN_COUNT 4
+
+// const uint CAPTURE_TRIGGER_PIN = VSYNC; // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
+// #define CAPTURE_TRIGGER_PIN_BASE HSYNC2 // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
+#define CAPTURE_TRIGGER_PIN_BASE 22 // 8 = hsync, 9 = vsync // 22 = hsync2, 23 = vsync2 NB IGNORED FOR NOW!
+
+// const uint CAPTURE_N_SAMPLES = SCREEN_WIDTH * 96; // enough for 48 screen width's worth of data
+// #define CAPTURE_N_SAMPLES SCREEN_WIDTH * 96 // enough for 48 screen width's worth of data
+
+//set the default sample rate to the pixel clock rate of 25 MHz
+#define CAPTURE_SAMPLE_FREQ_DIVISOR (SYS_CLK_HZ / 25 * MHZ)
+
+
+#define CAPTUTRE_TRIGGER_TYPE TT_VGA_CRGB
+
+
+#elif SETTINGS == 1
+
+
+#if USE_GPIO_31_47
+
+// #define CAPTURE_PIN_BASE 0 // HSYNC
+
+// #define CAPTURE_PIN_COUNT 27 // GPIO0 - GPIO26
+// #define CAPTURE_TRIGGER_PIN_BASE 0 // one of the keybord row drivers
+// #define CAPTURE_SAMPLE_FREQ_DIVISOR 12 // should capture two row-driving sequences
+// #define CAPTUTRE_TRIGGER_TYPE TT_FALLING_EDGE // 
+
+#define CAPTURE_PIN_BASE 30 // CSYNC - 1
+
+#define CAPTURE_PIN_COUNT 8 // GPIO30 - GPIO37
+#define CAPTURE_TRIGGER_PIN_BASE 31 // CSYNC
+#define CAPTURE_SAMPLE_FREQ_DIVISOR 6 //
+#define CAPTUTRE_TRIGGER_TYPE TT_VGA_CSYNC // 
+
+#else
+
+
+#if USE_CSYNC
+
+#if USE_VGA_CAPTURE
+#define CAPTURE_PIN_BASE 10 // HSYNC
+#define CAPTURE_PIN_COUNT 10 // CSYNC, 1-bit colour and 8 DVI
+#define CAPTURE_TRIGGER_PIN_BASE 10 // HSYNC_CSYNC
+#define CAPTUTRE_TRIGGER_TYPE TT_VGA_CSYNC
+
+#else
+#define CAPTURE_PIN_BASE 0 // HSYNC
+#define CAPTURE_PIN_COUNT 8 // HSYNC, VSYNC and BBGGRR (blue, green, red)
+#define CAPTURE_TRIGGER_PIN_BASE 1 // HSYNC_CSYNC
+#define CAPTUTRE_TRIGGER_TYPE TT_VGA_CSYNC
+#endif
+
+#else
+#define CAPTURE_PIN_BASE 0 // HSYNC
+#define CAPTURE_PIN_COUNT 8 // HSYNC, VSYNC and BBGGRR (blue, green, red)
+#define CAPTURE_TRIGGER_PIN_BASE 0 // VSYNC
+#define CAPTUTRE_TRIGGER_TYPE TT_VGA_VSYNC
+#endif
+
+    #if SYS_CLK_HZ == 125 * MHZ
+        #define CAPTURE_SAMPLE_FREQ_DIVISOR 5
+    #elif SYS_CLK_HZ == 150 * MHZ
+        #define CAPTURE_SAMPLE_FREQ_DIVISOR 6
+    #elif SYS_CLK_HZ == 250 * MHZ
+        #define CAPTURE_SAMPLE_FREQ_DIVISOR 10
+    #endif
+
+#endif
+
+// #define CAPTURE_SAMPLE_FREQ_DIVISOR (SYS_CLK_HZ / 480)
+
+#endif
+
+uint8_t g_palette = COLOUR_PALETTE_JUMPER_JERKY;
+
+uint g_sample_frequency = CAPTURE_SAMPLE_FREQ_DIVISOR;
+uint8_t g_no_of_captured_pins = CAPTURE_PIN_COUNT;
+uint8_t g_pins_base = CAPTURE_PIN_BASE;
+uint8_t g_pins_base_captured;
+
+#define HORIZONTAL_BLANKING_PIXELS 160
+#define VERTICAL_BLANKING_LINES 45
+
+// 640 + 160 = 800
+#define HSYNCS_IN_640_LINE (SCREEN_WIDTH + HORIZONTAL_BLANKING_PIXELS)
+
+// 480 + 45 = 525
+#define VSYNCS_IN_480_LINES (SCREEN_HEIGHT + VERTICAL_BLANKING_LINES)
+
+// 800 * 525 = 420,000
+// #define SAMPLES_IN_640_480_FRAME ((SCREEN_WIDTH + HORIZONTAL_BLANKING_PIXELS) * \
+//                                   (SCREEN_HEIGHT + VERTICAL_BLANKING_LINES))
+
+#define SAMPLES_IN_640_480_FRAME (HSYNCS_IN_640_LINE * VSYNCS_IN_480_LINES)
+
+// 420,000
+#define SAMPLES_TO_CAPTURE SAMPLES_IN_640_480_FRAME
+
+#if (PICO_RP2040 || USE_DVI)
+    // We're either using the RP2040 or we're using DVI on the RP2350, in which
+    // case we must reduce the size of the capture buffer. 
+
+    #define CHANNELS_PER_SAMPLE 4
+
+    // 1,680,000
+    #define TOTAL_SAMPLE_BITS (SAMPLES_TO_CAPTURE * CHANNELS_PER_SAMPLE)
+        
+    // This still seems ok
+    // #define TOTAL_SAMPLE_BITS (((SAMPLES_TO_CAPTURE * CHANNELS_PER_SAMPLE)) + (HSYNCS_IN_640_LINE * 4))
+
+    // This is too much (with USB stdio)
+    // #define TOTAL_SAMPLE_BITS (((SAMPLES_TO_CAPTURE * CHANNELS_PER_SAMPLE)) + (HSYNCS_IN_640_LINE * 5))
+    
+#else
+    #define CHANNELS_PER_SAMPLE 8
+
+    // #define TOTAL_SAMPLE_BITS (((SAMPLES_TO_CAPTURE * CHANNELS_PER_SAMPLE)) + SAMPLES_IN_640_LINE)
+    #define TOTAL_SAMPLE_BITS (((SAMPLES_TO_CAPTURE * CHANNELS_PER_SAMPLE)) + (HSYNCS_IN_640_LINE * (VERTICAL_BLANKING_LINES + 3)))
+#endif
+
+#define BUF_SIZE_WORDS (TOTAL_SAMPLE_BITS / 32)
+
+// // equivalent to: uint8_t array[210,000] 
+// uint32_t capture_buffer[BUF_SIZE_WORDS];
+// use malloc to create the 'capture_buffer' in case we need to resize it at any stage
+
+uint g_capture_n_samples = SAMPLES_TO_CAPTURE;
+
+uint8_t g_no_of_pins_to_capture = CAPTURE_PIN_COUNT;
+
+uint8_t g_trigger_pin_base = CAPTURE_TRIGGER_PIN_BASE;
+
+
+// uint8_t g_trigger_type = TT_VGA_VSYNC;
+
+uint8_t g_trigger_type = CAPTUTRE_TRIGGER_TYPE;
+
+/*
+    // uint total_sample_bits = g_capture_n_samples * g_no_of_captured_pins;
+    // total_sample_bits += bits_packed_per_word(g_no_of_captured_pins) - 1;
+
+    // uint buf_size_words = total_sample_bits / bits_packed_per_word(g_no_of_captured_pins);
+    // uint32_t *capture_buf = malloc(buf_size_words * sizeof(uint32_t));
+
+#define TOTAL_SAMPLE_BITS CAPTURE_N_SAMPLES * CAPTURE_PIN_COUNT + (32 - (32 % CAPTURE_PIN_COUNT) - 1)
+// #define BUF_SIZE_WORDS TOTAL_SAMPLE_BITS / bits_packed_per_word(CAPTURE_PIN_COUNT)
+
+#define BUF_SIZE_WORDS TOTAL_SAMPLE_BITS / (32 - (32 % CAPTURE_PIN_COUNT))
+
+
+uint32_t new_capture_buf[];
+
+    // hard_assert(capture_buf);
+
+
+*/
+static inline uint bits_packed_per_word(uint pin_count) {
+    // If the number of pins to be sampled divides the shift register size, we
+    // can use the full SR and FIFO width, and push when the input shift count
+    // exactly reaches 32. If not, we have to push earlier, so we use the FIFO
+    // a little less efficiently.
+    const uint SHIFT_REG_WIDTH = 32;
+    return SHIFT_REG_WIDTH - (SHIFT_REG_WIDTH % pin_count);
+}
+
+
+void uart_my_puts(const char * s) {
+
+#if !USE_STDIO_UART
+    uart_puts(UART_ID, s);    
+#else
+    stdio_put_string(s, strlen(s), false, false);
+#endif
+}
+
+
+void uart_my_putuif(const char *s, uint c) {
+    // char str[80];
+    // sprintf(str, s, c);
+    // uart_my_puts(str);
+    stdio_printf(s, c);
+}
+
+
+void logic_analyser_configure(PIO pio, uint sm, uint pin_base, uint pin_count, float div, uint offset) {
+    // Configure state machine to loop over this `in` instruction forever,
+    // with autopush enabled.
+    pio_sm_config c = pio_get_default_sm_config();
+    sm_config_set_in_pins(&c, pin_base);
+    sm_config_set_wrap(&c, offset, offset);
+    sm_config_set_clkdiv(&c, div);
+    // Note that we may push at a < 32 bit threshold if pin_count does not
+    // divide 32. We are using shift-to-right, so the sample data ends up
+    // left-justified in the FIFO in this case, with some zeroes at the LSBs.
+    sm_config_set_in_shift(&c, true, true, bits_packed_per_word(pin_count));
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+    pio_sm_init(pio, sm, offset, &c);
+}
+
+
+void uart_my_putcf(const char *s, int c) {
+    // char str[80];
+    // sprintf(str, s, c);
+    // uart_my_puts(str);
+    stdio_printf(s, c);
+}
+
+
+uint get_pio_number(PIO pio) {
+    int pio_num = 0;
+    if (pio == pio1) {
+        pio_num = 1;
+#if !PICO_RP2040
+    } else if (pio == pio2) {
+        pio_num = 2;
+#endif
+    }
+    return pio_num;
+}
+
+
+#if PICO_PIO_USE_GPIO_BASE
+uint my_pio_set_gpio_base(PIO pio, uint base) {
+    char str[80];
+    uint res = pio_set_gpio_base(pio, base);
+    int pio_num = get_pio_number(pio);
+    sprintf(str, "pio_set_gpio_base(%d, %d); res: %d\n", pio_num, base, res);
+    uart_my_puts(str);
+    return res;
+}
+#endif
+
+
+void logic_analyser_init(uint pin_base, uint pin_count, float div, bool init) {
+    // Load a program to capture n pins. This is just a single `in pins, n`
+    // instruction with a wrap.
+
+#if PICO_RP2040
+    PIO pio = pio0;
+#else
+    PIO pio = pio2;
+#endif
+
+    uint sm = 3;
+
+    static bool initialised;
+    static uint16_t prog_inst;
+    static struct pio_program prog;
+    static uint offset;
+
+    if (init) {
+        // if (prog_inst) {
+        if (initialised) {
+        // We need to re-initialise, presumably to change the pin base, the pin count,
+            // or the frequency divisor, so I believe we need to remove the old program first.
+            pio_remove_program(pio, &prog, offset);
+        // } else {
+            // This should be the first time we've called this, as prog_inst is
+            // a static variable, and static variables are zeroed on reset, which means
+            // we don't need to do anything here, so let's comment it out.
+            uart_my_puts("LA1 reiniting\n");
+        }
+
+        prog_inst = pio_encode_in(pio_pins, pin_count);
+
+        prog.instructions = &prog_inst;
+        prog.length = 1;
+        prog.origin = -1;
+
+        offset = pio_add_program(pio, &prog);
+        logic_analyser_configure(pio, sm, pin_base, pin_count, div, offset);
+        initialised = true;
+        uart_my_puts("LA1 inited\n");
+    } else {
+        if (initialised) {
+            pio_remove_program(pio, &prog, offset);
+            initialised = false;
+            uart_my_puts("LA1 deinited\n");
+        } else {
+            uart_my_puts("LA1 already deinited\n");
+        }
+    }
+}
+
+#if PICO_PIO_USE_GPIO_BASE
+
+void logic_analyser0_init(/*PIO pio, uint sm,*/ uint pin_base, uint pin_count, float div, bool init) {
+    // Load a program to capture n pins. This is just a single `in pins, n`
+    // instruction with a wrap.
+
+    // This is a copy of `logic_analyser_init()` with the setting of the gpio_base removed
+
+    PIO pio = pio1;
+    uint sm = 3;
+
+    static bool initialised;
+    static uint16_t prog_inst;
+    static struct pio_program prog;
+    static uint offset;
+
+    if (init) {
+        // if (prog_inst) {
+        if (initialised) {
+        // We need to re-initialise, presumably to change the pin base, the pin count,
+            // or the frequency divisor, so I believe we need to remove the old program first.
+            pio_remove_program(pio, &prog, offset);
+        // } else {
+            // This should be the first time we've called this, as prog_inst is
+            // a static variable, and static variables are zeroed on reset, which means
+            // we don't need to do anything here, so let's comment it out.
+            uart_my_puts("LA0 reiniting\n");
+        }
+
+        prog_inst = pio_encode_in(pio_pins, pin_count);
+
+        prog.instructions = &prog_inst;
+        prog.length = 1;
+        prog.origin = -1;
+
+        offset = pio_add_program(pio, &prog);
+        logic_analyser_configure(pio, sm, pin_base, pin_count, div, offset);
+        initialised = true;
+        uart_my_puts("LA0 inited\n");
+    } else {
+        if (initialised) {
+            pio_remove_program(pio, &prog, offset);
+            initialised = false;
+            uart_my_puts("LA0 deinited\n");
+        } else {
+            uart_my_puts("LA0 already deinited\n");
+        }
+    }
+}
+#endif
+
+// Immediately execute an instruction on a state machine and wait for up to
+// a number of microseconds for it to complete.
+bool pio_sm_exec_timeout_us(PIO pio, uint sm, uint instr, uint32_t timeout_us) {
+    pio_sm_exec(pio, sm, instr);
+    uint32_t start_time = time_us_32();
+    while (time_us_32() - start_time < timeout_us) {
+        if (!pio_sm_is_exec_stalled(pio, sm)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
+#if PICO_PIO_USE_GPIO_BASE
+
+// When this is #define'ed instead of a global variable the triggering respose is much slower
+// Is it because it's stored in flash rather than ram? todo -find out
+
+// #define la_capture_pio pio0
+PIO la_capture_pio = pio1;
+uint la_capture_sm = 3;
+
+#endif
+
+
+// Immediately execute an instruction on a state machine and wait for it to
+// complete unless an expiry time is reached sooner.
+bool pio_sm_exec_expiry_time_us(PIO pio, uint sm, uint instr, uint32_t expiry_time_us) {
+    pio_sm_exec(pio, sm, instr);
+    // uint32_t start_time = time_us_32();
+    while (time_us_32() < expiry_time_us) {
+        if (!pio_sm_is_exec_stalled(pio, sm)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
+// define a structure for storing edge locations for each of the channels
+
+struct Edges {
+    int prev_start;
+    int prev_end;
+    int next_start;
+    int next_end;
+};
+
+struct Edges edges[MAX_NO_OF_CHANNELS];
+
+void clear_previous_edges() {
+        memset(edges, 0, sizeof(edges[0]) * MAX_NO_OF_CHANNELS);
+}
+
+
+#if USE_IR
+
+    #if PICO_RP2040
+    
+    PIO ir_rx_pio = pio0;
+    
+    #else
+    
+    PIO ir_rx_pio = pio2;
+
+    #endif
+
+uint ir_rx_sm = 0;
+
+
+void init_ir_rx(bool init) {
+    static bool initialised;
+    static uint offset;
+
+    if (init) {
+
+        if (!initialised) {
+
+#if PICO_PIO_USE_GPIO_BASE
+            #if (IR_RX_PIN < 16) 
+            my_pio_set_gpio_base(ir_rx_pio, 0);
+            #else
+            my_pio_set_gpio_base(ir_rx_pio, 16);
+            #endif
+
+#endif
+            offset = pio_add_program(ir_rx_pio, &nec_ir_rx_program);
+
+        #if USE_LED_AS_IR_DEBUG
+        // todo tidy this up into one line and work out what we're doing with the LED
+            // nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, offset, IR_RX_PIN, LED_PIN);
+            nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, offset, IR_RX_PIN, -1);
+        #else
+            nec_ir_rx_program_init(ir_rx_pio, ir_rx_sm, offset, IR_RX_PIN, -1);
+        #endif
+
+            pio_enable_sm_mask_in_sync(ir_rx_pio, (1u << ir_rx_sm));
+
+            initialised = true;
+            uart_my_puts("IR inited\n");
+
+        } else {
+            uart_my_puts("IR already inited\n");
+        }
+    } else {
+        if (initialised) {
+
+            // stop the state machine
+            pio_sm_set_enabled(ir_rx_pio, ir_rx_sm, false);
+
+            // and free it
+            pio_remove_program(ir_rx_pio, &nec_ir_rx_program, offset);
+            
+            initialised = false;
+            uart_my_puts("IR deinited\n");
+
+        } else {
+            uart_my_puts("IR already deinited\n");
+        }
+    }
+}
+
+#endif
+
+
+#define TRIGGER_TIMEOUT_US 2000000 // 2 seconds
+
+
+bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, size_t capture_size_words,
+                        uint trigger_pin, uint8_t trigger_type) {
+
+    PIO trigger_pio = pio;
+    uint trigger_sm = sm;
+
+    PIO capture_pio = pio;
+    uint capture_sm = sm;
+
+    uart_my_puts("\nArming trigger...\n");
+
+    // Remove the ir rx - actually, we dont really need to because it's always using GPIO_BASE 16.
+    // Keep it for now. After trying without stopping it, the response time of the trigger (a 
+    // falling edge one) seemed to increase. Don't quite understand why. todo.
+
+#if USE_IR
+    init_ir_rx(false);
+#endif
+
+#if PICO_PIO_USE_GPIO_BASE
+
+    PIO pio_with_base_0;
+    PIO pio_with_base_16;
+
+    uint la_capture_base = pio_get_gpio_base(la_capture_pio);
+    if (la_capture_base == 0) {
+        // la_capture_base is 0, so we need to change the base of this pio to 16
+        my_pio_set_gpio_base(pio, 16);
+        pio_with_base_16 = pio;
+        pio_with_base_0 = la_capture_pio;
+    } else {
+        // la_capture_base is 16, so we need to change the base of this pio to 0
+        my_pio_set_gpio_base(pio, 0);
+        pio_with_base_0 = pio;
+        pio_with_base_16 = la_capture_pio;
+    }
+
+    if ((g_pins_base >= 16) && (g_pins_base + g_no_of_pins_to_capture > 32)) {
+        // res = pio_set_gpio_base(pio, 16);
+        uart_my_puts("using pio_with_base_16 to capture\n");
+        // leave the pio pointing here
+
+        // PIO capture_pio = pio;
+        // uint capture_sm = sm;
+
+        // logic_analyser_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
+        // logic_analyser_init(pio_with_base_16, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
+
+        capture_pio = pio_with_base_16;
+        capture_sm = sm;
+
+    } else {
+        uart_my_puts("using pio_with_base_0 to capture\n");
+        capture_pio = pio_with_base_0; //it's badly named - todo - change it 
+        capture_sm = sm; //it's badly named - todo - change it 
+
+        // logic_analyser0_init(pio_with_base_0, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
+    }
+
+    if (trigger_pin >= 32) {
+        // leave the pio pointing here
+        uart_my_puts("using pio_with_base_16 to trigger\n");
+
+        // PIO capture_pio = pio;
+        // uint capture_sm = sm;
+
+        // adjust the trigger_pin for use in the inline PIO instructions for triggering
+        trigger_pin -= 16;
+        trigger_pio = pio_with_base_16;
+        trigger_sm = sm;
+    } else {
+        uart_my_puts("using pio_with_base_0 to trigger\n");
+        trigger_pio = pio_with_base_0; //it's badly named - todo - change it 
+        trigger_sm = la_capture_sm; //it's badly named - todo - change it 
+    }
+
+    uart_my_putcf("capture_pio: %d\n", get_pio_number(capture_pio));
+    uart_my_putcf("trigger_pio: %d\n", get_pio_number(trigger_pio));
+
+
+    // Initialise both LAs, one on pio0 and one on pio2, regardles of whether we use them both, or not.
+    logic_analyser_init(/*pio_with_base_16, capture_sm, */ g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
+    logic_analyser0_init(/*pio_with_base_16, capture_sm, */ g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
+
+    
+    // logic_analyser_init(pio, sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
+    // ooh, this aint gonna work, yet
+
+    // logic_analyser_init(capture_pio, capture_pio, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
+
+    pio_sm_set_enabled(capture_pio, capture_sm, false);
+    // Need to clear _input shift counter_, as well as FIFO, because there may be
+    // partial ISR contents left over from a previous run. sm_restart does this.
+    pio_sm_clear_fifos(capture_pio, capture_sm);
+    pio_sm_restart(capture_pio, capture_sm);
+
+#else
+
+    logic_analyser_init(g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, true);
+
+#endif
+
+    uint wait_trigger_pin_to_be_high = pio_encode_wait_gpio(1, trigger_pin);
+    uint wait_trigger_pin_to_be_low = pio_encode_wait_gpio(0, trigger_pin);
+
+    dma_channel_config c = dma_channel_get_default_config(dma_chan);
+    channel_config_set_read_increment(&c, false);
+    channel_config_set_write_increment(&c, true);
+    channel_config_set_dreq(&c, pio_get_dreq(capture_pio, sm, false));
+
+    dma_channel_configure(dma_chan, &c,
+        capture_buf,        // Destination pointer
+        &capture_pio->rxf[capture_sm],      // Source pointer
+        capture_size_words, // Number of transfers
+        true                // Start immediately
+    );
+
+    bool triggered = false; // assume fail
+
+    switch (trigger_type) {
+
+        case TT_NONE:
+            triggered = true;
+            break;
+
+        case TT_LOW_LEVEL:
+            triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, wait_trigger_pin_to_be_low, TRIGGER_TIMEOUT_US);
+            break;
+
+        case TT_HIGH_LEVEL:
+            triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, wait_trigger_pin_to_be_high, TRIGGER_TIMEOUT_US);
+            break;
+
+        case TT_RISING_EDGE:
+            if (pio_sm_exec_timeout_us(trigger_pio, trigger_sm, wait_trigger_pin_to_be_low, TRIGGER_TIMEOUT_US)) {
+                triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, wait_trigger_pin_to_be_high, TRIGGER_TIMEOUT_US);
+            }
+            break;
+
+        case TT_FALLING_EDGE:
+            if (pio_sm_exec_timeout_us(trigger_pio, trigger_sm, wait_trigger_pin_to_be_high, TRIGGER_TIMEOUT_US)) {
+                triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, wait_trigger_pin_to_be_low, TRIGGER_TIMEOUT_US);
+            }
+            break;
+
+        case TT_ANY_EDGE:
+            // read the state of the trigger pin
+            bool trigger_pin_state = gpio_get(trigger_pin);
+
+            // wait for it to change to the opposite state
+            uint wait_gpio_pin_to_change = trigger_pin_state ? wait_trigger_pin_to_be_low : wait_trigger_pin_to_be_high;
+            triggered = pio_sm_exec_timeout_us(trigger_pio, trigger_sm, wait_gpio_pin_to_change, TRIGGER_TIMEOUT_US);
+            break;
+
+        case TT_VGA_VSYNC:
+        case TT_VGA_RGB:
+        case TT_VGA_VFRONT_PORCH:
+            int x = 1; // number of pulses
+
+            // Encoded PIO instructions for testing VGA_HSYNC
+            uint wait_trigger_pin_plus1_to_be_high = pio_encode_wait_gpio(1, trigger_pin + 1);
+            uint wait_trigger_pin_plus1_to_be_low = pio_encode_wait_gpio(0, trigger_pin + 1);
+
+            switch (trigger_type) {
+                case TT_VGA_VSYNC:
+                    x = 524; // capture just before the next VSYNC pulse
+                    break;
+                case TT_VGA_RGB:
+                    x = 34; // capture just before the active phase
+                    break;
+                case TT_VGA_VFRONT_PORCH:
+                    x = 480 + 33 + 2 - 1; // capture just before the vertical front porch phase
+                    break;
+            }
+
+
+            uint32_t expiry_time = time_us_32() + TRIGGER_TIMEOUT_US;
+
+            if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, wait_trigger_pin_to_be_high, expiry_time)) {
+                // VSYNC is high
+                if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, wait_trigger_pin_to_be_low, expiry_time)) {
+                    // VSYNC is low
+                    triggered = true; // assume pass
+                    // Wait for x HSYNC pulses before starting the capture
+                    for (int i = 0; i < x; i++) {
+                        if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, wait_trigger_pin_plus1_to_be_high, expiry_time)) {
+                            if (!pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, wait_trigger_pin_plus1_to_be_low, expiry_time)) {
+                                triggered = false;
+                                break;
+                            }
+                        } else {
+                            triggered = false;
+                            break;
+                        }
+                    }
+                } else {
+                    // uart_my_puts("trigger 2 failed\n");
+                }
+            } else {
+                // uart_my_puts("trigger 1 failed\n");
+            }
+            break;
+
+        case TT_VGA_CSYNC:
+        case TT_VGA_CRGB:
+        case TT_VGA_CVFRONT_PORCH:
+
+            x = 1; // number of pulses 
+
+            switch (trigger_type) {
+                case TT_VGA_CSYNC:
+                    x = 524; // capture just before the next VSYNC pulse
+                    break;
+                case TT_VGA_CRGB:
+                    x = 34; // capture just before the active phase
+                    break;
+                case TT_VGA_CVFRONT_PORCH:
+                    x = 480 + 33 + 2 - 1; // capture just before the vertical front porch phase
+                    break;
+            }
+
+            expiry_time = time_us_32() + TRIGGER_TIMEOUT_US;
+
+
+            // if we get a low pulse on CSYNC that is greater than 96 clks / 25 MHz = 3.84 us then
+            // chances are we have a "VSYNC" signal on CSYNC. It must also be less than 704 cls / 25 MHz = 28.16
+
+            if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, wait_trigger_pin_to_be_high, expiry_time)) {
+                // CSYNC is high
+                // wait for CSYNC to go low
+                while (1) {
+                    if (!triggered && (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, wait_trigger_pin_to_be_low, expiry_time))) {
+                        // CSYNC is low
+                        uint32_t csync_pulse_low_start_time = time_us_32();
+
+                        // wait for CSYNC to go high again
+                        if (!triggered && (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, wait_trigger_pin_to_be_high, expiry_time))) {
+                            // CSYNC is high again
+
+                            uint32_t csync_pulse_low_duration = time_us_32() - csync_pulse_low_start_time;
+                            
+                            // 3 fails - good
+                            // 4, 5, 10, 25, 27, 28 works
+                            // 29, 30, 35, 50, 100 fails - good
+
+                            // csync_pulse_low_duration should be between 
+
+                            #define MIN_CSYNC_WIDTH_uS 25
+                            #define MAX_CSYNC_WIDTH_uS 27
+
+                            if ((csync_pulse_low_duration >= MIN_CSYNC_WIDTH_uS) && (csync_pulse_low_duration <= MAX_CSYNC_WIDTH_uS)) {
+                                triggered = true; // assume pass
+                                // uart_my_putuif("csync_pulse_low_duration: %d\n", csync_pulse_low_duration);
+                                // this yielded a consistant value of 26 when a valid CSYNC was detected
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+
+                if (triggered) {
+                    // triggered = true; // assume pass
+                    // Wait for x CSYNC (HSYNC) pulses before starting the capture
+                    for (int i = 0; i < x; i++) {
+                        if (pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, wait_trigger_pin_to_be_high, expiry_time)) {
+                            if (!pio_sm_exec_expiry_time_us(trigger_pio, trigger_sm, wait_trigger_pin_to_be_low, expiry_time)) {
+                                triggered = false;
+                                break;
+                            }
+                        } else {
+                            triggered = false;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            break;
+    }
+
+    if (!triggered) {   
+        // Failed to trigger, so restart the state machine otherwise it'll be stuck
+        // in a latched EXEC instruction, and we'll never fill up the capture buffer.
+        uart_my_puts("failed to trigger, restarting the state machine...\n");
+        pio_sm_restart(capture_pio, capture_sm);
+    }
+
+    // Let the capture state machine take over from here
+    pio_sm_set_enabled(capture_pio, capture_sm, true);
+    dma_channel_wait_for_finish_blocking(dma_chan);
+    pio_sm_set_enabled(capture_pio, capture_sm, false); // Disable the state machine, which might save a bit of power? (todo - find out)
+
+    g_no_of_captured_pins = g_no_of_pins_to_capture;
+    g_pins_base_captured = g_pins_base;
+
+    clear_previous_edges();
+
+#if PICO_PIO_USE_GPIO_BASE
+
+    // if (capture_pio == pio) {
+    //     logic_analyser_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
+    // } else {
+    //     logic_analyser0_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
+    // }
+
+    // if (capture_pio == pio) {
+
+    // deinit pio2, sm (2, 3) as we may need to change the base at some point in the future
+    // I don't think there's any need to 
+    logic_analyser_init(/*pio, sm,*/ g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
+    // } else {
+    //     logic_analyser0_init(capture_pio, capture_sm, g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
+    // }
+
+    // deitit pio 0, sm 3
+    logic_analyser0_init(/*la_capture_pio, la_capture_sm,*/ g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
+
+
+
+#else 
+    logic_analyser_init(g_pins_base, g_no_of_pins_to_capture, g_sample_frequency, false);
+#endif
+
+
+#if USE_IR
+    // Restart the ir rx as we stopped it at the top of this function.
+    init_ir_rx(true);
+#endif
+
+    return triggered;
+}
+
+
+int get_channel_sample(const uint32_t *buf, int pin, uint pin_count, int index, uint record_size_bits) {
+
+    uint bit_index = pin + index * pin_count;
+    uint word_index = bit_index / record_size_bits;
+    // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
+    uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
+    //uart_my_puts(buf[word_index] & word_mask ? "-" : "_");
+
+    return buf[word_index] & word_mask ? 1 :0;
+}
+
+
+void print_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples) {
+    // Display the capture buffer in text form, like this:
+    // 00: __--__--__--__--__--__--
+    // 01: ____----____----____----
+    uart_my_puts("Capture:\n");
+    // Each FIFO record may be only partially filled with bits, depending on
+    // whether pin_count is a factor of 32.
+    uint record_size_bits = bits_packed_per_word(pin_count);
+    for (int pin = 0; pin < pin_count; ++pin) {
+        // uart_my_puts("%02d: ", pin + pin_base);
+        uart_my_puts("todo");
+        for (int sample = 0; sample < n_samples; ++sample) {
+            uart_my_puts(get_channel_sample(buf, pin, pin_count, sample, record_size_bits) ? "-" : "_");
+        }
+        uart_my_puts("\n");
+    }
+}
+
+
+int mag_factor(int value) {
+    if (g_mag < 0) {
+        return value * (abs(g_mag) + 1);
+    } else {
+        return value / (g_mag + 1);
+    }
+}
+
+
+// writes a formatted integer to the VGA framebuffer
+void write_intf(const char *s, int c) {
+    char str[80];
+    sprintf(str, s, c);
+    writeString(str);
+}
+
+
+#define FONT_WIDTH 6
+#define FONT_HEIGHT 8
+
+// Colours for the filled rectangles
+
+// #define LEFT_BOX_COLOR BLUE
+// #define MIDDLE_BOX_COLOR RED
+// #define RIGHT_BOX_COLOR MED_GREEN
+
+#define LEFT_BOX_COLOR BLACK
+#define MIDDLE_BOX_COLOR BLACK
+#define RIGHT_BOX_COLOR BLACK
+
+// Titlebar defines
+#define TITLEBAR_TOP 1
+#define TITLEBAR_LEFT 1
+#define TITLEBAR_WIDTH SCREEN_WIDTH - (2 * TITLEBAR_LEFT)
+#define TITLEBAR_HEIGHT 32
+
+
+// Toolbar defines
+// #define TOOLBAR_LEFT 1
+// #define TOOLBAR_WIDTH SCREEN_WIDTH - (2 * TOOLBAR_LEFT)
+
+#define TOOLBAR_LEFT 102
+#define TOOLBAR_WIDTH SCREEN_WIDTH - TOOLBAR_LEFT - 1
+
+#define TOOLBAR_HEIGHT 10
+// #define TOOLBAR_TOP SCREEN_HEIGHT - TOOLBAR_HEIGHT - 1
+// #define TOOLBAR_TOP TITLEBAR_TOP + TITLEBAR_HEIGHT
+#define TOOLBAR_TOP (22 - TOOLBAR_HEIGHT)
+#define TOOLBAR_TEXT_PADDING 1
+
+// #define TOOLBAR_COLOR DARK_BLUE
+#define TOOLBAR_COLOR BLACK
+#define TOOLBAR_ITEM_PADDING 0
+
+// #define TOOLBAR_HINT_WIDTH (TOOLBAR_WIDTH) / 3
+// #define TOOLBAR_HINT_WIDTH 100
+#define TOOLBAR_HINT_WIDTH 0
+
+char channel_text[] = "ch.";
+#define CHANNEL_NO_LEFT TOOLBAR_LEFT + TOOLBAR_TEXT_PADDING + TOOLBAR_HINT_WIDTH + TOOLBAR_TEXT_PADDING
+#define CHANNEL_NO_LABEL_CHARS 3
+#define CHANNEL_NO_INPUT_CHARS 4
+#define CHANNEL_NO_WIDTH (FONT_WIDTH * (CHANNEL_NO_LABEL_CHARS + 1 + CHANNEL_NO_INPUT_CHARS)) + TOOLBAR_ITEM_PADDING
+
+char palette_text[] = "plt.";
+#define PALETTE_LEFT CHANNEL_NO_LEFT + CHANNEL_NO_WIDTH + TOOLBAR_ITEM_PADDING
+#define PALETTE_LABEL_CHARS 4
+#define PALETTE_INPUT_CHARS 5
+#define PALETTE_WIDTH (FONT_WIDTH * (PALETTE_LABEL_CHARS + 1 + PALETTE_INPUT_CHARS)) + TOOLBAR_ITEM_PADDING
+
+char mag_text[] = "zoom";
+#define MAG_LEFT PALETTE_LEFT + PALETTE_WIDTH + TOOLBAR_ITEM_PADDING
+#define MAG_LABEL_CHARS 4
+#define MAG_INPUT_CHARS 8
+#define MAG_WIDTH (FONT_WIDTH * (MAG_LABEL_CHARS + 1 + MAG_INPUT_CHARS)) + TOOLBAR_ITEM_PADDING
+
+char freq_text[] = "freq.div";
+#define FREQ_LEFT MAG_LEFT + MAG_WIDTH + TOOLBAR_ITEM_PADDING
+#define FREQ_LABEL_CHARS 8
+#define FREQ_INPUT_CHARS 6   
+#define FREQ_WIDTH (FONT_WIDTH * (FREQ_LABEL_CHARS + 1 + FREQ_INPUT_CHARS)) + TOOLBAR_ITEM_PADDING
+
+char base_text[] = "base";
+#define PINS_BASE_LEFT FREQ_LEFT + FREQ_WIDTH + TOOLBAR_ITEM_PADDING
+#define PINS_BASE_LABEL_CHARS 4
+#define PINS_BASE_INPUT_CHARS 6
+#define PINS_BASE_WIDTH (FONT_WIDTH * (PINS_BASE_LABEL_CHARS + 1 + PINS_BASE_INPUT_CHARS)) + TOOLBAR_ITEM_PADDING
+
+char pins_text[] = "pins";
+#define NO_OF_PINS_LEFT PINS_BASE_LEFT + PINS_BASE_WIDTH + TOOLBAR_ITEM_PADDING
+#define NO_OF_PINS_LABEL_CHARS 4
+#define NO_OF_PINS_INPUT_CHARS 4
+#define NO_OF_PINS_WIDTH (FONT_WIDTH * (NO_OF_PINS_LABEL_CHARS + 1 + NO_OF_PINS_INPUT_CHARS)) + TOOLBAR_ITEM_PADDING
+
+char trigger_text[] = "trig.";
+#define TRIGGER_BASE_LEFT NO_OF_PINS_LEFT + NO_OF_PINS_WIDTH + TOOLBAR_ITEM_PADDING
+#define TRIGGER_BASE_LABEL_CHARS 5
+#define TRIGGER_BASE_INPUT_CHARS 6
+#define TRIGGER_BASE_WIDTH (FONT_WIDTH * (TRIGGER_BASE_LABEL_CHARS + 1 + TRIGGER_BASE_INPUT_CHARS)) + TOOLBAR_ITEM_PADDING
+
+char trigger_type[] = "type";
+#define TRIGGER_TYPE_LEFT TRIGGER_BASE_LEFT + TRIGGER_BASE_WIDTH + TOOLBAR_ITEM_PADDING
+#define TRIGGER_TYPE_LABEL_CHARS 4
+#define TRIGGER_TYPE_INPUT_CHARS 8
+#define TRIGGER_TYPE_WIDTH (FONT_WIDTH * (TRIGGER_TYPE_LABEL_CHARS + 1 + TRIGGER_TYPE_INPUT_CHARS)) + TOOLBAR_ITEM_PADDING
+
+#define PLOT_PADDING 4
+#define PLOT_TOP (TOOLBAR_TOP + TOOLBAR_HEIGHT + 6)
+// #define PLOT_HEIGHT 36
+
+#define MAX_PLOT_HEIGHT 48
+
+int plot_height;
+
+
+// #define MINIMAP_BOTTOM TOOLBAR_TOP - 4
+
+// #define STATUSBAR_LEFT 1
+// #define STATUSBAR_WIDTH SCREEN_WIDTH - (2 * STATUSBAR_LEFT)
+// #define STATUSBAR_HEIGHT 10
+// // #define TOOLBAR_TOP SCREEN_HEIGHT - TOOLBAR_HEIGHT - 1
+// #define STATUSBAR_TOP SCREEN_HEIGHT - TOOLBAR_HEIGHT - 1
+// #define STATUSBAR_TEXT_PADDING 1
+
+// #define MINIMAP_TOP 420
+#define MINIMAP_HEIGHT 6
+#define MINIMAP_PADDING 1
+#define MINIMAP_BOTTOM STATUSBAR_TOP - 1
+
+
+#define STATUSBAR_HEIGHT 10
+#define STATUSBAR_TOP (SCREEN_HEIGHT - STATUSBAR_HEIGHT - 1)
+#define STATUSBAR_LEFT 1
+#define STATUSBAR_WIDTH SCREEN_WIDTH - (2 * STATUSBAR_LEFT)
+
+// #define STATUSBAR_TOP 55
+#define STATUSBAR_TEXT_PADDING 1
+// #define STATUSBAR_COLOR DARK_BLUE
+#define STATUSBAR_COLOR BLACK
+#define STATUSBAR_ITEM_PADDING 0
+
+// #define STATUSBAR_HINT_WIDTH (TOOLBAR_WIDTH) / 3
+#define STATUSBAR_HINT_LEFT STATUSBAR_LEFT + 2
+// #define STATUSBAR_HINT_WIDTH STATUSBAR_WIDTH
+#define STATUSBAR_HINT_WIDTH 400
+
+#define STATUSBAR_HINT_COLOR STATUSBAR_COLOR
+
+#define STATUSBAR_INFO_LEFT STATUSBAR_HINT_LEFT + STATUSBAR_HINT_WIDTH
+#define STATUSBAR_INFO_WIDTH STATUSBAR_WIDTH - STATUSBAR_HINT_WIDTH - (2 * STATUSBAR_HINT_LEFT)
+#define STATUSBAR_INFO_RIGHT STATUSBAR_INFO_LEFT + STATUSBAR_INFO_WIDTH
+#define STATUSBAR_INFO_COLOR STATUSBAR_COLOR
+
+// There must be at least 48 of these colours - one for every possible GPIO
+char colours[48];
+
+#define MINIMAP_SCROLLBAR_HEIGHT 2
+#define MINIMAP_SCROLLBAR_PADDING 1
+
+
+int get_plot_padding() {
+    if (g_no_of_captured_pins <= 16) {
+        // return PLOT_PADDING;
+        return 4;
+    } else if (g_no_of_captured_pins <= 24) {
+        return 3;
+    } else {
+        return 1;
+    }
+}
+
+
+int get_minimap_height() {
+    if (g_no_of_captured_pins <= 16) {
+        // return MINIMAP_HEIGHT;
+        return 6;
+    } else if (g_no_of_captured_pins <= 24) {
+        return 3;
+    } else {
+        return 2;
+    }
+}
+
+int get_minimap_padding() {
+    if (g_no_of_captured_pins <= 16) {
+        // return MINIMAP_PADDING;
+        return 1;
+    } else if (g_no_of_captured_pins <= 24) {
+        return 1;
+    } else {
+        return 1;
+    }
+}
+
+
+int get_minimap_top() {
+    // int minimap_height = MINIMAP_HEIGHT;
+    // int minimap_padding = get_minimap_padding();
+    // if (g_no_of_captured_pins > 16) {
+    //     minimap_height = 3;
+    // } else if (g_no_of_captured_pins > 24) {
+    //     minimap_height = 2;
+    // }
+    // return TOOLBAR_TOP + ((get_minimap_height() + get_minimap_padding()) * g_no_of_captured_pins);
+    return MINIMAP_BOTTOM - ((get_minimap_height() + get_minimap_padding()) * g_no_of_captured_pins);
+}
+
+
+int get_minimap_scrollbar_top() {
+    return get_minimap_top() - (MINIMAP_SCROLLBAR_HEIGHT + MINIMAP_SCROLLBAR_PADDING);
+}
+
+
+/*
+uint get_minimap_y() {
+    int trace_height = MINIMAP_HEIGHT;
+    int y_padding = MINIMAP_PADDING;
+    if (g_no_of_captured_pins > 16) {
+    // drawing the minimap
+        trace_height = MINIMAP_HEIGHT >> 1;
+        // y_padding = MINIMAP_PADDING;
+    }
+    // y = MINIMAP_TOP;
+    // y = MINIMAP_BOTTOM - ((MINIMAP_HEIGHT + MINIMAP_PADDING) * pin_count);
+    // y = MINIMAP_BOTTOM - ((trace_height + y_padding) * pin_count);
+
+    return (MINIMAP_BOTTOM - ((trace_height + y_padding) * g_no_of_captured_pins) - (MINIMAP_SCROLLBAR_HEIGHT + MINIMAP_SCROLLBAR_PADDING));
+}
+*/
+
+int get_plot_height(uint pin_count) {
+    int avail_height = MINIMAP_BOTTOM - PLOT_TOP;
+    // int fixed_height = ((PLOT_PADDING + MINIMAP_HEIGHT + MINIMAP_PADDING) * pin_count) + MINIMAP_SCROLLBAR_HEIGHT + (2 * MINIMAP_PADDING);
+
+    // int fixed_height = ((PLOT_PADDING + MINIMAP_HEIGHT + MINIMAP_PADDING) * pin_count) + MINIMAP_SCROLLBAR_HEIGHT + (2 * MINIMAP_PADDING);
+
+    // int minimap_height = MINIMAP_HEIGHT;
+    // int minimap_padding = MINIMAP_PADDING;
+    // if (g_no_of_captured_pins > 16) {
+    // // drawing the minimap
+    //     minimap_height = MINIMAP_HEIGHT >> 1;
+    //     // minimap_padding = MINIMAP_PADDING;
+    // }
+
+    // int fixed_height = ((PLOT_PADDING + minimap_height + minimap_padding) * pin_count) + MINIMAP_SCROLLBAR_HEIGHT + (2 * MINIMAP_PADDING);
+    // int fixed_height = (PLOT_PADDING * pin_count) + get_minimap_top(0) + MINIMAP_SCROLLBAR_HEIGHT + (2 * MINIMAP_PADDING);
+
+    int fixed_height = ((get_plot_padding() + get_minimap_height() + get_minimap_padding()) * pin_count) + MINIMAP_SCROLLBAR_HEIGHT + (2 * MINIMAP_PADDING);
+
+    plot_height = MIN((avail_height - fixed_height) / pin_count, MAX_PLOT_HEIGHT);
+    return plot_height;
+}
+
+
+void change_plot_line_colour_palette(char palette) {
+    char jumper_jerky[10] = {DARK_YELLOW, RED, ORANGE, YELLOW, GREEN, BLUE, MAGENTA, LIGHT_GREY_64, WHITE, DARK_GREY_64};
+    char vga[8] = {ORANGE, YELLOW, MED_BLUE_64, LIGHT_BLUE_64, MED_GREEN_64, LIGHT_GREEN_64, MED_RED_64, LIGHT_RED_64};
+    
+    for (int i = 0; i < sizeof(colours); i++) {
+        switch (palette) {
+
+            case COLOUR_PALETTE_JUMPER_JERKY:
+                colours[i] = jumper_jerky[i % sizeof(jumper_jerky)];
+                break;
+
+            case COLOUR_PALETTE_VGA:
+                colours[i] = vga[i % sizeof(vga)];
+                break;
+
+            case COLOUR_PALETTE_GREEN:
+                colours[i] = GREEN;
+                break;
+
+            case COLOUR_PALETTE_RASPBERRY:
+                colours[i] = RASPBERRY_64;
+                break;
+        } 
+    }
+}
+
+
+void set_plot_line_colors(uint pin_count) {
+    int trace_height = get_plot_height(g_no_of_captured_pins);
+    int y_padding = get_plot_padding();
+    int y = PLOT_TOP;
+
+    int get_colour_index(int pin) {
+
+#if PICO_PIO_USE_GPIO_BASE
+        if (g_pins_base_captured < 16) {
+            return (g_pins_base_captured + pin) % 32;
+        } else {
+            // sample is between GP16 and GP47
+            return ((g_pins_base_captured + pin + 16) % 32) + 16;
+        }
+#else
+        return (g_pins_base + pin) % 32;
+#endif
+
+    }
+
+    for (int pin = 0; pin < pin_count; ++pin) {
+
+#if VGA_OUT_RGB_PIN_COUNT == 6
+        char line_col = colours[get_colour_index(pin)];
+#else 
+        char line_col = WHITE;
+#endif
+
+        // char back_col = BLACK;
+        // if (pin == g_channel) {
+        //     back_col = DARK_GREY_64;
+        // }
+
+        for (uint16_t l = 0; l < trace_height; l++) {
+            set_line_colors(y + l,  BLACK, line_col, 0, 0);
+        }
+
+        y += trace_height + y_padding;
+    }
+
+
+    y = get_minimap_scrollbar_top();
+    for (int i = 0; i < MINIMAP_SCROLLBAR_HEIGHT; i++) {
+        set_line_colors(y + i, BLACK, WHITE, 0, 0);
+    }
+
+    y = get_minimap_top();
+    int minimap_height = get_minimap_height();
+    int minimap_padding = get_minimap_padding();
+    for (int pin = 0; pin < pin_count; ++pin) {
+#if VGA_OUT_RGB_PIN_COUNT == 6
+        char line_col = colours[get_colour_index(pin)];
+#else
+        char line_col = WHITE;
+#endif
+        for (int i = 0; i < minimap_height; i++) {
+            set_line_colors(y + i, BLACK, line_col, 0, 0);
+        }
+        y+= minimap_height + minimap_padding;
+    }
+}
+
+
+// Returns the number of characters a uint would take if printed as ascii (with no separators).
+uint8_t uint_width(uint32_t num) {
+    uint8_t width = 0;
+    do {
+        width += 1;
+        num = num / 10;
+    } while (num);
+    return width;
+}
+
+
+void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32_t n_samples, int magnification,
+                        int scrollx, bool show_numbers) {
+    // Display the capture buffer in graphical form, like this:
+    // 00: __--__--__--__--__--__--
+    // 01: ____----____----____----
+    // ...only with lines
+    // uart_my_puts("Capture:\n");
+    // Each FIFO record may be only partially filled with bits, depending on
+    // whether pin_count is a factor of 32.
+
+    // Define a structure for pulse width values
+    struct PulseWidth {
+        int16_t x;
+        int32_t value;
+    };
+
+    // Buffer must be large enough to store a screen width's worth of pulses that are 1 sample wide.
+    // As font is 5px (not 8px) and a vertical line is 1px wide, it must be large enough to hold
+    // 640 / 6 = 106.67 -> 107 pulses
+    #define MAX_1_SAMPLE_WIDE_PULSES ((640 / 6) + 1) 
+    struct PulseWidth pws[MAX_1_SAMPLE_WIDE_PULSES];
+    uint8_t no_of_pws;
+
+    // 20
+    #define PIXEL_WORDS_PER_LINE 640 / 32
+
+    uint32_t top_pixels [PIXEL_WORDS_PER_LINE];
+    uint32_t mid_pixels [PIXEL_WORDS_PER_LINE];
+    uint32_t bot_pixels [PIXEL_WORDS_PER_LINE];
+
+    uint record_size_bits = bits_packed_per_word(pin_count);
+
+    int trace_height = plot_height;
+    int y_padding = get_plot_padding();
+    int y = PLOT_TOP;
+
+    int max_screen_x = MIN(scrollx + mag_factor(SCREEN_WIDTH), n_samples);
+
+
+    if (!show_numbers) {
+        trace_height = get_minimap_height();
+        y_padding = get_minimap_padding();
+        y = get_minimap_top();
+
+        if (g_capture_n_samples >= SCREEN_WIDTH) {
+            // we need to zoom out
+            int factor = g_capture_n_samples / SCREEN_WIDTH;
+            magnification = -(factor - 1);
+        } else {
+            // we need to zoom in
+            int factor = SCREEN_WIDTH / g_capture_n_samples;
+            magnification = (factor - 1);
+        }
+
+        scrollx = 0;
+        max_screen_x = n_samples;
+    }
+
+// #define DEBUG_PINS
+
+#ifdef DEBUG_PINS
+
+#define FIRST_PIN_TO_DEBUG 2
+#define LAST_PIN_TO_DEBUG 2
+
+    void print_debug(uint8_t pin) {
+        char str[256];
+        sprintf(str, "pin: %d scrollx: %d, prev start: %d prev_end: %d next start: %d next end: %d\n", 
+            pin, scrollx, edges[pin].prev_start, edges[pin].prev_end, edges[pin].next_start, edges[pin].next_end);
+        uart_my_puts(str);
+    }
+
+#endif
+
+    char str[80];
+
+    setTextSize(1);
+
+#ifdef DEBUG_PINS
+    uart_my_puts("-\n");
+#endif
+
+    for (int pin = 0; pin < pin_count; ++pin) {
+
+        no_of_pws = 0;
+
+        int x = 0;
+
+        uint magIndex = 0;
+
+        char line_col = colours[pin];
+
+        int last_sample = 1; // fix at high for now
+        int last_x = 0;
+
+        setTextColor(line_col);
+
+        int last_i = 0;
+        int cursor_x = 0;
+
+        bool use_prev_start = false;
+
+#ifdef DEBUG_PINS
+        if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
+            print_debug(pin);
+        }
+#endif
+
+        int safe_scrollx = scrollx;
+
+        if (safe_scrollx >= n_samples) {
+            safe_scrollx = n_samples - 1;
+        }
+
+        if (scrollx >= edges[pin].prev_start) {
+            if ((max_screen_x < edges[pin].next_end) || (edges[pin].next_end == n_samples)) {
+                if (edges[pin].prev_end == -1) {
+                    use_prev_start = true;
+                } else if (scrollx < edges[pin].prev_end) {
+                    use_prev_start = true;
+                }
+            }
+        }
+
+        last_sample = get_channel_sample(buf, pin, pin_count, safe_scrollx, record_size_bits);
+
+        if (use_prev_start) {
+            // we can use the previously searched-for prev_start edge
+            last_i = edges[pin].prev_start;
+
+        } else {
+            // we can not use the previous searched-for edge, so search for it
+
+#ifdef DEBUG_PINS
+            if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
+                sprintf(str, "finding prev edge on pin %d at scrollx: %d...\n", pin, scrollx);
+                uart_my_puts(str);
+            }
+#endif
+
+            last_i = 0;
+
+            for (int i = safe_scrollx - 1; i >= 0; i--) {
+                // go back from the current scroll position and find the first
+                // sample that's different from the sample at the scroll position.
+
+                uint sample = get_channel_sample(buf, pin, pin_count, i, record_size_bits);
+
+                if (last_sample != sample) {
+                    last_i = i + 1; // the "+ 1" is needed as we're going backwards
+                    break;
+                }
+            }
+
+            edges[pin].prev_start = last_i; // save the previous start edge for next time
+
+#ifdef DEBUG_PINS
+            if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
+                print_debug(pin);
+            }
+#endif
+
+        }
+
+        // last_i is now the index of the previous off-screen edge, or the beginning of the samples
+
+        // make any needed scale adjustments
+
+        if (magnification < 0) {
+            last_x = ((last_i - scrollx) / (abs(magnification) + 1));
+        } else {
+            last_x = ((last_i - scrollx) * (magnification + 1));
+        }
+
+        // get ready to paint the relevant samples on the screen
+
+        int last_pixel_x = -1;
+        int last_v_line_x = -1;
+
+        x = 0;
+
+        char debug1 = 0;
+
+        int prev_index = MAX(0, scrollx - 1);
+        last_sample = get_channel_sample(buf, pin, pin_count, prev_index, record_size_bits);
+
+        bool found_prev_end = false;
+
+        int prev_end = -1;
+
+        int next_start = -1;
+
+        // fillRect(0, y, SCREEN_WIDTH, (trace_height), BLACK); // clear plot area
+
+        // clear the buffered top, middle and bottom lines of the plot
+        memset(&top_pixels[0], 0, PIXEL_WORDS_PER_LINE * sizeof(uint32_t));
+        memset(&mid_pixels[0], 0, PIXEL_WORDS_PER_LINE * sizeof(uint32_t));
+        memset(&bot_pixels[0], 0, PIXEL_WORDS_PER_LINE * sizeof(uint32_t));
+
+        // paint the windowed part of the plot
+
+        for (int i = scrollx; i < max_screen_x; i++) {
+
+            uint sample = get_channel_sample(buf, pin, pin_count, i, record_size_bits);
+
+            if ((last_sample != sample))  {
+
+                if ((!found_prev_end) && (i != scrollx)) {
+                    prev_end = i;
+                    found_prev_end = true;
+                }
+
+                next_start = i;
+
+                if (x != last_v_line_x) {
+                    // We've not yet drawn a vertical line at this x location, so let's draw one.
+                    // drawVLine(x, y, trace_height, line_col);
+
+                    // Or rather, let's buffer it now, and memcpy it later
+                    // calculate the word index (0 - 19)
+                    int wi = (x / 32);
+                    
+                    // calculate the bit index (0 - 31) and then the or mask 
+                    uint or_mask = 1 << (x & 0x1f);
+                    
+                    top_pixels[wi] |= (or_mask);
+                    mid_pixels[wi] |= (or_mask);
+                    bot_pixels[wi] |= (or_mask);
+
+                    last_v_line_x = x;
+                    last_pixel_x = x;
+
+                    if (show_numbers) {
+                        // sprintf(str,"%d", i - last_i);
+                        // int str_width = strlen(str) * FONT_WIDTH;
+
+                        int str_width =  uint_width(i - last_i) * FONT_WIDTH;
+
+                        if (str_width < (x - last_x)) {
+                            // the string fits between the two edges
+
+                            int x_offset = ((x - last_x - str_width) / 2) + 1;
+                            if (x_offset < 2) {
+                                x_offset = 2;
+                            }
+                            cursor_x = last_x +  x_offset;
+
+                            if (cursor_x < 0) {
+                                cursor_x = 0;
+                                if (cursor_x + str_width >= x) {
+                                    cursor_x = x - str_width;
+                                }
+                            }
+
+                            // if (cursor_x <= last_x) {
+                            //     cursor_x = last_x + 1;
+                            // }
+
+                            if (cursor_x - str_width < SCREEN_WIDTH) {
+                                // setCursor(cursor_x, y + (trace_height / 2) - (FONT_HEIGHT / 2));
+                                // writeString(str);
+
+                                // buffer the value and draw it later
+                                pws[no_of_pws].x = cursor_x;
+                                pws[no_of_pws].value = i - last_i;
+                                no_of_pws++;
+                            }
+                        }
+                    }
+                }
+                last_sample = sample;
+                last_x = x;
+                last_i = i;
+
+            } else {
+                if (x != last_pixel_x) {
+                    // We've not yet drawn a pixel at this x location, so let's draw one.
+                    // drawPixel(x, y + (sample ? 0 : trace_height - 1), line_col);
+
+                    if (x < 640) {
+                        // Not sure why x is getting to >= 640, but it is, and this has been the 
+                        // cause of the bug in the first sample of minimap traces. It only happens 
+                        // when there's a minimap trace. Maybe it's just more noticeable when the
+                        // trace is zoomed out? todo - find out.
+
+                        // calculate the word index 0 - 19
+                        int wi = (x / 32);
+                        
+                        // calculate the bit index (0 - 31) and then the or mask 
+                        uint or_mask = 1 << (x & 0x1f);
+
+                        if (sample) {
+                            top_pixels[wi] |= or_mask;
+                        } else {
+                            bot_pixels[wi] |= or_mask;
+                        }
+                    }
+
+                    last_pixel_x = x;
+                }
+            }
+
+            if (magnification < 0) {
+                if (++magIndex >= abs(magnification) + 1) {
+                    x++;
+                    magIndex = 0;
+                }
+            } else {
+                x+= magnification + 1;
+            }
+        }
+
+         if (show_numbers) {
+
+            int i;
+
+            bool use_next_edge = false;
+
+            if ((use_prev_start == false) && (prev_end == -1)) {
+
+            } else {
+                if (max_screen_x <= edges[pin].next_end) {
+                    if (next_start == edges[pin].next_start) {
+                        use_next_edge = true;
+                    }
+                }
+            }
+
+            edges[pin].prev_end = prev_end;
+            edges[pin].next_start = next_start;
+
+            if (use_next_edge) {
+
+                if (next_start == -1) {
+                    // edges[pin].prev_start should also be -1
+                    // we didn't find any edges in the windowed area 
+                    last_i = edges[pin].prev_start;
+                } else {
+                    last_i = next_start;
+                }
+
+                i = edges[pin].next_end;
+            } else {
+
+#ifdef DEBUG_PINS
+                if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
+                    sprintf(str, "finding next edge on pin %d at scrollx: %d...\n", pin, scrollx);
+                    uart_my_puts(str);
+                }
+#endif
+
+                for (i = max_screen_x; i < n_samples; i++) {
+                    uint sample = get_channel_sample(buf, pin, pin_count, i, record_size_bits);
+                    if (last_sample != sample) {
+                        if (!found_prev_end) {
+                            edges[pin].prev_end = i;
+                            found_prev_end = true;
+                        }
+                        edges[pin].next_end = i;
+                        break;
+                    }
+                }
+
+                edges[pin].next_end = i;
+            }
+
+            if (magnification < 0) {
+                x = ((i - scrollx) / (abs(magnification) + 1));
+            } else {
+                x = ((i - scrollx) * (magnification + 1));
+            }
+
+            // sprintf(str,"%d", i - last_i);
+            // int str_width = strlen(str) * FONT_WIDTH;
+
+            int str_width =  uint_width(i - last_i) * FONT_WIDTH;
+
+/*
+            if (str_width < (x - last_x)) {
+                // the string fits between the two edges
+                cursor_x = last_x + ((x - last_x - str_width) / 2) + 1;
+
+                if (cursor_x < 0) {
+                    cursor_x = 0;
+                    if (cursor_x + str_width >= x) {
+                        cursor_x = x - str_width;
+                    }
+                }
+
+                if (cursor_x - str_width < SCREEN_WIDTH) {
+                    setCursor(cursor_x, y + (trace_height / 2) - (FONT_HEIGHT / 2));
+                    writeString(str);
+                }
+            }
+*/
+
+            if (str_width < (x - last_x)) {
+
+                cursor_x = last_x + ((x - last_x - str_width) / 2) + 1;
+                if (cursor_x + str_width >= SCREEN_WIDTH) {
+                    // some of the string is off screen and to the right
+                    cursor_x = last_x + 2;
+                    if (cursor_x + str_width < SCREEN_WIDTH) {
+                        cursor_x = SCREEN_WIDTH - str_width - 1;
+                    }
+
+                } else if (cursor_x < 0) {
+                    cursor_x = 0;
+                }
+                // else if (cursor_x <= last_x) {
+                //     cursor_x = last_x + 1;
+                // } 
+                // setCursor(cursor_x, y + (trace_height / 2) - (FONT_HEIGHT / 2));
+                // writeString(str);
+
+                pws[no_of_pws].x = cursor_x;
+                pws[no_of_pws].value = i - last_i;
+                no_of_pws++;
+            }
+        }
+
+        // copy the buffer top, all the middle and the bottom lines in quick succession 
+        memcpy(&vga_1bit_data_array[(y * WORDS_PER_LINE) + 1], &top_pixels[0], PIXEL_WORDS_PER_LINE * sizeof(uint32_t));
+        
+        for (int i = 1; i < trace_height - 1; i++) {    
+            memcpy(&vga_1bit_data_array[((y + i) * WORDS_PER_LINE) + 1], &mid_pixels[0], PIXEL_WORDS_PER_LINE * sizeof(uint32_t));
+        }
+
+        memcpy(&vga_1bit_data_array[((y + trace_height - 1) * WORDS_PER_LINE) + 1], &bot_pixels[0], PIXEL_WORDS_PER_LINE * sizeof(uint32_t));
+
+        if (show_numbers) {
+            // calculate the y position for the text
+            uint16_t cursor_y = y + ((trace_height - FONT_HEIGHT) / 2);
+            
+            // draw all the buffered pulse widths
+            for (int i = 0; i < no_of_pws; i++) {
+                setCursor(pws[i].x, cursor_y);
+                sprintf(str,"%d", pws[i].value);
+                // itoa(pws[i].value, str, 10);
+                writeString(str);
+            }
+        }
+
+        y += trace_height + y_padding;
+    }
+}
+
+/*
+/// \tag::get_time[]
+// Simplest form of getting 64 bit time from the timer.
+// It isn't safe when called from 2 cores because of the latching
+// so isn't implemented this way in the sdk
+static uint64_t get_time(void) {
+    // Reading low latches the high value
+    uint32_t lo = timer_hw->timelr;
+    uint32_t hi = timer_hw->timehr;
+    return ((uint64_t) hi << 32u) | lo;
+}
+/// \end::get_time[]
+
+
+bool my_uart_is_readable_within_us(uart_inst_t * uart, uint32_t us) {
+    bool r = uart_is_readable(uart);
+    if (!r) {
+        uint32_t start = time_us_32();
+        while (time_us_32() - start < us) {
+            r = uart_is_readable(uart);
+            if (r) {
+                break;
+            }
+        }
+    }
+    return r;
+}
+
+*/
+
+
+    // plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, CAPTURE_PIN_COUNT, CAPTURE_N_SAMPLES, g_mag, g_scrollx);
+
+
+
+
+// Measures the number of samples between various transitions. Intended for VGA signal analysis.
+int measure(const uint32_t *buf) {
+    uart_my_puts("\nMeasuring...\n");
+
+
+    char pin = 2;
+    uint record_size_bits = bits_packed_per_word(g_no_of_captured_pins);
+
+    int i;
+
+    int green_start;
+
+    for (i = 0; i < g_capture_n_samples; i++) {
+        uint sample = get_channel_sample(buf, pin, g_no_of_captured_pins, i, record_size_bits);
+
+        if (sample) {
+            green_start = i;
+            uart_my_putcf("green_start: %d\n", green_start);
+            break;
+        }
+
+    }
+
+    int hsync_end;
+
+    pin = 0;
+
+    for (i = green_start; i >= 0; i--) {
+        uint sample = get_channel_sample(buf, pin, g_no_of_captured_pins, i, record_size_bits);
+
+        if (!sample) {
+            hsync_end = i + 1; // this sample is still high (we're going backwards)
+            uart_my_putcf("hsync_end: %d\n", hsync_end);
+            break;
+        }
+
+    }
+
+    uart_my_putcf("hsync_end..green_start: %d\n", green_start - (hsync_end + 0));
+
+    pin = 1; // vsync
+    // uint record_size_bits = bits_packed_per_word(CAPTURE_PIN_COUNT);
+
+    // int i;
+
+    // int p2;
+    int vsync_start;
+
+    for (i = 0; i < g_capture_n_samples; i++) {
+        uint sample = get_channel_sample(buf, pin, g_no_of_captured_pins, i, record_size_bits);
+
+        if (!sample) {
+            vsync_start = i;
+            uart_my_putcf("vsync_start: %d\n", vsync_start);
+            break;
+        }
+
+    }
+
+
+    int vsync_end;
+
+    for (i = vsync_start; i < g_capture_n_samples; i++) {
+        uint sample = (buf, pin, g_no_of_captured_pins, i, record_size_bits);
+
+        if (sample) {
+            vsync_end = i;
+            uart_my_putcf("vsync_end: %d\n", vsync_end);
+            break;
+        }
+
+    }
+
+    uart_my_putcf("vsync_start..vsync_end: %d\n", vsync_end - (vsync_start + 0));
+
+    pin = 0; // hsync
+
+    // int hsync_end;
+
+    for (i = vsync_end; i >= 0; i--) {
+        uint sample = get_channel_sample(buf, pin, g_no_of_captured_pins, i, record_size_bits);
+
+        if (!sample) {
+            hsync_end = i + 1;
+            uart_my_putcf("hsync_end: %d\n", hsync_end);
+            break;
+        }
+
+    }
+
+
+    uart_my_putcf("hsync_end..vsync_start: %d\n", vsync_end - (hsync_end + 0));
+
+    uart_my_putcf("vsync_end..green_start: %d\n", green_start - (vsync_end + 0));
+
+    pin = 0;
+
+/*
+    for (i = i; i >= 0; i--) {
+        uint bit_index = pin + i * CAPTURE_PIN_COUNT;
+        uint word_index = bit_index / record_size_bits;
+        // Data is left-justified in each FIFO entry, hence the (32 - record_size_bits) offset
+        uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
+
+        uint sample = buf[word_index] & word_mask ? 1 :0;
+
+        if (!sample) {
+            p0 = i; // this sample is still high (we're going backwards)
+            uart_my_putcf("previous pin 0 low: %d\n", p0);
+            break;
+        }
+
+    }
+*/
+
+    // uart_my_putcf("p0..p2: %d\n", p2 - (p0 + 1));
+    return 0;
+}
+
+
+// Finds the previous or next transition.
+int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next) {
+    // uart_my_puts("\nFinding transition...\n");
+
+    uint record_size_bits = bits_packed_per_word(g_no_of_captured_pins);
+
+    int i;
+
+    int green_start;
+
+    uint first_sample;
+
+    int next_sample = from_sample;
+
+
+    if (next) {
+
+        for (i = from_sample; i < g_capture_n_samples; i++) {
+            uint sample = get_channel_sample(buf, pin, g_no_of_captured_pins, i, record_size_bits);
+
+            if (i == from_sample) {
+                first_sample = sample;
+            }
+
+            if (sample != first_sample) {
+                next_sample = i;
+                // uart_my_putcf("next_sample: %d\n", next_sample);
+                break;
+            }
+
+        }
+
+    } else {
+
+        for (i = from_sample - 1; i >= 0; i--) {
+            uint sample = get_channel_sample(buf, pin, g_no_of_captured_pins, i, record_size_bits);
+
+            if (i == from_sample - 1) {
+                first_sample = sample;
+            }
+
+            if (sample != first_sample) {
+                next_sample = i + 1;
+                // uart_my_putcf("next_sample: %d\n", next_sample);
+                break;
+            }
+
+        }
+
+    }
+
+
+
+
+    return next_sample;
+}
+
+
+enum UI_COMMANDS {
+    UIC_NONE,
+    UIC_ANY,
+    UIC_LEFT,
+    UIC_RIGHT,
+    UIC_CTRL_LEFT,
+    UIC_CTRL_RIGHT,
+    UIC_HOME,
+    UIC_END,
+    UIC_EQUALS,
+    UIC_PLUS,
+    UIC_MINUS,
+    UIC_Z,
+    UIC_M,
+    UIC_C,
+    UIC_H,
+    UIC_A,
+
+    #if USE_DVI
+    UIC_V,
+    #if USE_DVI_DEBUG
+
+    UIC_D,
+    UIC_R,
+    UIC_S,
+
+    #endif
+#endif
+
+    UIC_SPACEBAR,
+    UIC_UP,
+    UIC_DOWN,
+    UIC_PAGE_UP,
+    UIC_PAGE_DOWN,
+    UIC_TAB,
+    UIC_SHIFT_TAB,
+    UIC_ESC,
+    UIC_UPPER_S,
+
+    UIC_CTRL_P,
+
+    UIC_SHIFT_COMMA,
+    UIC_SHIFT_FULL_STOP,
+
+    UIC_0,
+    UIC_1,
+    UIC_2,
+    UIC_3,
+    UIC_4,
+    UIC_5,
+    UIC_6,
+    UIC_7,
+    UIC_8,
+    UIC_9,
+
+    UIC_F1,
+
+};
+
+
+void draw_hint(char *s) {
+    fillRect(STATUSBAR_HINT_LEFT, STATUSBAR_TOP, STATUSBAR_HINT_WIDTH, STATUSBAR_HEIGHT, STATUSBAR_HINT_COLOR);
+    setCursor(STATUSBAR_HINT_LEFT, STATUSBAR_TOP + STATUSBAR_TEXT_PADDING);
+    setTextColor(WHITE);
+    setTextSize(1);
+    writeString(s);
+}
+
+
+void draw_setting_helper(uint left, uint8_t label_len, uint8_t str_len) {
+    fillRect(left + (FONT_WIDTH * label_len), TOOLBAR_TOP, (FONT_WIDTH * str_len), FONT_HEIGHT + 1, TOOLBAR_COLOR);
+    setCursor(left + (FONT_WIDTH * label_len), TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    setTextColor(WHITE);
+    setTextSize(1);
+}
+
+
+void draw_channel_no() {
+    draw_setting_helper(CHANNEL_NO_LEFT, CHANNEL_NO_LABEL_CHARS, CHANNEL_NO_INPUT_CHARS);
+    if (settings_state == SS_CHANNEL) {
+        uart_my_putcf("ch: %d\n", g_channel);
+        setTextColor2(TOOLBAR_COLOR, WHITE);
+    }
+    write_intf(" %d ", g_channel);
+}
+
+
+void draw_palette() {
+    unsigned char palettes[CT_COUNT][7] = {" JJ ", " VGA ", " GRN ", " RSP "};
+    draw_setting_helper(PALETTE_LEFT, PALETTE_LABEL_CHARS, PALETTE_INPUT_CHARS);
+    if (settings_state == SS_PALETTE) {
+        setTextColor2(TOOLBAR_COLOR, WHITE);
+        uart_my_puts("palette:");
+        uart_my_puts(palettes[g_palette]);
+        uart_my_puts("\n");
+    }
+    writeString(palettes[g_palette]);
+}
+
+
+void draw_magnification() {
+    draw_setting_helper(MAG_LEFT, MAG_LABEL_CHARS, MAG_INPUT_CHARS);
+    if (settings_state == SS_ZOOM) {
+        setTextColor2(TOOLBAR_COLOR, WHITE);
+        uart_my_puts("zoom: ");
+        if (g_mag < 0) {
+            uart_my_putcf("1:%d\n", abs(g_mag - 1));
+        } else {
+            uart_my_putcf("%d:1\n", abs(g_mag + 1));
+        }
+    }
+    if (g_mag < 0) {
+        write_intf(" 1:%d ", abs(g_mag - 1));
+    } else {
+        write_intf(" %d:1 ", g_mag + 1);
+    }
+}
+
+
+void draw_no_of_pins() {
+    draw_setting_helper(NO_OF_PINS_LEFT, NO_OF_PINS_LABEL_CHARS, NO_OF_PINS_INPUT_CHARS);
+    if (settings_state == SS_NO_OF_PINS) {
+        setTextColor2(TOOLBAR_COLOR, WHITE);
+        uart_my_putcf("pins: %d\n", g_no_of_pins_to_capture);
+    }
+    write_intf(" %d ", g_no_of_pins_to_capture);
+}
+
+
+void draw_pins_base() {
+    draw_setting_helper(PINS_BASE_LEFT, PINS_BASE_LABEL_CHARS, PINS_BASE_INPUT_CHARS);
+    if (settings_state == SS_PINS_BASE) {
+        setTextColor2(TOOLBAR_COLOR, WHITE);
+        uart_my_putcf("base: %d\n", g_pins_base);
+    }
+    write_intf(" GP%d ", g_pins_base);
+}
+
+
+void draw_sample_frequency() {
+    draw_setting_helper(FREQ_LEFT, FREQ_LABEL_CHARS, FREQ_INPUT_CHARS);
+    if (settings_state == SS_FREQ) {
+        setTextColor2(TOOLBAR_COLOR, WHITE);
+        uart_my_putcf("fdiv: %d\n", g_sample_frequency);
+    }
+    write_intf(" %d ", g_sample_frequency);
+}
+
+
+void draw_trigger_pin_base() {
+    draw_setting_helper(TRIGGER_BASE_LEFT, TRIGGER_BASE_LABEL_CHARS, TRIGGER_BASE_INPUT_CHARS);
+    if (settings_state == SS_TRIGGER_PIN_BASE) {
+        setTextColor2(TOOLBAR_COLOR, WHITE);
+        uart_my_putcf("tpin: %d\n", g_trigger_pin_base);
+    }
+    write_intf(" GP%d ", g_trigger_pin_base);
+}
+
+
+void draw_trigger_type() {
+
+// enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FALLING_EDGE, TT_ANY_EDGE, TT_VGA_VSYNC, TT_VGA_RGB, TT_VGA_VFRONT_PORCH, TT_COUNT};
+
+    unsigned char tt_chars[TT_COUNT][8] = {" NONE ", " LOW ", " HIGH ", " RISE ", " FALL ", " EDGE ", " VSYNC ", " RGB ", " VFPOR ", " CSYNC ",  " CRGB ", " CFPOR "};
+    draw_setting_helper(TRIGGER_TYPE_LEFT, TRIGGER_TYPE_LABEL_CHARS, TRIGGER_TYPE_INPUT_CHARS);
+    if (settings_state == SS_TRIGGER_TYPE) {
+        setTextColor2(TOOLBAR_COLOR, WHITE);
+        uart_my_puts("ttype:");
+        uart_my_puts(tt_chars[g_trigger_type]);
+        uart_my_puts("\n");
+    }
+    writeString(tt_chars[g_trigger_type]);
+}
+
+
+void draw_settings() {
+    draw_channel_no();
+    draw_palette();
+    draw_magnification();
+    draw_sample_frequency();
+    draw_no_of_pins();
+    draw_pins_base();
+    draw_trigger_pin_base();
+    draw_trigger_type();
+}
+
+
+void draw_titlebar() {
+    // fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    fillRect(TITLEBAR_LEFT, TITLEBAR_TOP, TITLEBAR_WIDTH, TITLEBAR_HEIGHT, BLACK);
+    setTextColor(WHITE);
+    setCursor(TITLEBAR_LEFT + ((TITLEBAR_WIDTH - (6 * FONT_WIDTH)) / 2), TITLEBAR_TOP + 1);
+    setTextSize(1);
+    // writeString("palavo");
+}
+
+
+void draw_toolbar() {
+    // fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_WIDTH, TOOLBAR_HEIGHT, BLACK);
+    setTextColor(WHITE);
+    setTextSize(1);
+    
+    setCursor(CHANNEL_NO_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    writeString(channel_text);
+
+    setCursor(PALETTE_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    writeString(palette_text);
+    
+    setCursor(MAG_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    writeString(mag_text);
+    
+    setCursor(FREQ_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    writeString(freq_text);
+
+    setCursor(PINS_BASE_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    writeString(base_text);
+
+    setCursor(NO_OF_PINS_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    writeString(pins_text);
+
+    setCursor(TRIGGER_BASE_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    writeString(trigger_text);
+   
+    setCursor(TRIGGER_TYPE_LEFT, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    writeString(trigger_type);
+
+    draw_settings();
+}
+
+
+void set_toolbar_text() {
+    setCursor(TOOLBAR_LEFT + TOOLBAR_TEXT_PADDING, TOOLBAR_TOP + TOOLBAR_TEXT_PADDING);
+    setTextColor(WHITE);
+    setTextSize(1);
+}
+
+
+void clear_toolbar_hint() {
+    set_toolbar_text();
+    // fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_HINT_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_COLOR);
+    fillRect(TOOLBAR_LEFT, TOOLBAR_TOP, TOOLBAR_HINT_WIDTH, TOOLBAR_HEIGHT, BLACK);
+    setCursor(2, SCREEN_HEIGHT - 1 - 8);
+    setTextColor(WHITE);
+    setTextSize(1);
+}
+
+
+void draw_statusbar() {
+    fillRect(STATUSBAR_LEFT, STATUSBAR_TOP, STATUSBAR_WIDTH, STATUSBAR_HEIGHT, STATUSBAR_COLOR);
+    // draw_settings();
+}
+
+
+void set_statusbar_text() {
+    setCursor(STATUSBAR_LEFT + STATUSBAR_TEXT_PADDING, STATUSBAR_TOP + STATUSBAR_TEXT_PADDING);
+    setTextColor(WHITE);
+    setTextSize(1);
+}
+
+
+void clear_statusbar_hint() {
+    // set_statusbar_text();
+    fillRect(STATUSBAR_HINT_LEFT, STATUSBAR_TOP, STATUSBAR_HINT_WIDTH, STATUSBAR_HEIGHT, STATUSBAR_HINT_COLOR);
+    setCursor(STATUSBAR_HINT_LEFT, STATUSBAR_TOP + STATUSBAR_TEXT_PADDING);
+    setTextColor(WHITE);
+    setTextSize(1);
+}
+
+
+void clear_statusbar_info() {
+    fillRect(STATUSBAR_INFO_LEFT, STATUSBAR_TOP, STATUSBAR_INFO_WIDTH, STATUSBAR_HEIGHT, STATUSBAR_INFO_COLOR);
+    // draw_settings();
+    // setCursor(STATUSBAR_INFO_LEFT + 1, SCREEN_HEIGHT - 1 - 8);
+    setTextColor(WHITE);
+    setTextSize(1);
+}
+
+
+void clear_screen() {
+    fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
+}
+
+
+uint check_keyboard() {
+
+    uint ui_command = UIC_NONE;
+
+#if !USE_STDIO_UART
+    if ((last_uart_char == 27) || uart_is_readable(UART_ID)) {
+#else
+    int uart_int = stdio_getchar_timeout_us(0);
+    if ((last_uart_char == 27) || (uart_int != PICO_ERROR_TIMEOUT)) {
+#endif
+        ui_command = UIC_ANY;
+
+        // set_statusbar_text();
+        // fillRect(1, SCREEN_HEIGHT - 1 - 8, SCREEN_WIDTH - 2, 8, BLUE);
+        // setCursor(2, SCREEN_HEIGHT - 1 - 8);
+        // setTextColor(WHITE);
+        // setTextSize(1);
+
+        uint8_t ch = last_uart_char;
+
+        if (ch != 27) {
+#if !USE_STDIO_UART
+            ch = uart_getc(UART_ID);
+#else
+            ch = uart_int;            
+#endif
+            last_uart_char = ch;
+        }
+
+        char str[80];
+        if (ch != CTRL_P) {
+            // not ctrl-p
+            clear_statusbar_hint();
+            sprintf(str,"%d ", ch);
+            // itoa(ch, str, 10);
+            writeString(str);
+        }
+
+        #define ESCAPE_SEQ_LEN 80
+        uint8_t escape_seq[ESCAPE_SEQ_LEN + 1];
+        escape_seq[0] = 0;
+
+        // char str[80];
+        // sprintf(str,"%d ", ch);
+        // itoa(ch, str, 10);
+        // writeString(str);
+        // if (uart_is_writable(UART_ID)) {
+        //     uart_putc(UART_ID, ch);
+        // }
+
+
+        if (ch == 27 /* ESC */) {
+            ch = 0;
+            uint8_t noofchars = 0;
+
+            // Wait up to 2 byte times, which is (2 * 10 * 1,000,000) / 115,200 = 1737 uS.
+            // This had me confused for ages. It seemed to make no difference whether
+            // the "us" parameter was 1 or 1800. Turns out that pressing the Esc
+            // key in minicom (serial terminal) has a little delay before it is transmitted
+            // unlike any other key. Thank goodness for LEDs on the debug probe.
+#if !USE_STDIO_UART
+            while (uart_is_readable_within_us(UART_ID, 1800)) {
+            ch = uart_getc(UART_ID);
+#else
+            int new_uart_int;
+            while ((new_uart_int = stdio_getchar_timeout_us(1800)) != PICO_ERROR_TIMEOUT) {
+                ch = new_uart_int;
+ #endif
+                last_uart_char = ch;
+
+                if (ch == 27 /* ESC */) {
+                    break;
+
+                } else {
+
+                    // possibly build up string here for testing later?
+                    if (noofchars < ESCAPE_SEQ_LEN){
+                        escape_seq[noofchars] = ch;
+                        escape_seq[noofchars + 1] = 0;
+                    }
+                    noofchars += 1;
+
+                    sprintf(str,"%d ", ch);
+                    // itoa(ch, str, 10);
+                    writeString(str);
+                    // if (uart_is_writable(UART_ID)) {
+                    //     uart_putc(UART_ID, ch);
+                    // }
+                }
+            }
+
+            if (strlen(escape_seq) == 0) {
+                // Must have been caused by a single Esc key press
+                // writeString("esc");
+                last_uart_char = 0;
+                ui_command = UIC_ESC;
+            } else {
+                writeString(escape_seq);
+                writeString(" ");
+            }
+
+            if (strlen(escape_seq) == 2) {
+                if (escape_seq[0] == '[') {
+                    switch (escape_seq[1]) {
+                        case 'A':
+                            ui_command = UIC_UP;
+                            break;
+                        case 'B':
+                            ui_command = UIC_DOWN;
+                            break;
+                        case 'C':
+                            ui_command = UIC_RIGHT;
+                            break;
+                        case 'D':
+                            ui_command = UIC_LEFT;
+                            break;
+                        case 'Z':
+                            ui_command = UIC_SHIFT_TAB;
+                            break;
+
+                        default:
+                            break;
+                    }
+                } else if (escape_seq[0] == 'O') {
+                    switch (escape_seq[1]) {
+                        case 'F':
+                            ui_command = UIC_END;
+                            break;
+                        case 'P':
+                            ui_command = UIC_F1;
+                            break;
+
+                        default:
+                            break;
+                    }
+                }
+            } else if (strlen(escape_seq) == 3) {
+                if (escape_seq[2] == '~') {
+
+                    switch (escape_seq[1]) {
+                        case '1':
+                            ui_command = UIC_HOME;
+                            break;
+                        case '5':
+                            ui_command = UIC_PAGE_UP;
+                            break;
+                        case '6':
+                            ui_command = UIC_PAGE_DOWN;
+                            break;
+
+                        default:
+                            break;
+                    }
+                }
+            } else if (strlen(escape_seq) == 5) {
+                if (strcmp(escape_seq, "[1;5D") == 0) {
+                        ui_command = UIC_CTRL_LEFT;
+
+                } else if (strcmp(escape_seq, "[1;5C") == 0) {
+                    ui_command = UIC_CTRL_RIGHT;
+                }
+            }
+
+         } else {
+            switch (ch) {
+
+                case ' ':
+                    ui_command = UIC_SPACEBAR;
+                    break;
+
+                case '-':
+                    ui_command = UIC_MINUS;
+                    break;
+
+                case '+' :
+                    ui_command = UIC_PLUS;
+                    break;
+
+                case '=':
+                    ui_command = UIC_EQUALS;
+                    break;
+
+                case 'c':
+                    ui_command = UIC_C;
+                    break;
+
+                case 'z':
+                    ui_command = UIC_Z;
+                    break;
+
+                case 'm':
+                    ui_command = UIC_M;
+                    break;
+
+                case 'h':
+                    ui_command = UIC_H;
+                    break;
+
+                case 'a':
+                    ui_command = UIC_A;
+                    break;
+
+#if USE_DVI
+                case 'v':
+                    ui_command = UIC_V;
+                    break;
+
+    #if USE_DVI_DEBUG
+
+                case 'd':
+                    ui_command = UIC_D;
+                    break;
+
+                case 'r':
+                    ui_command = UIC_R;
+                    break;
+
+                case 's':
+                    ui_command = UIC_S;
+                    break;
+
+    #endif
+
+#endif
+
+                case '\t':
+                    ui_command = UIC_TAB;
+                    break;
+
+                case 'S':
+                    ui_command = UIC_UPPER_S;
+                    break;
+
+                case '<':
+                    ui_command = UIC_SHIFT_COMMA;
+                    break;
+
+                case '>':
+                    ui_command = UIC_SHIFT_FULL_STOP;
+                    break;
+
+                case CTRL_P:
+                    ui_command = UIC_CTRL_P;
+                    break;
+
+                case '0':
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9':
+                    ui_command = UIC_0 + ch - '0';
+                    break;
+
+            }
+         }
+    }
+    return ui_command;
+}
+
+
+void draw_minimap_indicator() {
+
+    static int prev_mini_x = 0;
+    static int prev_mini_w = 0;
+
+    int mini_x = (g_scrollx * SCREEN_WIDTH) / g_capture_n_samples;
+    int mini_w = (mag_factor(SCREEN_WIDTH * SCREEN_WIDTH) / g_capture_n_samples) + 1; // add one to round up and/or ensure a visible indicator
+
+    uint y = get_minimap_scrollbar_top();
+
+    fillRect(prev_mini_x, y, prev_mini_w, MINIMAP_SCROLLBAR_HEIGHT, BLACK);
+    fillRect(mini_x, y, mini_w, MINIMAP_SCROLLBAR_HEIGHT, WHITE);
+
+    prev_mini_x = mini_x;
+    prev_mini_w = mini_w;
+
+    // uart_my_putcf("mini_x: %d; ", mini_x);
+    // uart_my_putcf("mini_w: %d\n", mini_w);
+}
+
+
+void draw_statusbar_info(){
+    char str[80];
+    clear_statusbar_info();
+    // write_intf("x:%d ", g_scrollx);
+    // write_intf("was:%d ", g_prev_scrollx);
+    // write_intf("diff:%d", g_scrollx - g_prev_scrollx);
+
+    // int diff = g_scrollx - g_prev_scrollx;
+
+    sprintf(str, "x:%d prev:%d diff:%d", g_scrollx, g_prev_scrollx, g_scrollx - g_prev_scrollx);
+    setCursor(STATUSBAR_INFO_RIGHT - (strlen(str) * FONT_WIDTH), STATUSBAR_TOP + STATUSBAR_TEXT_PADDING);
+    writeString(str);
+}
+
+
+bool set_scroll_x(int x) {
+    bool changed = x != g_scrollx;
+    if (changed) {
+        g_scrollx = x;
+        draw_statusbar_info();
+        g_prev_scrollx = x;
+    }
+    draw_minimap_indicator();
+    return changed;
+}
+
+
+bool set_mag(int mag) {
+    bool changed = mag != g_mag;
+    if (changed) {
+        g_mag = mag;
+        draw_magnification();
+        draw_minimap_indicator();
+    }
+    return changed;
+}
+
+
+void set_channel (uint8_t ch) {
+    if (g_channel != ch) {
+        g_channel = ch;
+        draw_channel_no();
+    }
+}
+
+
+void set_palette (uint8_t colours) {
+    if (g_palette != colours) {
+        g_palette = colours;
+        draw_palette();
+        change_plot_line_colour_palette(g_palette);
+        set_plot_line_colors(g_no_of_captured_pins);
+    }
+}
+
+
+void set_sample_frequency(uint f) {
+    if (g_sample_frequency != f) {
+        g_sample_frequency = f;
+        draw_sample_frequency();
+    }
+}
+
+
+void set_no_of_pins(uint8_t no_of_pins) {
+    if (g_no_of_pins_to_capture != no_of_pins) {
+        g_no_of_pins_to_capture = no_of_pins;
+        draw_no_of_pins();
+    }
+}
+
+
+void set_pins_base(uint8_t pins_base) {
+    if (g_pins_base != pins_base) {
+        g_pins_base = pins_base;
+        draw_pins_base();
+    }
+}
+
+
+void set_trigger_pin_base(uint8_t trigger_pin_base) {
+    if (g_trigger_pin_base != trigger_pin_base) {
+        g_trigger_pin_base = trigger_pin_base;
+        draw_trigger_pin_base();
+    }
+}
+
+
+void set_trigger_type(uint8_t trigger_type) {
+    if (g_trigger_type != trigger_type) {
+        g_trigger_type = trigger_type;
+        draw_trigger_type();
+    }
+}
+
+
+void draw_setting(uint8_t setting) {
+    switch (setting) {
+        case SS_CHANNEL:
+            draw_channel_no();
+            break;
+
+        case SS_PALETTE:
+            draw_palette();
+            break;
+
+        case SS_FREQ:
+            draw_sample_frequency();
+            break;
+
+        case SS_NO_OF_PINS:
+            draw_no_of_pins();
+            break;
+
+        case SS_PINS_BASE:
+            draw_pins_base();
+            break;
+
+        case SS_TRIGGER_PIN_BASE:
+            draw_trigger_pin_base();
+            break;
+
+        case SS_TRIGGER_TYPE:
+            draw_trigger_type();
+            break;
+
+        case SS_ZOOM:
+            draw_magnification();
+            break;
+    }
+    // if (setting == settings_state) {
+    //     draw_hint("Press UP / DOWN to increase / decrease the selected setting.");
+    // }
+}
+
+
+void set_settings_state(uint8_t state) {
+    uint8_t previous_state = settings_state;
+    settings_state = state;
+    draw_setting(previous_state);
+    draw_setting(settings_state);
+    
+    // draw_settings();
+
+    // draw a line under, or something, under the appropriate item in the toolbar
+    // the one that now will respond to the up and down keys
+    // uart_my_putcf("State: %d\n", settings_state);
+}
+
+
+char* help_strings =
+    "HELP\n"
+    "\n"
+    "LEFT / RIGHT to scroll one sample period left / right\n"
+    "CTRL-LEFT / CTRL-RIGHT to scroll to previous / next edge\n"
+    "  on the selected channel (ch)\n"
+    "< / > to scroll to previous / next edge but one\n"
+    "PGUP / PGDN to scroll one page left / right\n"
+    "HOME / END to scroll to the beginning / end\n"
+    "\n"
+    "TAB / SHIFT-TAB to select the next / previous setting\n"
+    "UP / DOWN to increase / decrease the selected setting\n"
+    "0..9 to set the selected numeric setting\n" 
+    "c to capture a sample using the settings\n"
+    "+ / - / = / z to zoom in / out / to 1:1 / to fit width\n"
+    // "m to measure VGA timings\n"
+    "h or F1 to show this help window\n"
+    "a to show the about window\n"
+    "S to start the screensaver\n"
+    "CTRL-P to upload the framebuffer using xmodem\n"
+
+#if USE_DVI
+    "v to cycle DVI modes: mirror VGA out -> test -> VGA in\n"
+#else
+    "\n"
+#endif
+
+    "\n";
+
+char* press_any_key_string = 
+    "Press any key to close this window\n";
+
+
+bool showing_window = false;
+
+#define HELP_WINDOW_PADDING 2
+#define HELP_WINDOW_WIDTH (56 + 2) * FONT_WIDTH
+#define HELP_WINDOW_HEIGHT (21 + 2) * (FONT_HEIGHT + HELP_WINDOW_PADDING)
+#define HELP_WINDOW_TOP (SCREEN_HEIGHT - HELP_WINDOW_HEIGHT) / 2
+#define HELP_WINDOW_LEFT (SCREEN_WIDTH - HELP_WINDOW_WIDTH) / 2 
+
+
+void show_help_window() {
+    fillRect(HELP_WINDOW_LEFT, HELP_WINDOW_TOP, HELP_WINDOW_WIDTH, HELP_WINDOW_HEIGHT, LIGHT_BLUE);
+
+    for (int y = 0; y <= SCREEN_HEIGHT; y++) {
+        set_line_colors(y, BLACK, WHITE, 0, 0);
+    }
+
+    setTextSize(1);
+    setTextColor(BLACK);
+    setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + FONT_HEIGHT + HELP_WINDOW_PADDING);
+    set_text_padding(HELP_WINDOW_PADDING);
+    writeString(help_strings);
+    writeString(press_any_key_string);
+
+    uart_my_puts("\n");
+    uart_my_puts(help_strings);
+    uart_my_puts(press_any_key_string);
+    uart_my_puts("\n\n");
+
+    showing_window = true;
+}
+
+
+void logo(int x, int y, bool use_fore_col) {
+
+    #define LOGO_THICKNESS 4
+    #define LOGO_WIDTH 16
+    // #define LOGO_HEIGHT
+
+    // bool back_col = colour 
+
+    void logo_o(int x, int y) {
+        fillCircle(x + (LOGO_WIDTH / 2), y + (LOGO_WIDTH / 2) + 4 - 1, 8, use_fore_col);
+        fillCircle(x + (LOGO_WIDTH / 2), y + (LOGO_WIDTH / 2) + 4 - 1, 8 - LOGO_THICKNESS, !use_fore_col);
+    }
+
+    void logo_a(int x, int y) {
+        logo_o(x, y);
+        fillRect(x + LOGO_WIDTH - LOGO_THICKNESS + 1, y + (LOGO_WIDTH / 2) + 4 - 1, LOGO_THICKNESS, 9, use_fore_col);
+    }
+
+    // p
+
+    logo_o(x, y);
+    fillRect(x, y + (LOGO_WIDTH / 2) + 4 - 1, LOGO_THICKNESS, 12, use_fore_col);
+
+    // x is 61
+
+    x += 16;
+
+    // x is 77
+
+
+    // a
+    logo_a(x + 3, y);
+    x += 3 + 16;
+
+    // x is 96
+
+    // l
+    // fillRect(x + 4, y - 7 - 4, LOGO_THICKNESS, 20, use_fore_col);
+    fillRect(x + 4, y, LOGO_THICKNESS, 20, use_fore_col);
+
+    x += 4;
+
+    // x is 100
+
+    // t
+    // fillRect(96 + 8 + 1, 20 - 7 - 4, 4, 20, WHITE);
+    // fillRect(96 + 8 + 1 + 4, 20 - 7 , 4, 4, WHITE);
+
+    // a
+
+    logo_a(x + 6, y);
+
+    x += 6 + 16;
+
+    // x is 122
+
+    // v
+
+    for (int i = 0; i < LOGO_THICKNESS; i++) {
+        // drawLine(O_X + V_SHIFT_X + 10 + i, LOGO_Y_CENTRE - 8, O_X + V_SHIFT_X + 16 + i, LOGO_Y_CENTRE + 8, WHITE);
+        // drawLine(x + 1 + i, y - 8, x + 1 + 6 + i, y + 8, use_fore_col);
+        drawLine(x + 1 + i, y + 3, x + 1 + 6 + i, y + 3 + 16, use_fore_col);
+        // drawLine(O_X + V_SHIFT_X + 10 + 12 + i, LOGO_Y_CENTRE - 8, O_X + V_SHIFT_X + 16 + i, LOGO_Y_CENTRE + 8, WHITE);
+        // drawLine(x + 1 + 12 + i, y - 8, x + 1 + 6 + i, y + 8, use_fore_col);
+        drawLine(x + 1 + 12 + i, y + 3, x + 1 + 6 + i, y + 3 + 16, use_fore_col);
+    }
+
+    x += 1 + 12; 
+
+    // x is 135
+
+    // o
+    logo_o(x + 2 + 2, y);
+
+}
+
+
+
+void logo_small(int x, int y, bool use_fore_col) {
+
+    #define LOGO_SMALL_THICKNESS 2
+    #define LOGO_SMALL_WIDTH 8
+
+    #define LOGO_SMALL_DIAMETER 4
+
+
+
+    // #define LOGO_HEIGHT
+
+    // bool back_col = colour 
+
+    void logo_o(int x, int y) {
+        fillCircle(x + (LOGO_SMALL_WIDTH / 2), y + (LOGO_SMALL_WIDTH / 2) + 2 - 1, LOGO_SMALL_DIAMETER, use_fore_col);
+        fillCircle(x + (LOGO_SMALL_WIDTH / 2), y + (LOGO_SMALL_WIDTH / 2) + 2 - 1, LOGO_SMALL_DIAMETER - LOGO_SMALL_THICKNESS, !use_fore_col);
+    }
+
+    void logo_a(int x, int y) {
+        logo_o(x, y);
+        fillRect(x + LOGO_SMALL_WIDTH - LOGO_SMALL_THICKNESS + 1, y + (LOGO_SMALL_WIDTH / 2) + 2 - 1, LOGO_SMALL_THICKNESS, LOGO_SMALL_DIAMETER + 1, use_fore_col);
+    }
+
+    // p
+
+    logo_o(x, y);
+    fillRect(x, y + (LOGO_SMALL_WIDTH / 2) + 2 - 1, LOGO_SMALL_THICKNESS, LOGO_SMALL_DIAMETER + 1 + 2, use_fore_col);
+
+    // x is 61
+
+    x += 7;
+
+    // x is 77
+
+
+    // a
+    logo_a(x + 3, y);
+    x += 2 + 8;
+
+    // x is 96
+
+    // l
+    // fillRect(x + 4, y - 7 - 4, LOGO_SMALL_THICKNESS, 20, use_fore_col);
+    fillRect(x + 4, y, LOGO_SMALL_THICKNESS, LOGO_SMALL_WIDTH + 2, use_fore_col);
+
+    x += 7;
+
+    // x is 100
+
+    // t
+    // fillRect(96 + 8 + 1, 20 - 7 - 4, 4, 20, WHITE);
+    // fillRect(96 + 8 + 1 + 4, 20 - 7 , 4, 4, WHITE);
+
+    // a
+
+    logo_a(x, y);
+
+    x += 8;
+
+    // x is 122
+
+    // v
+
+    for (int i = 0; i < LOGO_SMALL_THICKNESS; i++) {
+        // drawLine(O_X + V_SHIFT_X + 10 + i, LOGO_Y_CENTRE - 8, O_X + V_SHIFT_X + 16 + i, LOGO_Y_CENTRE + 8, WHITE);
+        // drawLine(x + 1 + i, y - 8, x + 1 + 6 + i, y + 8, use_fore_col);
+        drawLine(x + 1 + i, y + 1, x + 1 + 3 + i, y + 1 + 8, use_fore_col);
+        // drawLine(O_X + V_SHIFT_X + 10 + 12 + i, LOGO_Y_CENTRE - 8, O_X + V_SHIFT_X + 16 + i, LOGO_Y_CENTRE + 8, WHITE);
+        // drawLine(x + 1 + 12 + i, y - 8, x + 1 + 6 + i, y + 8, use_fore_col);
+        drawLine(x + 1 + 6 + i, y + 1, x + 1 + 3 + i, y + 1 + 8, use_fore_col);
+    }
+
+    x += 6 - 1; 
+
+    // x is 135
+
+    // o
+    logo_o(x + 2 + 2, y);
+
+}
+
+
+
+void logo_med(int x, int y, bool use_fore_col) {
+
+    
+    #define LOGO_MED_ASC 3
+    #define LOGO_MED_DES 3
+    
+    #define LOGO_MED_THICKNESS 4
+    #define LOGO_MED_WIDTH 14
+
+    #define LOGO_MED_RADIUS 7
+
+
+
+    // #define LOGO_HEIGHT
+
+    // bool back_col = colour 
+
+    void logo_o(int x, int y) {
+        fillCircle(x + LOGO_MED_RADIUS, y + LOGO_MED_ASC + LOGO_MED_RADIUS - 1, LOGO_MED_RADIUS, use_fore_col);
+        fillCircle(x + LOGO_MED_RADIUS, y + LOGO_MED_ASC + LOGO_MED_RADIUS - 1, LOGO_MED_RADIUS - LOGO_MED_THICKNESS, !use_fore_col);
+    }
+
+    void logo_a(int x, int y) {
+        logo_o(x, y);
+        fillRect(x + LOGO_MED_WIDTH - LOGO_MED_THICKNESS + 1, y + LOGO_MED_ASC + LOGO_MED_RADIUS, LOGO_MED_THICKNESS, LOGO_MED_RADIUS, use_fore_col);
+    }
+
+    // p
+
+    logo_o(x, y);
+    fillRect(x, y + LOGO_MED_ASC + LOGO_MED_RADIUS, LOGO_MED_THICKNESS, LOGO_MED_RADIUS + LOGO_MED_DES, use_fore_col);
+
+    // x is 61
+
+    x += 7 + 7 + 3;
+
+    // x is 77
+
+
+    // a
+    logo_a(x, y);
+    x += LOGO_MED_WIDTH + 4;
+
+    // x is 96
+
+    // l
+    // fillRect(x + 4, y - 7 - 4, LOGO_MED_THICKNESS, 20, use_fore_col);
+    fillRect(x, y, LOGO_MED_THICKNESS, LOGO_MED_ASC + LOGO_MED_WIDTH, use_fore_col);
+
+    x += LOGO_MED_THICKNESS + 2;
+
+    // x is 100
+
+    // t
+    // fillRect(96 + 8 + 1, 20 - 7 - 4, 4, 20, WHITE);
+    // fillRect(96 + 8 + 1 + 4, 20 - 7 , 4, 4, WHITE);
+
+    // a
+
+    logo_a(x, y);
+
+    x += (LOGO_MED_WIDTH) + 1;
+
+    // x is 122
+
+    // v
+
+    for (int i = 0; i < LOGO_MED_THICKNESS; i++) {
+        // drawLine(O_X + V_SHIFT_X + 10 + i, LOGO_Y_CENTRE - 8, O_X + V_SHIFT_X + 16 + i, LOGO_Y_CENTRE + 8, WHITE);
+        // drawLine(x + 1 + i, y - 8, x + 1 + 6 + i, y + 8, use_fore_col);
+        drawLine(x + i, y + LOGO_MED_ASC - 1, x + 5 + i, y + LOGO_MED_ASC - 1 + (LOGO_MED_WIDTH), use_fore_col);
+        // drawLine(O_X + V_SHIFT_X + 10 + 12 + i, LOGO_Y_CENTRE - 8, O_X + V_SHIFT_X + 16 + i, LOGO_Y_CENTRE + 8, WHITE);
+        // drawLine(x + 1 + 12 + i, y - 8, x + 1 + 6 + i, y + 8, use_fore_col);
+        drawLine(x + 10 + i, y + LOGO_MED_ASC - 1, x + 5 + i, y + LOGO_MED_ASC - 1 + (LOGO_MED_WIDTH), use_fore_col);
+    }
+
+    x += 6 + 1 + 7; 
+
+    // x is 135
+
+    // o
+    logo_o(x, y);
+
+}
+
+
+char* about_name_str = 
+    "\n"
+    "PALAVO\n"
+    "\n";
+
+char* about_description_str =
+    "PIO-Assisted Logic Analyser with VGA Output\n"
+    "Version: " STR(VERSION_MAJOR) "." STR(VERSION_MINOR) "." STR(VERSION_PATCH) "\n"
+    "\n"
+    "Developed by Peter Stansfeld.\n"
+    "\n"
+    "Inspired by and using code from:\n"
+
+#if !USE_DVI
+    "\n"
+#endif
+
+    "* Raspberry Pi's Logic Analyser example for the Pico.\n"
+
+#if !USE_DVI
+    "\n"
+#endif
+
+    "* Hunter Adams's VGA Graphics Primitives demo, which\n"
+    "  uses his VGA Driver for the RP2040 with\n"
+    "  Bruce Land's 4-bit mod.\n"
+
+#if USE_DVI
+    "* Raspberry Pi's DVI Out HSTX Encoder example for the\n"
+    "  Pico 2.\n"
+#endif
+
+    "\n";
+
+void show_about_info(bool on_window) {
+
+    char about_platform_str[128];
+    sprintf(about_platform_str, "Board: %s\nClock: %d MHz\nConfig: %d\n\n", PICO_BOARD, SYS_CLK_HZ / 1000000, PALAVO_CONFIG);
+
+    if (on_window) {
+        for (int y = 0; y <= SCREEN_HEIGHT; y++) {
+            set_line_colors(y, BLACK, WHITE, 0, 0);
+        }
+
+        fillRect(HELP_WINDOW_LEFT, HELP_WINDOW_TOP, HELP_WINDOW_WIDTH, HELP_WINDOW_HEIGHT, LIGHT_BLUE);
+        logo_med(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + 20 - 11, false);
+        setTextSize(1);
+        setTextColor(BLACK);
+        setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + 20 + 8 + 4 + 4 + 4);
+        set_text_padding(HELP_WINDOW_PADDING);
+
+        writeString(about_description_str);
+        writeString(about_platform_str);
+        writeString(press_any_key_string);
+    }
+
+    uart_my_puts(about_name_str);
+    uart_my_puts(about_description_str);
+    uart_my_puts(about_platform_str);
+    if (on_window) {
+        uart_my_puts(press_any_key_string);
+    }
+    uart_my_puts("\n\n\n");
+}
+
+
+void show_about_window() {
+    show_about_info(true);
+    showing_window = true;
+}
+
+
+// Sets all line colours to `fore_colour` on `back_colour`
+void set_all_line_colours(uint8_t fore_colour, uint8_t back_colour) {
+    for (int y = 0; y < SCREEN_HEIGHT; y++) {
+        set_line_colors(y, back_colour, fore_colour, WHITE, LIGHT_BLUE);
+    }
+}
+
+
+// Sets all line colours to `WHITE` on `BLACK`
+void init_line_colours() {
+    /*
+    for (int y = 0; y < SCREEN_HEIGHT; y++) {
+        // vga_1bit_data_array[y * WORDS_PER_LINE] = (((BLUE << 4) | (y & 0x0f)) << 16) | (639);
+        char fore_colour;
+        char back_colour;
+        
+        if (((y >= 0) && (y <= TOOLBAR_TOP + TOOLBAR_HEIGHT)) || (y >= STATUSBAR_TOP)) {
+            fore_colour = WHITE;
+            back_colour = BLACK;
+            
+        } else {
+            fore_colour = WHITE;
+            back_colour = BLACK;
+        }
+
+        // vga_1bit_data_array[y * WORDS_PER_LINE] = (((fore_colour << 4) | (back_colour)) << 16) | (639);
+        set_line_colors(y, back_colour, fore_colour, WHITE, LIGHT_BLUE);
+    }
+
+    */
+
+    set_all_line_colours(WHITE, BLACK);
+}
+
+#if USE_DVI
+
+void mirror_VGA_data_to_DVI() {
+
+    uint32_t *vga_framebuf_ptr = (uint32_t*) &vga_1bit_data_array[0];
+    uint32_t *dvi_framebuf_ptr = (uint32_t*) &dvi_framebuf[0];
+
+    uint32_t sr = 0;
+    uint8_t shifts = 0;
+
+
+    for (int y = 0; y < MODE_V_ACTIVE_LINES; y++) {
+        // The first uint32 of each line contains colour information as well as other stuff.
+        uint32_t colours = *vga_framebuf_ptr++;
+
+        uint8_t fore_col = get_four_bit_col((colours >> 20) & 0x0f);  
+        uint8_t back_col = get_four_bit_col((colours >> 16) & 0x0f);  
+        uint8_t pixcol;
+
+        // get the 32-bit word
+        for (int x = 0; x < WORDS_PER_LINE - 1; x++) {
+            uint32_t vga_bit_word = *vga_framebuf_ptr;   
+            vga_framebuf_ptr++;    
+
+            uint32_t bitmask = 0x01;
+            for (uint32_t b = 0; b < 32; b++) {
+                if (vga_bit_word & bitmask) {
+                    pixcol = fore_col;
+                } else {
+                    pixcol = back_col;
+                }
+                // Shift the shift register and put the 6-bit colour into the most significant bits
+                sr = (sr >> 6) | (pixcol << 26);
+                if (++shifts == 5) {
+                    // Every 5 pixels the shift register consists of 5 6-bit values,
+                    // which we pack into four bytes (a uin32_t).
+                    *dvi_framebuf_ptr++ = sr;
+                    shifts = 0;
+                }
+                bitmask <<= 1;
+            }
+        }
+    }
+}
+
+
+#if USE_VGA_CAPTURE
+enum vc_modes {VC_NONE, VC_VGA_IN, VC_VGA_OUT};
+uint8_t vga_capture_mode = VC_NONE;
+#endif
+
+
+void test_DVI_framebuf() {
+    dvi_testbars();
+}
+#endif
+
+
+// upload a screenshot (the VGA or DVI framebuffer) using the XMODEM protocol
+void print_screen() {
+    #define XMODEM_MAX_FRAME_NAKS 9
+
+    #define XMODEM_DATA_BUF_LEN 128
+    uint8_t xm_buf[XMODEM_DATA_BUF_LEN];
+
+    // assume we're going to upload the VGA framebuffer
+    uint8_t* screen_buf_byte_ptr = (uint8_t*)&vga_1bit_data_array[0];
+    uint32_t no_of_packets = no_of_packets = ((21 * 4) * 480) / XMODEM_DATA_BUF_LEN;
+
+#if USE_VGA_CAPTURE
+    // If we're mirroring VGA Out to DVI we should upload the VGA framebuffer
+    // as its much smaller, otherwise upload the DVI framebuffer.
+    if (vga_capture_mode != VC_VGA_OUT) {
+        screen_buf_byte_ptr = &dvi_framebuf[0];
+        no_of_packets = ((640 * 4) / 5) * 480 / XMODEM_DATA_BUF_LEN;
+    }
+#endif
+
+    uint8_t frame_no = 1;
+    uint8_t frame_naks = 0;
+
+    int uart_int;
+
+    int l = 0;
+
+    uint32_t byte_index = 0;
+
+    // wait for upto 60 seconds for a NAK from the controller (e.g. minicom)
+    uart_int = stdio_getchar_timeout_us(60 * 1000 * 1000);
+    if (uart_int != NAK) {
+        // failed to get a NAK
+        writeString(" screenshot timeout");
+        return;
+    }
+
+    while (l < no_of_packets) {
+        uint8_t checksum = 0;
+
+        stdio_putchar_raw(SOH);
+        stdio_putchar_raw(frame_no);
+        stdio_putchar_raw(~frame_no);
+
+        for (uint8_t i = 0; i < XMODEM_DATA_BUF_LEN ; i++) {
+            uint8_t b = *screen_buf_byte_ptr;
+
+            stdio_putchar_raw(b);
+            checksum += b;
+
+            screen_buf_byte_ptr++;
+            byte_index++;
+        }
+
+        stdio_putchar_raw(checksum);
+
+        // wait for upto 2 seconds for an ACK
+        uart_int = stdio_getchar_timeout_us(2 * 1000 * 1000);
+
+        if (uart_int == ACK) {
+            // the packet was ok
+            // writeString(".");
+            l += 1;
+            frame_no += 1;
+            frame_naks = 0;
+        } else if (uart_int == NAK) {
+            // the packet was not ok
+            // writeString("?");
+            // we're allowed a certain number of attempts
+            if (frame_naks++ < XMODEM_MAX_FRAME_NAKS)  {
+                // repeat the packet
+                screen_buf_byte_ptr -= XMODEM_DATA_BUF_LEN;
+            } else {
+                // give up
+                // writeString(" - too many attempts");
+                break;
+            }
+
+        } else if (uart_int == PICO_ERROR_TIMEOUT) {
+            // timeout
+            // writeString(" - boo");
+            break;
+        }
+    }
+
+    if (uart_int == ACK) {
+        stdio_putchar_raw(EOT);
+        uart_int = stdio_getchar_timeout_us(5 * 1000 * 1000); // 1 second is not enough
+        if (uart_int == ACK) {
+            // writeString(" - yay");
+        } else if (uart_int == PICO_ERROR_TIMEOUT) {
+            // writeString(" - boo");
+        } else {
+            // writeString(" - ???");
+        }
+    }
+}
+
+
+void close_window() {
+    fillRect(HELP_WINDOW_LEFT, HELP_WINDOW_TOP, HELP_WINDOW_WIDTH, HELP_WINDOW_HEIGHT, BLACK);
+    uart_my_puts("Window closed\n");
+    init_line_colours();
+    set_plot_line_colors(g_no_of_captured_pins);
+    showing_window = false;
+}
+
+
+char * start_help_text = "Press h for help.\n";
+
+#if USE_VGA_CAPTURE
+
+PIO vga_capture_pio = pio0;
+uint vga_capture_sm = 0;
+uint vga_capture_offset;
+
+// PIO vga_detect_vsync_pio = pio0;
+uint vga_detect_vsync_sm = 1;
+uint vga_detect_vsync_offset;
+
+// PIO vga_detect_csync_on_vsync_pio = pio0;
+uint vga_detect_vsync_on_csync_sm = 2;
+uint vga_detect_vsync_on_csync_offset;
+
+int rgb_test_chan_0;
+int rgb_test_chan_1;
+
+
+void init_vga_capture_dma_and_start_capturing() {
+    // DMA stuff
+
+    dma_channel_config vga_capture_dma_ch0;
+    dma_channel_config c1;
+    
+    // More DMA channels - test ones - 0 sends color data, 1 reconfigures and restarts 0
+    rgb_test_chan_0 = dma_claim_unused_channel(true);
+    rgb_test_chan_1 = dma_claim_unused_channel(true);
+
+    // Channel Zero (receives color data to PIO VGA machine)
+    vga_capture_dma_ch0 = dma_channel_get_default_config(rgb_test_chan_0);  // default configs
+    channel_config_set_transfer_data_size(&vga_capture_dma_ch0, DMA_SIZE_32);              // 32-bit txfers
+    channel_config_set_read_increment(&vga_capture_dma_ch0, false);                        // no read incrementing
+    channel_config_set_write_increment(&vga_capture_dma_ch0, true);                      // yes write incrementing
+
+    // channel_config_set_dreq(&c0, DREQ_PIO0_RX0) ;                        // DREQ_PIO0_RX0 pacing (FIFO)
+    channel_config_set_dreq(&vga_capture_dma_ch0, pio_get_dreq(vga_capture_pio, vga_capture_sm, false));     // vga_detect_vsync rx FIFO pacing
+
+    channel_config_set_chain_to(&vga_capture_dma_ch0, rgb_test_chan_1);                        // chain to other channel
+
+    #define DVI_LINE_LENGTH_BYTES (640 * 4 / 5)
+    
+    #define DVI_FRAME_LENGTH_IN_BYTES (((640 * 4) / 5) * 480)
+
+    #define DVI_BUF_TRANSFER_SIZE ((((640 * 4) / 5) * 480) / 4)
+
+    static uint32_t testReadValue = /* 0xffffffff */((RED_BITS) | (GREEN_BITS << 6) | (BLUE_BITS << 12)) << 2;
+
+     dma_channel_configure(
+        rgb_test_chan_0,            // Channel to be configured
+        &vga_capture_dma_ch0,                        // The configuration we just created
+        &dvi_framebuf[0],              // The initial write address (pixel color array)
+        &vga_capture_pio->rxf[vga_capture_sm],       // read address (RGB PIO RX FIFO)
+        // (0x0 << 28) | (DVI_LINE_LENGTH_BYTES * 480 / 4),                  // Number of transfers in words; in this case each word is 4 byte. this doesn't crash
+        DVI_BUF_TRANSFER_SIZE,
+        false                       // Don't start immediately.
+    );
+
+    // Channel One (reconfigures the first channel)
+    c1 = dma_channel_get_default_config(rgb_test_chan_1);   // default configs
+    channel_config_set_transfer_data_size(&c1, DMA_SIZE_32);              // 32-bit txfers
+    channel_config_set_read_increment(&c1, false);                        // no read incrementing
+    channel_config_set_write_increment(&c1, false);                       // no write incrementing
+    channel_config_set_chain_to(&c1, rgb_test_chan_0);                    // chain to other channel
+
+    static char * dvi_framebuf_ptr = &dvi_framebuf[0];
+
+    dma_channel_configure(
+        rgb_test_chan_1,                        // Channel to be configured
+        &c1,                                // The configuration we just created
+        &dma_hw->ch[rgb_test_chan_0].write_addr,  // Write address (channel 0 write address)
+        &dvi_framebuf_ptr,                 // Read address (POINTER TO AN ADDRESS)
+        1,                                  // Number of transfers, in this case each is 4 byte
+        false                               // Don't start immediately.
+    );
+
+    dma_start_channel_mask((1u << rgb_test_chan_0)); 
+}
+
+// this must match the irq number from vga_detect_vsync in vga_capture.pio
+#define VGA_CAPTURE_FRAME_PIO_IRQ 7
+
+#if VGA_CAPTURE_FRAME_PIO_IRQ == 0
+    #define PIS_INTERRUPT_NO pis_interrupt0
+#elif VGA_CAPTURE_FRAME_PIO_IRQ == 1
+    #define PIS_INTERRUPT_NO pis_interrupt1
+#elif VGA_CAPTURE_FRAME_PIO_IRQ == 2
+    #define PIS_INTERRUPT_NO pis_interrupt2
+#elif VGA_CAPTURE_FRAME_PIO_IRQ == 3
+    #define PIS_INTERRUPT_NO pis_interrupt3
+#elif VGA_CAPTURE_FRAME_PIO_IRQ == 4
+    #define PIS_INTERRUPT_NO pis_interrupt4
+#elif VGA_CAPTURE_FRAME_PIO_IRQ == 5
+    #define PIS_INTERRUPT_NO pis_interrupt5
+#elif VGA_CAPTURE_FRAME_PIO_IRQ == 6
+    #define PIS_INTERRUPT_NO pis_interrupt6
+#elif VGA_CAPTURE_FRAME_PIO_IRQ == 7
+    #define PIS_INTERRUPT_NO pis_interrupt7
+#endif
+
+int vsync_counter;
+
+#if defined(PICO_DEFAULT_LED_PIN)
+    bool led_state;
+#endif
+
+#define VGA_VERTICAL_REFRESH_FREQ 60
+
+uint vga_capture_dma_write_addr;
+uint vga_capture_seconds_count;
+uint last_vga_capture_seconds_count;
+
+uint64_t last_vga_capture_time;
+
+// void __scratch_x("") pio0_irq_handler() {
+void pio0_irq_handler() {
+    pio_interrupt_clear(vga_capture_pio, VGA_CAPTURE_FRAME_PIO_IRQ);
+    if (++vsync_counter >= VGA_VERTICAL_REFRESH_FREQ) {
+        // every second
+        uint write_addr = dma_hw->ch[rgb_test_chan_0].write_addr;
+        if (write_addr != (uintptr_t) &dvi_framebuf) {
+            vga_capture_dma_write_addr = write_addr;
+        }
+#if defined(PICO_DEFAULT_LED_PIN)
+        led_state = !led_state;
+        gpio_put(PICO_DEFAULT_LED_PIN, led_state);
+#endif
+        vsync_counter = 0;
+        vga_capture_seconds_count++;
+    }
+}
+
+
+void vga_sync_detect_interrupt_set_enabled(bool enabled) {
+    // configure the LED to be an output and set it
+
+    if (enabled) {
+
+#if defined(PICO_DEFAULT_LED_PIN)
+        gpio_init(PICO_DEFAULT_LED_PIN);
+        gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+        gpio_put(PICO_DEFAULT_LED_PIN, 0);
+#endif
+
+        irq_add_shared_handler(PIO0_IRQ_0, pio0_irq_handler, PICO_SHARED_IRQ_HANDLER_LOWEST_ORDER_PRIORITY);
+        // pio_set_irq0_source_enabled(vga_capture_pio, 4, true);
+        pio_set_irq0_source_enabled(vga_capture_pio, PIS_INTERRUPT_NO, true);
+
+        // enable the interrupt
+        irq_set_enabled(PIO0_IRQ_0, true);
+    } else {
+        // disable the interrupt
+        irq_set_enabled(PIO0_IRQ_0, false);
+
+        pio_set_irq0_source_enabled(vga_capture_pio, PIS_INTERRUPT_NO, false);
+
+        irq_remove_handler(PIO0_IRQ_0, pio0_irq_handler);
+    }
+}
+
+
+void deinit_vga_capture_interrupts_and_dma() {
+
+    vga_sync_detect_interrupt_set_enabled(false);
+
+    // stop and free the dma channels
+    dma_channel_cleanup(rgb_test_chan_1);
+    dma_channel_cleanup(rgb_test_chan_0);
+
+    // and unclaim them
+    dma_channel_unclaim(rgb_test_chan_1);
+    dma_channel_unclaim(rgb_test_chan_0);
+
+#if PICO_PIO_USE_GPIO_BASE
+    my_pio_set_gpio_base(vga_capture_pio, 0);
+#endif
+
+    vga_capture_mode = VC_NONE;
+
+}
+
+
+// capture the RGB of pins 0 to 5 using HSYNC and VSYNC of pins 26 & 27, or CSYNC on pin 26.
+void vga_in_capture_set_enabled(bool enabled) {
+    static bool is_enabled;
+
+    if (enabled) {
+        if (!is_enabled) {
+            if (vga_capture_mode == VC_NONE) {
+#if SYS_CLK_HZ == 125 * MHZ
+                vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_125_mhz_program);
+
+                vga_capture_125_mhz_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_IN_RGB_BASE_PIN);
+
+#elif SYS_CLK_HZ == 150 * MHZ
+                vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
+
+                vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_IN_RGB_BASE_PIN);
+#endif
+                vga_detect_vsync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_program);
+                vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, VGA_IN_VSYNC_PIN);
+                // vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, 0);
+
+                vga_detect_vsync_on_csync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_on_csync_program);
+                vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, VGA_IN_HSYNC_CSYNC_PIN);
+                // vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, 0);
+
+                init_vga_capture_dma_and_start_capturing();
+
+                vga_sync_detect_interrupt_set_enabled(true);
+
+                pio_enable_sm_mask_in_sync(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_sm) | (1u << vga_detect_vsync_on_csync_sm));
+
+                vga_capture_mode = VC_VGA_IN; // this needs to be moved
+            }
+            is_enabled = true;
+        }
+    } else {
+        if (is_enabled) {
+
+        // stop the state machine
+            pio_sm_set_enabled(vga_capture_pio, vga_capture_sm, false);
+
+    #if USE_CSYNC
+            pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_on_csync_sm, false);
+    #else
+            pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_on_csync_sm, false);
+    #endif
+
+            // stop the other state machine
+            pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_sm, false);
+
+            // and free it
+            pio_remove_program(vga_capture_pio, &vga_detect_vsync_program, vga_detect_vsync_offset);
+#if SYS_CLK_HZ == 125 * MHZ
+            pio_remove_program(vga_capture_pio, &vga_capture_125_mhz_program, vga_capture_offset);
+#elif SYS_CLK_HZ == 150 * MHZ
+            pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
+#endif
+            // free the remaining state machine
+            pio_remove_program(vga_capture_pio, &vga_detect_vsync_on_csync_program, vga_detect_vsync_on_csync_offset);
+
+            deinit_vga_capture_interrupts_and_dma();
+
+            is_enabled = false;
+        }
+    }
+}
+
+
+// capture the RGB of pins 6 to 11 using CSYNC of pins 22.
+// or the RGB of pins 32 to 37 using CSYNC of pin 31
+void vga_out_capture_set_enabled(bool enabled) {
+    static bool is_enabled;
+
+    if (enabled) {
+        if (!is_enabled) {
+
+            if (vga_capture_mode == VC_NONE) {
+
+#if ((VGA_OUT_RGB_BASE_PIN + 6) >= 32)
+                my_pio_set_gpio_base(vga_capture_pio, 16);
+#endif
+
+#if USE_GPIO_31_47
+    #if SYS_CLK_HZ == 125 * MHZ
+                vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_125_mhz_program);
+                vga_capture_125_mhz_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
+    #elif SYS_CLK_HZ == 150 * MHZ
+                vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
+                vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
+    #endif
+#else
+
+    #if VGA_OUT_RGB_PIN_COUNT == 1
+        #if SYS_CLK_HZ == 125 * MHZ
+                vga_capture_offset = pio_add_program(vga_capture_pio, &vga_1bit_capture_125_mhz_program);
+                vga_1bit_capture_125_mhz_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
+        #elif SYS_CLK_HZ == 150 * MHZ
+                vga_capture_offset = pio_add_program(vga_capture_pio, &vga_1bit_capture_program);
+                vga_1bit_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
+        #endif
+
+    #else
+        #if SYS_CLK_HZ == 125 * MHZ
+                vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_125_mhz_program);
+                vga_capture_125_mhz_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
+        #elif SYS_CLK_HZ == 150 * MHZ
+                vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
+                vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, VGA_OUT_RGB_BASE_PIN);
+        #endif
+    #endif
+
+#endif
+
+#if USE_CSYNC
+
+                vga_detect_vsync_on_csync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_on_csync_program);
+                vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, VGA_OUT_HSYNC_CSYNC_PIN);
+
+#else
+
+                vga_detect_vsync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_program);
+                vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, VGA_OUT_VSYNC_PIN);
+
+#endif
+
+                init_vga_capture_dma_and_start_capturing();
+                vga_sync_detect_interrupt_set_enabled(true);
+
+#if USE_CSYNC
+                pio_enable_sm_mask_in_sync(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_on_csync_sm));
+#else
+                // pio_enable_sm_mask_in_sync(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_on_csync_sm));
+                pio_enable_sm_mask_in_sync(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_sm));
+#endif
+
+                vga_capture_mode = VC_VGA_OUT; // this needs to be moved
+            }
+
+            is_enabled = true;
+
+        }
+    } else {
+
+        if (is_enabled) {
+
+    // start of code copied from deinit_vga_capture
+
+        // stop the state machine
+            pio_sm_set_enabled(vga_capture_pio, vga_capture_sm, false);
+
+#if USE_CSYNC
+            pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_on_csync_sm, false);
+#else
+            // pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_on_csync_sm, false);
+            pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_sm, false);
+
+#endif
+
+#if USE_GPIO_31_47 
+    #if SYS_CLK_HZ == 125 * MHZ
+            pio_remove_program(vga_capture_pio, &vga_capture_125_mhz_program, vga_capture_offset);
+    #elif SYS_CLK_HZ == 150 * MHZ
+            pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
+    #endif
+#else
+    #if VGA_OUT_RGB_PIN_COUNT == 1
+        #if SYS_CLK_HZ == 125 * MHZ
+            pio_remove_program(vga_capture_pio, &vga_1bit_capture_125_mhz_program, vga_capture_offset);
+        #elif SYS_CLK_HZ == 150 * MHZ
+            pio_remove_program(vga_capture_pio, &vga_1bit_capture_program, vga_capture_offset);
+        #endif
+
+    #else
+        #if SYS_CLK_HZ == 125 * MHZ
+            pio_remove_program(vga_capture_pio, &vga_capture_125_mhz_program, vga_capture_offset);
+        #elif SYS_CLK_HZ == 150 * MHZ
+            pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
+        #endif
+    #endif
+
+#endif
+
+            // free the remaining state machine
+#if USE_CSYNC
+            pio_remove_program(vga_capture_pio, &vga_detect_vsync_on_csync_program, vga_detect_vsync_on_csync_offset);
+#else
+            pio_remove_program(vga_capture_pio, &vga_detect_vsync_program, vga_detect_vsync_offset);
+#endif
+
+            deinit_vga_capture_interrupts_and_dma();
+
+            is_enabled = false;
+
+        }
+    }
+}
+
+
+void deinit_vga_capture() {
+
+    vga_in_capture_set_enabled(false);
+    vga_out_capture_set_enabled(false);
+
+}
+
+
+void set_vga_capture(uint8_t new_capture_mode) {
+
+    deinit_vga_capture();
+
+    switch (new_capture_mode) {
+        case VC_NONE:
+            break;
+
+        case VC_VGA_IN:
+            vga_in_capture_set_enabled(true);
+            break;
+
+        case VC_VGA_OUT:
+            vga_out_capture_set_enabled(true);
+            break;
+    }
+}
+
+
+#endif
+
+
+#if USE_IR
+
+uint32_t time_ms() {
+    return time_us_64() / 1000;
+}
+
+uint check_ir() {
+    static uint32_t last_ir_command = 0;
+    static uint32_t last_ir_button_time;
+    static uint32_t last_ir_button_start_time;
+
+    uint ui_command = UIC_NONE;
+    if (!pio_sm_is_rx_fifo_empty(ir_rx_pio, ir_rx_sm)) {
+
+        uint32_t ir_command = pio_sm_get_blocking(ir_rx_pio, ir_rx_sm);
+
+        uart_my_putuif("ir: %#x\n", ir_command);
+
+        // uart_my_putuif("  ir: %#x\n", ir_command & 0xffff);
+        char str[80];
+        clear_statusbar_hint();
+
+        uint32_t time_now = time_ms();
+        if (ir_command) {
+            // ir_command != 0, ie not a repeat code
+            last_ir_button_time = time_now;
+            last_ir_button_start_time = time_now;
+            last_ir_command = ir_command;
+            sprintf(str, "%#x " , ir_command);
+            // itoa(ir_command, str, 16);
+            writeString(str);
+        } else {
+            // ir_command == 0, ie repeat code
+           if (last_ir_button_start_time) {
+                // Haven't timed out between repeat codes
+                if (time_now - last_ir_button_start_time > 500) {
+                    // Had enough time to allow a repeat code
+                    if (time_now - last_ir_button_time < 500) {
+                        // Still haven't timed out between repeat codes
+                        ir_command = last_ir_command;
+                        last_ir_button_time = time_now;
+                        sprintf(str, "repeat %#x ", ir_command);
+                        // itoa(ir_command, str, 16);
+                        writeString(str);
+                        // uart_my_putuif("ir2: %#x\n", ir_command);
+                    } else {
+                        // Timed out between repeat codes
+                        last_ir_button_start_time = 0;
+                    }
+                }
+                // Save this in case we're still allowed repeat codes
+                last_ir_button_time = time_now;
+            }
+        }
+
+        if (ir_command) {
+
+            uint8_t ir_button = (ir_command >> 16) & 0xff;
+
+            if ((ir_command & 0xffff) == 0xbf00) {
+                // Adafruit Mini Remote Control (https://www.adafruit.com/product/389)
+
+
+
+                uart_my_putcf("  btn: %d\n", ir_button);
+
+                switch (ir_button) {
+
+                    case 1:
+                        // 'play/pause'
+                        ui_command = UIC_C; // capture
+                        last_ir_command = 0;
+                        break;
+
+                    case 8:
+                        ui_command = UIC_LEFT;
+                        break;
+
+                    case 10:
+                        ui_command = UIC_RIGHT;
+                        break;
+
+    #if USE_DVI
+
+        #if USE_DVI_DEBUG
+    
+                    case 14:
+                        ui_command = UIC_R; // reset DVI
+                        break;
+        #endif
+    
+    #endif
+
+                    case 9:
+                        // 'enter/save'
+                        break;
+
+    #if USE_DVI
+
+                    case 16:
+                        // '1'
+                        set_vga_capture(VC_NONE);
+                        test_DVI_framebuf();
+                        break;
+
+                    case 17:
+                        set_vga_capture(VC_VGA_IN);
+                        // '2'
+                        break;
+
+                    case 18:
+                        // '3'
+                        set_vga_capture(VC_VGA_OUT);
+                        break;
+
+    #endif
+
+                }
+
+                last_ir_command = ir_command;
+
+            } else {
+                // from a different ir remote
+
+                if ((ir_command & 0xffff) == 0xff00) {
+                    // Argon IR Remote (https://argon40.com/products/argon-remote?_pos=1&_psq=remote&_ss=e&_v=1.0)
+
+                    switch (ir_button) {
+                        case 0xce:
+                            // 'play/pause'
+                            ui_command = UIC_C; // capture
+                            last_ir_command = 0;
+                            break;
+
+                        case 0xca:
+                            ui_command = UIC_UP;
+                            break;
+
+                        case 0xd2:
+                            ui_command = UIC_DOWN;
+                            break;
+
+                        case 0x99:
+                            ui_command = UIC_LEFT;
+                            break;
+
+                        case 0xc1:
+                            ui_command = UIC_RIGHT;
+                            break;
+
+                        case 0x9d:
+                            ui_command = UIC_TAB;
+                            break;
+
+                        case 0x80:
+                            ui_command = UIC_PLUS;
+                            break;
+
+                        case 0x81:
+                            ui_command = UIC_MINUS;
+                            break;
+
+                    }
+                    last_ir_command = ir_command;
+                }
+            }
+        }
+    }
+    
+    return ui_command;
+}
+
+
+void ir_flush() {
+    pio_sm_clear_fifos(ir_rx_pio, ir_rx_sm);
+}
+
+#endif
+
+
+#if USE_DVI
+void print_dvi_regs() {
+    uart_my_putcf("expand_tmds: %#x\n", dvi_get_expand_tmds());
+    uart_my_putcf("expand_shift: %#x\n", dvi_get_expand_shift());
+    uart_my_putcf("csr: %#x\n", dvi_get_csr());
+    uart_my_putcf("v_scanline: %d\n", dvi_get_v_scanline());
+}
+#endif
+
+
+uint32_t *capture_buf;
+
+uint buf_size_words;
+
+uint total_sample_bits;
+
+// #if PICO_PIO_USE_GPIO_BASE
+#if PICO_RP2040
+
+    PIO capture_pio = pio0;
+
+#else
+
+    // PICO_2350
+    PIO capture_pio = pio2;
+
+#endif
+
+    uint capture_sm = 3;
+
+    // Claim a DMA channel for the pio state machine(s) used for capturing.
+    uint dma_chan;
+
+    uint64_t last_event_time;
+
+    enum MAIN_STATES {MS_ACTIVE, MS_SCREENSAVE, MS_BLANK, MS_VGA_HALTED};
+
+    uint8_t main_state = MS_ACTIVE;
+    uint screensaver_line;
+
+
+    void start_screensaver() {
+        uart_my_puts("Saving VGA screen...\n");
+        main_state = MS_SCREENSAVE;
+        last_event_time = time_us_64();
+        screensaver_line = 0;
+    }
+
+
+    bool screensaver_animate() {
+        bool res = true;
+        if (screensaver_line < SCREEN_HEIGHT / 2) {
+            // new white lines
+            set_line_colors(screensaver_line, WHITE, WHITE, WHITE, LIGHT_BLUE);
+            set_line_colors(SCREEN_HEIGHT - 1 - screensaver_line, WHITE, WHITE, WHITE, LIGHT_BLUE);
+            // delete old white lines
+            set_line_colors(screensaver_line - 1, BLACK, BLACK, WHITE, LIGHT_BLUE);
+            set_line_colors(SCREEN_HEIGHT - 1 - screensaver_line + 1, BLACK, BLACK, WHITE, LIGHT_BLUE);
+            screensaver_line++;
+        } else if (screensaver_line < (SCREEN_HEIGHT / 2) + 20) {
+            if (screensaver_line == (SCREEN_HEIGHT / 2) + 10) {
+                // delete one of the two remaining white lines after about 100 ms
+                set_line_colors((SCREEN_HEIGHT / 2) - 1, BLACK, BLACK, WHITE, LIGHT_BLUE);
+            }
+            screensaver_line++;
+        } else {
+            // delete the last remaining white line after about 200 ms
+            set_line_colors((SCREEN_HEIGHT / 2), BLACK, BLACK, WHITE, LIGHT_BLUE);
+            res = false;
+        }
+        return res;
+    }
+
+
+    void start_screen_blanking() {
+        uart_my_puts("Blanking VGA screen...\n");
+        main_state = MS_BLANK;
+        last_event_time = time_us_64();
+    }
+
+
+    void halt_vga_out() {
+        uart_my_puts("Halting VGA output...\n");
+        vga_pause();
+        main_state = MS_VGA_HALTED;
+    }
+
+
+    void restart_vga_out() {
+        // clear_screen();
+        // draw_ui();
+        // plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, true);
+        // draw_minimap_indicator();
+        // plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
+        // draw_statusbar_info();
+
+        uart_my_puts("Restarting VGA output...\n");
+        init_line_colours();
+        if (!showing_window) {
+            set_plot_line_colors(g_no_of_captured_pins);
+        }
+        vga_restart();
+        main_state = MS_ACTIVE;
+        last_event_time = time_us_64();
+    }
+
+    enum MAIN_DVI_STATES {MDS_ACTIVE, MDS_NO_SIGNAL};
+
+    uint8_t main_dvi_state = MDS_ACTIVE;
+
+    void handle_command(uint ui_command) {
+
+    bool update_last_numeric_key_time = false;
+
+    static uint64_t last_numeric_key_time;
+    static uint32_t numeric_value;
+
+    if (ui_command) {
+        last_event_time = time_us_64();
+        bool plot_required = false;
+        bool mini_map_redraw_required = false;
+        if (showing_window) {
+            if (ui_command == UIC_CTRL_P) {
+                print_screen();
+            } else {
+                close_window();
+                plot_required = true;
+            }
+        } else {
+
+            if ((ui_command >= UIC_0) && (ui_command <= UIC_9)) {
+
+                uint64_t time_now = time_us_64();
+                uint8_t this_numeric_value = ui_command - UIC_0;
+
+                if ((time_now - last_numeric_key_time) < 750 * 1000) {
+                    // Two or more number keys have been pressed in quick succession
+                    numeric_value = (numeric_value * 10) + this_numeric_value;
+                } else {
+                    // It's been a while since the last number key was pressed
+                    numeric_value = this_numeric_value;
+                }
+                last_numeric_key_time = time_now;
+
+                switch (settings_state) {
+                    case SS_CHANNEL:
+                        if (numeric_value < g_no_of_captured_pins) {
+                            set_channel(numeric_value);
+                        } else if (this_numeric_value < g_no_of_captured_pins) {
+                            set_channel(this_numeric_value);
+                        }
+                        break;
+
+                    case SS_FREQ:
+                        if ((numeric_value > 0) && (numeric_value <= 10000)) {
+                            set_sample_frequency(numeric_value);
+                        }
+                        break;
+
+                    case SS_NO_OF_PINS:
+                        if (numeric_value > 0) {
+                            if (numeric_value <= MAX_NO_OF_PINS) {
+                                set_no_of_pins(numeric_value);
+                            } else if (this_numeric_value <= MAX_NO_OF_PINS) {
+                                set_no_of_pins(this_numeric_value);
+                            }
+                        }
+                        break;
+
+                    case SS_PINS_BASE:
+                        if (numeric_value <= MAX_BASE_PIN_NO) {
+                            set_pins_base(numeric_value);
+                        } else if (this_numeric_value <= MAX_BASE_PIN_NO) {
+                            set_pins_base(this_numeric_value);
+                        }
+                        break;
+
+                    case SS_TRIGGER_PIN_BASE:
+                        if (numeric_value <= MAX_BASE_PIN_NO) {
+                            set_trigger_pin_base(numeric_value);
+                        } else if (this_numeric_value <= MAX_BASE_PIN_NO) {
+                            set_trigger_pin_base(this_numeric_value);
+                        }
+                        break;
+
+                    // case SS_TRIGGER_TYPE:
+                    //     set_trigger_type(MAX(g_trigger_type - 1, 0));
+                    //     break;
+
+                    case SS_ZOOM:
+                        if ((numeric_value > 0) && (numeric_value < 10000)) {
+                            plot_required = set_mag(1 - numeric_value);
+                            update_last_numeric_key_time = true;
+                        }
+                        break;
+                }
+
+            } else {
+                last_numeric_key_time = 0;
+                numeric_value = 0;
+
+            switch (ui_command) {
+
+                case UIC_CTRL_RIGHT:
+                case UIC_CTRL_LEFT:
+                    writeString(ui_command == UIC_CTRL_RIGHT ? "next" : "previous");
+                    writeString(" edge");
+                    plot_required = set_scroll_x(find_transition(capture_buf, g_channel, g_scrollx, ui_command == UIC_CTRL_RIGHT));
+                    break;
+
+                case UIC_HOME:
+                    writeString("scroll home");
+                    plot_required = set_scroll_x(0);
+                    break;
+
+                case UIC_END:
+                    writeString("scroll end");
+                    plot_required = set_scroll_x(MAX(g_capture_n_samples - (mag_factor(SCREEN_WIDTH)), 0));
+                    break;
+
+                case UIC_RIGHT:
+                    writeString("scroll right");
+                    int scroll_inc = 1;
+                    if (g_mag < 0) {
+                        scroll_inc = abs(g_mag) + 1;
+                    }
+                    plot_required = set_scroll_x(MIN(g_scrollx + scroll_inc, g_capture_n_samples));
+                    break;
+
+                case UIC_LEFT:
+                    writeString("scroll left");
+                    int scroll_dec = 1;
+                    if (g_mag < 0) {
+                        scroll_dec = abs(g_mag) + 1;
+                    }
+                    plot_required = set_scroll_x(MAX(g_scrollx - scroll_dec, 0));
+                    break;
+
+                case UIC_PAGE_UP:
+                    writeString("scroll left a page");
+                    plot_required = set_scroll_x(MAX(g_scrollx - mag_factor(SCREEN_WIDTH), 0));
+                    break;
+
+                case UIC_PAGE_DOWN:
+                    writeString("scroll right a page");
+                    plot_required = set_scroll_x(MIN(g_scrollx + (mag_factor(SCREEN_WIDTH)), g_capture_n_samples));
+                    break;
+
+                case UIC_MINUS:
+                    writeString("zoom out");
+                    plot_required = set_mag(g_mag - 1);
+                    break;
+
+                case UIC_PLUS:
+                    writeString("zoom in");
+                    plot_required = set_mag(g_mag + 1);
+                    break;
+
+                case UIC_EQUALS:
+                    writeString("no zoom");
+                    plot_required = set_mag(0);
+                    break;
+
+                case UIC_M:
+                    writeString("measure");
+                    measure(capture_buf);
+                    break;
+
+                case UIC_Z:
+                    writeString("zoom to fill");
+                    if (g_capture_n_samples >= SCREEN_WIDTH) {
+                        // we need to zoom out
+                        int factor = g_capture_n_samples / SCREEN_WIDTH;
+                        plot_required = set_mag(-(factor - 1));
+                    } else {
+                        // we need to zoom in
+                        int factor = SCREEN_WIDTH / g_capture_n_samples;
+                        plot_required = set_mag(factor - 1);
+                    }
+                    // set_scroll_x(0);
+                    break;
+
+                case UIC_C:
+                    writeString("capturing... ");
+                    // fillRect(0, PLOT_TOP, SCREEN_WIDTH, MINIMAP_BOTTOM - PLOT_TOP, BLACK);
+
+                    if (!logic_analyser_arm(capture_pio, capture_sm, dma_chan, capture_buf, buf_size_words, g_trigger_pin_base, g_trigger_type)) {
+                        writeString("failed to trigger");
+                    } else {
+                        writeString("done");
+                    }
+
+                    fillRect(0, PLOT_TOP, SCREEN_WIDTH, MINIMAP_BOTTOM - PLOT_TOP, BLACK);
+
+
+                    // each bit on a uart travels at 115200 bits per second
+                    // the clock goes at 125,000,000 hz (I think)
+
+                    // so if we want to take, say, 4 samples per bit then we need to sample at  4 * 115200 = 460800 bps
+                    // 125,000,000 / 460,800 = 271.267
+
+                    // The logic analyser should have started capturing as soon as it saw the
+                    // first transition. Wait until the last sample comes in from the DMA.
+
+                    // before we plot, let's recalculate g_capture_n_samples as we may have changed the number of pins
+                    // to capture...
+
+                    // heres the code to reverse
+
+                    // uint total_sample_bits = g_capture_n_samples * g_no_of_pins;
+                    // total_sample_bits += bits_packed_per_word(g_no_of_pins) - 1;
+                    // uint buf_size_words = total_sample_bits / bits_packed_per_word(g_no_of_pins);
+
+                    // end of code to reverse
+
+                    uart_my_putcf("g_capture_n_samples before calc: %d\n", g_capture_n_samples);
+
+                    total_sample_bits = buf_size_words * bits_packed_per_word(g_no_of_captured_pins);
+                    uart_my_putcf("total_sample_bits: %d\n", total_sample_bits);
+
+                    // total_sample_bits -= bits_packed_per_word(g_no_of_pins) - 1; ***
+                    // uart_my_putcf("total_sample_bits: %d\n", total_sample_bits);
+
+                    g_capture_n_samples = total_sample_bits / g_no_of_captured_pins;
+                    uart_my_putcf("g_capture_n_samples after calc: %d\n", g_capture_n_samples);
+
+                    // it seems to work, but when not 4 - it throws the scaling out. for example the zoom to fill screen no
+                    // longer calculates correctly - pressing 'END' crashes the program. think I know why, but not now
+                    // actually it can't be quite right as the
+                    // strangely removing the line with the *** aove seems to have fixed it. Hmm...
+
+
+                    // plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
+
+                    if (g_scrollx >= g_capture_n_samples) {
+                        set_scroll_x(0);
+                    } else {
+                         draw_statusbar_info();
+                        draw_minimap_indicator();
+                    }
+
+                    get_plot_height(g_no_of_captured_pins);
+
+                    set_plot_line_colors(g_no_of_captured_pins);
+
+                    plot_required = true;
+
+                    mini_map_redraw_required = true;
+#if USE_IR
+                    ir_flush();
+                    // last_ir_command = 0;
+#endif
+
+                    break;
+
+                case UIC_DOWN:
+                    writeString("decrease setting");
+
+                    switch (settings_state) {
+                        case SS_CHANNEL:
+                            set_channel(MAX(g_channel - 1, 0));
+                            break;
+
+                        case SS_PALETTE:
+                            set_palette(MAX(g_palette - 1, 0));
+                            break;
+
+                        case SS_FREQ:
+                            set_sample_frequency(MAX(g_sample_frequency - 1, 1));
+                            break;
+
+                        case SS_NO_OF_PINS:
+                            set_no_of_pins(MAX(g_no_of_pins_to_capture - 1, 1));
+                            break;
+
+                        case SS_PINS_BASE:
+                            set_pins_base(MAX(g_pins_base - 1, 0));
+                            break;
+
+                        case SS_TRIGGER_PIN_BASE:
+                            set_trigger_pin_base(MAX(g_trigger_pin_base - 1, 0));
+                            break;
+
+                        case SS_TRIGGER_TYPE:
+                            set_trigger_type(MAX(g_trigger_type - 1, 0));
+                            break;
+
+                        case SS_ZOOM:
+                            plot_required = set_mag(g_mag - 1);
+                            break;
+
+                    }
+                    break;
+
+                case UIC_UP:
+                    writeString("increase setting");
+
+                    switch (settings_state) {
+                        case SS_CHANNEL:
+                            set_channel(MIN(g_channel + 1, g_no_of_captured_pins - 1));
+                            break;
+
+                        case SS_PALETTE:
+                            set_palette(MIN(g_palette + 1, CT_COUNT - 1));
+                            break;
+
+                        case SS_FREQ:
+                            set_sample_frequency(g_sample_frequency + 1);
+                            break;
+
+                        case SS_NO_OF_PINS:
+                            set_no_of_pins(MIN(g_no_of_pins_to_capture + 1, MAX_NO_OF_CHANNELS));
+                            break;
+
+                        case SS_PINS_BASE:
+                            set_pins_base(MIN(g_pins_base + 1, MAX_BASE_PIN_NO));
+                            break;
+
+                        case SS_TRIGGER_PIN_BASE:
+                            set_trigger_pin_base(MIN(g_trigger_pin_base + 1, MAX_BASE_PIN_NO));
+                            break;
+
+                        case SS_TRIGGER_TYPE:
+                            set_trigger_type(MIN(g_trigger_type + 1, TT_COUNT - 1));
+                            break;
+
+                        case SS_ZOOM:
+                            plot_required = set_mag(g_mag + 1);
+                            break;
+
+                    }
+                    break;
+                /*
+                case UIC_0:
+
+
+                    logic_analyser_init(pio, sm, CAPTURE_PIN_BASE, g_no_of_captured_pins, 5 * 4 * 16);
+
+                    logic_analyser_arm(pio, sm, dma_chan, capture_buf, buf_size_words, CAPTURE_TRIGGER_PIN, false);
+
+                    // each bit on a uart travels at 115200 bits per second
+                    // the clock goes at 125,000,000 hz (I think)
+
+                    // so if we want to take, say, 4 samples per bit then we need to sample at  4 * 115200 = 460800 bps
+                    // 125,000,000 / 460,800 = 271.267
+
+                    // The logic analyser should have started capturing as soon as it saw the
+                    // first transition. Wait until the last sample comes in from the DMA.
+
+                    plot_capture_buf(capture_buf, CAPTURE_PIN_BASE, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
+                    plot_required = true;
+                    break;
+                */
+
+                case UIC_TAB:
+                    writeString("next setting");
+
+                    set_settings_state((settings_state + 1) % SS_COUNT);
+                    // draw a line under, or something under the appropriate item in the toolbar
+                    // the one that now will respond to the up and down keys
+                    // uart_my_putcf("State: %d\n", settings_state);
+                    break;
+
+                case UIC_SHIFT_TAB:
+                    writeString("previous setting");
+
+                    if (settings_state <= 0) {
+                        set_settings_state(SS_COUNT - 1);
+                    } else {
+                        set_settings_state(settings_state - 1);
+                    }
+                    // uart_my_putcf("State: %d\n", settings_state);
+                    break;
+
+                case UIC_H:
+                case UIC_F1:
+                    writeString("help");
+                    show_help_window();
+                    break;
+
+                case UIC_A:
+                    writeString("about");
+                    show_about_window();
+                    break;
+
+                case UIC_UPPER_S:
+                    writeString("start screensaver");
+                    start_screensaver();
+                    break;
+
+                case UIC_SHIFT_COMMA:
+                case UIC_SHIFT_FULL_STOP:
+                    writeString(ui_command == UIC_SHIFT_FULL_STOP ? "next" : "previous");
+                    writeString(" two edges");
+                    plot_required = set_scroll_x(
+                        find_transition(capture_buf, g_channel, 
+                            find_transition(capture_buf, g_channel, g_scrollx, ui_command == UIC_SHIFT_FULL_STOP), 
+                            ui_command == UIC_SHIFT_FULL_STOP));
+                    break;
+#if USE_DVI
+
+#if USE_VGA_CAPTURE
+
+                case UIC_V:
+                    switch (vga_capture_mode) {
+                        case VC_NONE:
+                            set_vga_capture(VC_VGA_IN);
+                            writeString("capture VGA IN to DVI");
+                            break;
+
+                        case VC_VGA_IN:
+                            set_vga_capture(VC_VGA_OUT);
+                            writeString("mirror VGA OUT to DVI");
+                            break;
+
+                        case VC_VGA_OUT:
+                            set_vga_capture(VC_NONE);
+                            writeString("display DVI test pattern");
+                            test_DVI_framebuf();
+                            break;
+                    }
+                    break;
+#endif
+
+#if USE_DVI_DEBUG
+                case UIC_D:
+                    writeString("test DVI");
+                    test_DVI_framebuf();
+                    break;
+
+                case UIC_R:
+
+                    print_dvi_regs();
+
+                    // writeString("reset DVI");
+                    // dvi_deinit();
+                    // sleep_ms(100) ;
+                    // dvi_init();
+                    // print_dvi_regs();
+
+                    writeString("reinit DVI");
+                    dvi_reinit();
+                    // sleep_ms(100) ;
+                    // dvi_init();
+                    print_dvi_regs();
+                    break;
+
+                case UIC_S:
+                    writeString("deinit DVI");
+                    dvi_deinit();
+                    break;
+#endif
+
+#endif
+                case UIC_CTRL_P:
+                    print_screen();
+                    break;
+
+                }
+            }
+        }
+
+        if ((plot_required) || (mini_map_redraw_required)) {
+
+            if (plot_required) {
+                plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, true);
+            }
+
+            if (mini_map_redraw_required) {
+                plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
+            }
+
+            // A brief nap
+            // sleep_ms(10);
+            // busy_wait_us(10000);
+
+            // Because it can take a long time to perform a plot we should update the timer.
+            if (update_last_numeric_key_time) {
+                last_numeric_key_time = time_us_64();
+            }
+        }
+
+    }
+}
+
+
+#if USE_MULTI_CORE
+
+    #if USE_DVI
+
+#define FLAG_VALUE 123
+#define CORE1_CMD_DEINIT_DVI 456
+#define CORE1_CMD_INIT_DVI 789
+
+void core1_main() { 
+    dvi_init();
+    dvi_testbars();
+
+    multicore_fifo_push_blocking(FLAG_VALUE);
+
+    while (true) {
+
+        if (multicore_fifo_rvalid()) {
+            uint32_t cmnd = multicore_fifo_pop_blocking();
+            switch (cmnd) {
+                case CORE1_CMD_DEINIT_DVI:
+                dvi_deinit();
+                break;
+
+                case CORE1_CMD_INIT_DVI:
+                dvi_init();
+                break;
+            }
+        } else {
+            tight_loop_contents();
+            // sleep_ms(10); // testing to see if this still randomly crashes the hstx-dvi now that it's on core 1 - it does
+        }
+    }
+}
+
+    #endif
+
+#endif
+
+
+void draw_ui() {
+    // draw corner markers for reference
+    #define CORNER_LEN 2
+
+    // top left
+    drawHLine(0, 0, CORNER_LEN, WHITE);
+    drawVLine(0, 0, CORNER_LEN, WHITE);
+
+    // top right
+    drawHLine(SCREEN_WIDTH - CORNER_LEN, 0, CORNER_LEN, WHITE);
+    drawVLine(SCREEN_WIDTH - 1, 0, CORNER_LEN, WHITE);
+
+    // bottom left
+    drawHLine(0, SCREEN_HEIGHT - 1, CORNER_LEN, WHITE);
+    drawVLine(0, SCREEN_HEIGHT - CORNER_LEN, CORNER_LEN, WHITE);
+
+    // bottom right
+    drawVLine(SCREEN_WIDTH - 1, SCREEN_HEIGHT - CORNER_LEN, CORNER_LEN, WHITE);
+    drawHLine(SCREEN_WIDTH - CORNER_LEN, SCREEN_HEIGHT - 1, CORNER_LEN, WHITE);
+
+    draw_toolbar();
+
+    draw_statusbar();
+
+    logo_med(3, 3, true);
+
+    // logo(200, 0);
+
+    // logo(440, 30);
+
+    clear_statusbar_hint(); // set the cursor etc.
+}
+
+
+int main() {
+
+// hw_write_masked(
+// 		&clocks_hw->clk[clk_hstx].div,
+// 		2 << CLOCKS_CLK_HSTX_DIV_INT_LSB,
+// 		CLOCKS_CLK_HSTX_DIV_INT_BITS
+// 	);
+
+
+    // this does not work
+    // CLK_HSTX = clk_sys. Transmit bit clock for the HSTX peripheral.
+
+
+    // clock_configure_undivided(clk_hstx,
+    //                 0,
+    //                 CLOCKS_CLK_HSTX_CTRL_AUXSRC_VALUE_CLK_SYS,
+    //                 125000000); // reports as changed to this value, but makes no difference to hstx dvi refresh rate - it's still 72 Hz and trying for 60 Hz
+
+    // Initialize stdio
+    
+    // stdio_init_all();
+
+    // stdio_driver_t my_uart_driver;
+    // Initialize your UART driver here
+
+    // stdio_set_driver_enabled(&my_uart_driver, true);
+    // stdio_set_translate_crlf(&my_uart_driver, true); // Enable CR/LF 
+
+    // gpio_init_mask(GPIO_INPUT_MASK_0_31); // init all GPIO in the above mask
+
+    for (int i = 0; i < 32; i++) {
+        if (GPIO_INPUT_MASK_0_31 & (1 << i)) {
+            gpio_init(i);
+            gpio_pull_up(i);
+        }
+    }
+
+#if PICO_PIO_USE_GPIO_BASE
+    for (int i = 0; i < 16; i++) {
+        if (GPIO_INPUT_MASK_32_47 & (1 << i)) {
+            gpio_init(i + 32);
+            gpio_pull_up(i + 32);
+        }
+    }
+#endif
+
+    stdio_init_all();
+
+
+#if !USE_STDIO_UART
+    uart_init(UART_ID, BAUD_RATE);
+    gpio_set_function(UART_TX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_TX_PIN));
+    gpio_set_function(UART_RX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_RX_PIN));
+#endif
+
+
+#if USE_LED_AS_IR_DEBUG
+
+#ifdef LED_PIN
+    gpio_init(LED_PIN);
+    gpio_set_dir(LED_PIN, GPIO_OUT); // set LED_PIN GPIO to an output
+    gpio_put(LED_PIN, 1); // set LED_PIN
+
+#endif
+
+#endif
+
+    // uart_my_putcf("GPIO Inputs: %x\n", GPIO_INPUT_MASK_0_31);
+
+    // uart_my_puts("\n\n");
+
+    show_about_info(false);
+
+// #ifdef PICO_SDK_VERSION_STRING
+//     uart_my_puts("SDK Version: ");
+//     uart_my_puts(PICO_SDK_VERSION_STRING);
+//     uart_my_puts("\n");
+// #endif
+
+
+#if USE_DVI
+    // Initialise the HSTX DVI driver
+    uart_my_puts("Initialising DVI...\n");
+
+    #if SYS_CLK_HZ == 250 * MHZ
+    // clock_configure_int_divider (clk_hstx, 0, 0, clock_get_hz(clk_sys), 2);
+    #endif
+
+    uart_my_putcf("clk_hstx: %d\n", clock_get_hz (clk_hstx));
+    // uart_my_putcf("HSTX Frequency: %d\n", clock_get_hz (CLK_DEST_HSTX));
+
+ #if USE_MULTI_CORE
+
+    #if USE_UART_STDIO
+    // for some reason we need a delay here. find out why. todo
+
+    // sleep_ms(1); // if using DVI this seems to be required ??? needs to empty the UART perhaps? todo
+
+    // try sleep_us()...
+    // sleep_us(100); // if using DVI this seems to be required ??? needs to empty the UART perhaps? todo
+    // 190 fails everytime, 200 fails sometimes, 201 passes everty time
+
+    // This only seems to be needed following a programming of the flash via SWD, or a reset via SWD.
+    // If given a hardware reset (RUN driven low and then released) it works every time, ie needs no delay.
+    // Also, it doesn't need a delay if programming the flash via picotool. So for now let's leave it at
+    // 500 and investigate further later.
+
+    sleep_us(500);
+
+    #endif
+
+    multicore_launch_core1(core1_main);
+
+    // wait for core 1 to acknowledge that it's initialised the DVI output
+    if (multicore_fifo_pop_blocking()) {   
+        uart_my_puts("DVI initialised\n");
+    }
+
+    // show the test bars
+    // dvi_testbars();
+    sleep_ms(500); 
+
+#else
+
+    sleep_ms(1000); // if using DVI this seems to be required
+                    // doesn't like powering up (versus reset).
+
+    dvi_init();
+
+    dvi_testbars();
+
+#endif
+
+    // print_dvi_regs();
+
+    // uart_my_putcf("clk_peri: %d\n", clock_get_hz(clk_peri));
+
+    // uart_my_putcf("clk_hstx: %d\n", clock_get_hz(clk_hstx));
+
+    sleep_ms(500);
+
+#endif
+
+    // Initialize the VGA screen
+
+    change_plot_line_colour_palette(g_palette);
+
+    uart_my_puts("Initialising VGA...\n");
+
+    // sometimes we the VGA to DVI doesn't work if this delay is too short
+    // sleep_ms(1);
+
+    // uart_my_puts("Initialising VGA...\n");
+    
+    // uart_my_putcf("VGA_OUT_RGB_BASE_PIN: %x\n", VGA_OUT_RGB_BASE_PIN);
+
+    // The VGA driver state machines are on pio1
+
+#if PICO_PIO_USE_GPIO_BASE
+    if ((VGA_OUT_RGB_BASE_PIN + 6) >= 32) {
+        my_pio_set_gpio_base(pio1, 16);
+    }
+#endif
+
+    uart_my_putcf("With RGB base pin on: %d\n", VGA_OUT_RGB_BASE_PIN);
+    uart_my_putcf("And: %d pins\n", VGA_OUT_RGB_PIN_COUNT);
+
+    bool use_csync;
+
+#if USE_CSYNC
+    use_csync = true;
+#endif
+
+    initVGA(VGA_OUT_HSYNC_CSYNC_PIN, use_csync, VGA_OUT_RGB_BASE_PIN, VGA_OUT_RGB_PIN_COUNT);
+    init_line_colours();
+
+    // We're going to capture into a u32 buffer, for best DMA efficiency. Need
+    // to be careful of rounding in case the number of pins being sampled
+    // isn't a power of 2.
+
+    // uint total_sample_bits = g_capture_n_samples * g_no_of_captured_pins;
+    // total_sample_bits += bits_packed_per_word(g_no_of_captured_pins) - 1;
+    
+    // uint buf_size_words = total_sample_bits / bits_packed_per_word(g_no_of_captured_pins);
+
+    // As we know that BUF_SIZE_WORDS is a power of 2 we don't need to bother with bits_packed_per_word()
+    buf_size_words = BUF_SIZE_WORDS; // todo - replace buf_size_words with BUF_SIZE_WORDS
+
+    // equivalent to: uint8_t array[210,000] 
+    capture_buf = malloc(buf_size_words * sizeof(uint32_t));
+    hard_assert(capture_buf);
+
+    total_sample_bits = buf_size_words * bits_packed_per_word(g_no_of_captured_pins);
+
+    g_capture_n_samples = total_sample_bits / g_no_of_captured_pins;    
+    
+    // if we change the no of pins during the program then our CAPTURE_N_SAMPLES will possibly be wrong
+    // so let's try and reverse the maths to give us CAPTURE_N_SAMPLES given buf_size_words and g_no_of_pins...
+
+    // total_sample_bits = buf_size_words * bits_packed_per_word(g_no_of_pins);
+    // total_sample_bits -= bits_packed_per_word(g_no_of_pins) - 1;
+    // CAPTURE_N_SAMPLES = total_sample_bits / g_no_of_pins;
+
+    // now to test it... at the start of the plotting function, perhaps...
+
+    // Grant high bus priority to the DMA, so it can shove the processors out
+    // of the way. This should only be needed if you are pushing things up to
+    // >16bits/clk here, i.e. if you need to saturate the bus completely.
+
+    // todo - uncomment this next line if we need to
+    // bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
+    
+
+    // Define PIO and State Machines for the trigger and capture logic.
+    // Could make these more global to avoid lots of parameter passing - todo. 
+
+
+/*
+#if PICO_PIO_USE_GPIO_BASE 
+    PIO pio = pio2;
+#else
+    PIO pio = pio2;
+#endif
+    uint sm = 3;
+*/
+    // Claim a DMA channel for the pio state machine(s) used for capturing.
+    dma_chan = dma_claim_unused_channel(true);
+
+    draw_ui();
+
+    // Capture and plot
+    handle_command(UIC_C);
+
+    // Show help message
+    clear_statusbar_hint(); // set the cursor etc.
+    writeString(start_help_text);
+    uart_my_puts(start_help_text);
+
+#if USE_IR
+
+    init_ir_rx(true);
+
+#endif
+
+#if USE_VGA_CAPTURE
+    sleep_ms(500);
+
+    #if USE_VGA_IN_TO_DVI
+
+    set_vga_capture(VC_VGA_IN);
+
+    #else
+
+    set_vga_capture(VC_VGA_OUT);
+
+    #endif
+
+    // set_vga_capture(VC_NONE);
+
+ #endif
+
+    uint ins = 0;
+
+    for (int i = 0; i < 32; i++) {
+
+        // if (gpio_is_dir_out(i) == 0) {
+        // if (gpio_is_pulled_up(i) == 0) {
+        if (gpio_is_dir_out(i) == 0) {
+
+            ins |= (1 << i);
+        }
+
+    }
+
+
+#if PICO_PIO_USE_GPIO_BASE
+
+    uint high_ins = 0;
+
+    for (int i = 32; i < 48; i++) {
+        if (gpio_is_dir_out(i) == 0) {
+            high_ins |= (1 << (i - 32));
+        }
+    }
+
+/*
+
+    for (int i = 0; i < 48; i++) {
+
+        // if (gpio_is_dir_out(i) == 0) {
+        // if (gpio_is_pulled_up(i) == 0) {
+        gpio_function_t f = gpio_get_function(i);
+            // uart_my_putcf("%d\n", (uint) f);
+
+        printf("%d: %d\n", i, (uint) f);
+
+    }
+
+*/
+
+#endif
+
+    uart_my_putcf("Inputs: %x\n", ins);
+
+#if PICO_PIO_USE_GPIO_BASE
+
+    stdio_printf("High inputs: %x\n", high_ins);
+
+#endif
+
+    // mainloop
+    while(true) {
+
+        uint ui_command = check_keyboard();
+
+#if USE_IR
+        if (!ui_command) {
+            ui_command = check_ir();
+        }
+#endif
+
+        if (ui_command) {
+
+            if (main_state == MS_ACTIVE) {
+                handle_command(ui_command);
+            } else {
+                restart_vga_out();
+            }
+        } else {
+
+            switch (main_state) {
+                case MS_ACTIVE:
+                if (VGA_TIMEOUT && (time_us_64() - last_event_time >= (VGA_TIMEOUT * 1000 * 1000))) {
+                        start_screensaver();
+                }
+                break;
+
+                case MS_SCREENSAVE:
+                if (screensaver_animate()) {
+                    screensaver_animate();
+                } else {
+                    start_screen_blanking();
+                }
+                break;
+
+                case MS_BLANK:
+                if (time_us_64() - last_event_time >= (1 * 1000 * 1000)) {
+                    halt_vga_out();
+                }
+                break;
+
+                case MS_VGA_HALTED:
+                break;
+
+            }
+
+#if USE_VGA_CAPTURE
+
+            // test to see if the vga capture dma write address is that of the start of the dvi frame buffer
+            if (vga_capture_dma_write_addr) {
+                // it isn't, so report the write address
+                uart_my_putuif("vga_capture_dma_write_addr: %x\n", vga_capture_dma_write_addr);
+                
+                // reinitialise the vga capture PIOs and DMA 
+                deinit_vga_capture();
+                vga_in_capture_set_enabled(true);
+                vga_capture_dma_write_addr = 0;
+            } else {
+                if (vga_capture_seconds_count != last_vga_capture_seconds_count) {
+                    last_vga_capture_seconds_count = vga_capture_seconds_count;
+                    last_vga_capture_time = time_us_64();
+                    if (main_dvi_state == MDS_NO_SIGNAL) {
+                        uart_my_puts("VGA input signal detected. Restarting DVI output...\n");
+                        multicore_fifo_push_blocking(CORE1_CMD_INIT_DVI);
+                        main_dvi_state = MDS_ACTIVE;
+                    }
+                } else if (main_dvi_state == MDS_ACTIVE) {
+                    if (time_us_64() - last_vga_capture_time >= (5 * 1000 * 1000)) {
+                        uart_my_puts("No VGA input signal. Halting DVI output...\n");
+                        multicore_fifo_push_blocking(CORE1_CMD_DEINIT_DVI);
+                        main_dvi_state = MDS_NO_SIGNAL;
+#if defined(PICO_DEFAULT_LED_PIN)
+                        led_state = 0;
+                        gpio_put(PICO_DEFAULT_LED_PIN, led_state);
+#endif
+                    }
+                }
+            }
+
+#endif
+
+#if !USE_DVI
+            sleep_ms(10); // testing to see if this still randomly crashes the hstx-dvi (when using it)
+            // NB sleep_ms, which trys to use the arm's wfe instruction, seems to be the thing
+            // that causes the hstx-dvi to fall over.
+
+            // Calling sleep_ms() with 'PICO_TIME_DEFAULT_ALARM_POOL_DISABLED=1' (defined using target_compile_definitions())
+            // in CMakeLists.txt also prevents the crashing, but defeats the purpose of trying to save power.
+
+            // uart_putc(UART_ID, 'B');
+
+#else
+
+    #if USE_MULTI_CORE
+            sleep_ms(10); // testing to see if this still randomly crashes the hstx-dvi now that it's on core 1 - it doesn't
+
+    #endif
+
+#endif
+
+        }
+    }
+}

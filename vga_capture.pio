@@ -1,0 +1,395 @@
+; VGA (VGA222 6-bit) Capture
+
+; Currently this is designed for the RP2350 as it uses new features of PIO1.
+; It monitors when VSYNC goes low and then counts 23 high to low transitions of 
+; HSYNC (horizontal back porch) before taking 640 samples of the RRGGBB pins at
+; 25 MHz and then autopushing them to the RXFIFO every 5 samples (30 bits).
+
+
+.program vga_detect_vsync
+
+.wrap_target
+start:
+; Wait for a VSYNC
+    wait 0 jmppin+0                 ; wait for VSYNC to be low (VSYNC must be 1 GPIO higher than HSYNC's GPIO)
+    wait 1 jmppin+0                 ; wait for VSYNC to be high
+
+; Signal that a VSYNC has occurred, which allows us to test whether we're out
+; of sync with the DMA channel responsible for writing to the dvi frame buffer.
+    irq 7
+
+; Wait for 32 HSYNCs
+    set x, 31                       ; prepare to count 32 HSYNCS
+
+clock_count_loop:
+    wait 0 jmppin+1                 ; wait for HSYNC to be low
+    wait 1 jmppin+1                 ; wait for HSYNC to be high
+    jmp x-- clock_count_loop
+
+    mov y, osr                      ; y = 479 for 480 vertical lines
+
+; Wait for one more HSYNC (a total of 33 HSYNCS)
+
+wait_for_hsync:
+    wait 0 jmppin+1                 ; wait for HSYNC to be low
+    wait 1 jmppin+1                 ; wait for HSYNC to be high
+   
+    irq 4                           ; signal to another state machine to grab the pixel value
+    jmp y-- wait_for_hsync
+
+.wrap
+
+
+% c-sdk {
+
+static inline void vga_detect_vsync_program_init(PIO pio, uint sm, uint offset, uint vsync_pin) {
+
+    pio_sm_config c = vga_detect_vsync_program_get_default_config(offset);
+
+    // Configure the jmp pin group to start at `vsync_pin`
+    sm_config_set_jmp_pin(&c, vsync_pin);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+
+    pio_sm_put_blocking(pio, sm, 480 - 1); // put 479 into the txfifo for the number of lines
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // osr = 479
+
+}
+
+%}
+
+
+.program vga_detect_vsync_on_csync
+
+; Wait for a VSYNC on CSYNC, which looks like this (periods are in cycles @ 25MHz, which need to multiplied by 6 to get @ 150MHz):
+
+;``````````````|    |``|                   |````|                          |````|  |```````````````````|    |``````````````````````````|    |``````````````````````````|    |`````
+;    704       | 96 |48|       656         | 96 |            704           | 96 |48|       656         | 96 |           704            | 96 |           704            | 96 | etc.
+;              |____|  |___________________|    |__________________________|    |__|                   |____|                          |____|                          |____|
+
+; 1. Wait for a low pulse that's greater than 96 cycles, ie the 656 cycle pulse
+; 2. Wait for 34 low pulses, including the 704 and 48 cycle pulses (25MHz)
+; 3. Wait for an hsync pulse (on csync) and set an IRQ flag so that another
+;    state machine can sample the RGB pins 640 times and DMA these samples to SRAM
+; 4. Repeat from step 3 until all 480 lines have been sampled
+; 5. Repeat from step 1
+
+.wrap_target
+
+wait_for_vsync_on_csync:
+
+; I'd really like to gain one instruction so that we can set an irq on VSYNC
+; in vga_detect_vsync in order to test whether we need to resynchronise the
+; dvi frame buffer
+
+; I don't particulaly like it but we can probably lose this instruction
+
+;    wait 1 jmppin                   ; wait for csync to be high
+
+; Yes, it seems we can
+
+; csync is high
+    wait 0 jmppin                   ; wait for csync to be low
+
+; csync has gone low and needs to be low for more than 96 * 6 = 576 cycles, and less than 656 * 6 = 3936 cycles
+
+    mov y, osr                      ; y = 479 for 480 vertical lines
+
+; Load 479 into x for a pulse of greater than 2 + (480 * 2) = 962 cycles
+; and satisfies: 576 < 962 < 3936
+    mov x, y                        ; x = 479
+
+test_low_pulse_width:
+; if csync has gone high too soon the pulse is too short for a vsync (on csync),
+; it's probably a regular HSYNC   
+    jmp pin wait_for_vsync_on_csync
+
+; if not, see if it has been low for long enough
+    jmp x-- test_low_pulse_width
+
+; Signal that a VSYNC has occurred, which allows us to test whether we're out
+; of sync with the DMA channel responsible for writing to the dvi frame buffer.
+
+    irq 7
+    mov x, isr                      ; x = 34 for 35 hsync on csync pulses
+
+; Wait for 35 hsyncs on csync (2 for the 704 and 48 pulses, and 33 more for the back porch)
+hsync_wait_loop:
+    wait 0 jmppin                   ; wait for csync to be low
+    wait 1 jmppin                   ; wait for csync to be high
+    jmp x-- hsync_wait_loop
+
+; Wait for one more hsync (a total of 36)
+
+wait_for_hsync:
+    wait 0 jmppin                   ; wait for csync to be low
+    wait 1 jmppin                   ; wait for csync to be high
+
+    irq 4                           ; signal to another SM to start grabbing a line of pixels
+    jmp y-- wait_for_hsync
+
+.wrap
+
+
+% c-sdk {
+
+static inline void vga_detect_vsync_on_csync_program_init(PIO pio, uint sm, uint offset, uint hsync_pin /*, uint rgb_pin /* , uint led_pin */) {
+
+    pio_sm_config c = vga_detect_vsync_on_csync_program_get_default_config(offset);
+
+    // Configure the jmp pin to start at `rgb_pin`
+    sm_config_set_jmp_pin(&c, hsync_pin);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+
+    // Write values into the osr and the isr
+    pio_sm_put_blocking(pio, sm, 35 - 1); // put 34 into the txfifo for the number hsync on csync pulses
+    pio_sm_put_blocking(pio, sm, 480 - 1); // put 479 into the txfifo for the number of lines
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // osr = 34
+    pio_sm_exec(pio, sm, pio_encode_mov(pio_isr, pio_osr)); // isr = 34
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // osr = 479
+
+}
+
+%}
+
+
+.program vga_capture
+;.side_set 1 opt                     ; one sideset pin - the Pico's LED
+
+; 1. Wait to be flagged by another state machine that an HSYNC has been detected
+; 2. Wait for 48 * 6 = 288 cycles (@150 MHz) plus 3 more to be in the middle of the
+;    first pixel and sample the RRGGBB pins
+; 3. Keep sampling every 6 cycles until a whole line (640 pixels) has been sampled
+; 4. Jump to step 1
+
+.wrap_target
+
+start:
+    mov y, osr                      ; load y with 639 for 640 loops
+
+wait_for_hsync:
+    wait 1 irq 4                    ; wait for hsync (1 clk) to be detected and flagged by another sm (1 clk)
+
+    set x, 31                       ; 1 clk
+
+delay_loop:
+    jmp x-- delay_loop [8]          ; 32 * 9 = 288 + (1 + 1 + 1 (from above)) = 291 clks
+
+sample_rgb_pins:
+    in pins, 6 [4]                  ; grab the pixel data
+    jmp y-- sample_rgb_pins         ; repeat 639 more times  
+
+.wrap
+
+
+% c-sdk {
+
+static inline void vga_capture_program_init(PIO pio, uint sm, uint offset, uint rgb_pin) {
+
+    pio_sm_config c = vga_capture_program_get_default_config(offset);
+
+    // Configure the input pin group to start at `rgb_pin`
+    sm_config_set_in_pins (&c, rgb_pin);
+
+    // Configure the sideset pin to start at `debug_pin`
+    // sm_config_set_sideset_pins(&c, debug_pin);
+
+    // Shift ISR to the right, enable autopush, and set the push threshold set to 30
+    sm_config_set_in_shift(&c, true, true, 30);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+
+    pio_sm_put_blocking(pio, sm, 640 - 1); // put 639 into the txfifo for the number of horizontal pixels
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // osr = 639
+
+}
+
+%}
+
+
+.program vga_capture_125_mhz
+;.side_set 1 opt                     ; one sideset pin - the Pico's LED
+
+; 1. Wait to be flagged by another state machine that an HSYNC has been detected
+; 2. Wait for 48 * 5 = 240 cycles (@125 MHz) plus 2 or 3 more to be in the middle of the
+;    first pixel and sample the RRGGBB pins
+; 3. Keep sampling every 5 cycles until a whole line (640 pixels) has been sampled
+; 4. Jump to step 1
+
+.wrap_target
+
+start:
+    mov y, osr                      ; load y with 639 for 640 loops
+
+wait_for_hsync:
+    wait 1 irq 4                    ; wait for hsync (1 clk) to be detected and flagged by another sm (1 clk)
+
+    set x, 28 [7]                   ; 8 clks
+
+delay_loop:
+    jmp x-- delay_loop [7]          ; 29 * 8 = 232 + (1 + 1 + 8 (from above)) = 242 clks
+
+
+sample_rgb_pins:
+    in pins, 6 [3]                  ; grab the pixel data
+    jmp y-- sample_rgb_pins         ; repeat 639 more times
+
+.wrap
+
+
+% c-sdk {
+
+static inline void vga_capture_125_mhz_program_init(PIO pio, uint sm, uint offset, uint rgb_pin) {
+
+    pio_sm_config c = vga_capture_125_mhz_program_get_default_config(offset);
+
+    // Configure the input pin group to start at `rgb_pin`
+    sm_config_set_in_pins (&c, rgb_pin);
+
+    // Configure the sideset pin to start at `debug_pin`
+    // sm_config_set_sideset_pins(&c, debug_pin);
+
+    // Shift ISR to the right, enable autopush, and set the push threshold set to 30
+    sm_config_set_in_shift(&c, true, true, 30);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+
+    pio_sm_put_blocking(pio, sm, 640 - 1); // put 639 into the txfifo for the number of horizontal pixels
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // osr = 639
+
+}
+
+%}
+
+
+.program vga_1bit_capture
+
+; 1. Wait to be flagged by another state machine that an HSYNC has been detected
+; 2. Wait for 48 * 6 = 288 cycles (@150 MHz) plus 3 more to be in the middle of the
+;    first pixel and sample the single RGB pin
+; 3. Keep sampling every 6 cycles until a whole line (640 pixels) has been sampled
+; 4. Jump to step 1
+
+.wrap_target
+
+start:
+    mov y, osr                      ; load y with 639 for 640 loops
+
+wait_for_hsync:
+    wait 1 irq 4                    ; wait for hsync (1 clk) to be detected and flagged by another sm (1 clk)
+
+    set x, 30 [6]                      ; 10 clks
+
+delay_loop:
+    jmp x-- delay_loop [8]          ; 31 * 9 = 279 + (1 + 1 + 7 (from above)) + 3 = 291 clks
+
+sample_rgb_pin:
+    jmp pin rgb_pin_high
+rgb_pin_low:
+    set x, 0                        ; load x with black
+    jmp auto_push_pixel
+
+rgb_pin_high:
+    set x, 0b001100 [1]             ; load x with a RRGGBB value - in this case light green
+
+    ; set x, 0b001110                 ; load x with the inverse of a RRGGBB value and...
+    ; mov x, !x                       ; ... invert it, int his case: a sort of raspberry
+    
+auto_push_pixel:
+    in x, 6 [1]                     ; push 6 bits of pixel data (if auto-push enabled)
+    jmp y-- sample_rgb_pin          ; repeat 639 more times  
+
+.wrap
+
+
+% c-sdk {
+
+static inline void vga_1bit_capture_program_init(PIO pio, uint sm, uint offset, uint rgb_pin) {
+
+    pio_sm_config c = vga_1bit_capture_program_get_default_config(offset);
+
+    // Configure the jmp pin group to start at `rgb_pin`
+    sm_config_set_jmp_pin(&c, rgb_pin);
+
+    // Shift ISR to the right, enable autopush, and set the push threshold to 30
+    sm_config_set_in_shift(&c, true, true, 30);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+
+    pio_sm_put_blocking(pio, sm, 640 - 1); // put 639 into the txfifo for the number of horizontal pixels
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // osr = 639
+
+}
+
+%}
+
+
+.program vga_1bit_capture_125_mhz
+
+; 1. Wait to be flagged by another state machine that an HSYNC has been detected
+; 2. Wait for 48 * 5 = 240 cycles (@125 MHz) plus 2 or 3 more to be in the middle of the
+;    first pixel and sample the RRGGBB pins
+; 3. Keep sampling every 5 cycles until a whole line (640 pixels) has been sampled
+; 4. Jump to step 1
+
+
+.wrap_target
+
+start:
+    mov y, osr                      ; load y with 639 for 640 loops
+
+wait_for_hsync:
+    wait 1 irq 4                    ; wait for hsync (1 clk) to be detected and flagged by another sm (1 clk)
+
+    set x, 28 [4]                   ; 5 clks
+
+delay_loop:
+    jmp x-- delay_loop [7]          ; 29 * 8 = 232 + (1 + 1 + 5 (from above) + 3) = 242 clks
+
+sample_rgb_pin:
+    jmp pin rgb_pin_high
+rgb_pin_low:
+    set x, 0                        ; load x with black
+    jmp auto_push_pixel
+
+rgb_pin_high:
+    set x, 0b001100 [1]             ; load x with a RRGGBB value - in this case light green
+
+    ; set x, 0b001110                 ; load x with the inverse of a RRGGBB value and...
+    ; mov x, !x                       ; ... invert it, int his case: a sort of raspberry
+    
+auto_push_pixel:
+    in x, 6                         ; push 6 bits of pixel data (if auto-push enabled)
+    jmp y-- sample_rgb_pin          ; repeat 639 more times  
+
+.wrap
+
+
+% c-sdk {
+
+static inline void vga_1bit_capture_125_mhz_program_init(PIO pio, uint sm, uint offset, uint rgb_pin) {
+
+    pio_sm_config c = vga_1bit_capture_125_mhz_program_get_default_config(offset);
+
+    // Configure the jmp pin group to start at `rgb_pin`
+    sm_config_set_jmp_pin(&c, rgb_pin);
+
+    // Shift ISR to the right, enable autopush, and set the push threshold to 30
+    sm_config_set_in_shift(&c, true, true, 30);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+
+    pio_sm_put_blocking(pio, sm, 640 - 1); // put 639 into the txfifo for the number of horizontal pixels
+    pio_sm_exec(pio, sm, pio_encode_pull(false, true)); // osr = 639
+
+}
+
+%}
+
