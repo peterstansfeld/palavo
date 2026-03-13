@@ -469,7 +469,7 @@ TODO ![A Pimoroni PICO LIPO 2XL W attached - well, 66.67% attached - to a Pimoro
 
 #### Using Pre-built Firmware
 
-Place the Pico or Pico 2 in BOOTSEL mode (hold the BOOTSEL button down during board power-up) and copy [palavo_config2_on_pimoroni_pico_lipo2xl_w.uf2](http://github.com/peterstansfeld/palavo/releases/latest/download/palavo_config2_on_pimoroni_pico_lipo2xl_w.uf2) to the drive that appears on your PC.
+Place the Pico or Pico 2 in BOOTSEL mode (hold the BOOTSEL button down during board power-up) and copy [palavo_config2_on_pimoroni_pico_lipo2xl_w_rp2350.uf2](http://github.com/peterstansfeld/palavo/releases/latest/download/palavo_config2_on_pimoroni_pico_lipo2xl_w_rp2350.uf2) to the drive that appears on your PC.
 
 Skip to [Testing Configuration 2](#testing-configuration-2).
 
