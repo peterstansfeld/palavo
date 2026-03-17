@@ -96,7 +96,7 @@ mkdir build
 cd build
 ```
 
-Create a suitably-named directory for the board, and enter it.  
+Create a directory for the board, and enter it.  
 
 For the Pico:
 
@@ -112,7 +112,7 @@ mkdir pico2
 cd pico2
 ```
 
-Create a suitably-named directory for this particular configuration of Palavo, and enter it:
+Create a directory for this particular configuration of Palavo, and enter it:
 
 ```bash
 mkdir config0
@@ -233,7 +233,7 @@ __(PALAVO_CONFIG=1)__
 
 ![A circuit diagram showing example hardware for Configuration 1. A long description follows.](images/config1-circuit.svg "Raspberry Pi Pico in Configuration 1.")
 
-*This is the same circuit as used in Configuration 0 with the addition of a [Pico DVI Sock](https://github.com/Wren6991/Pico-DVI-Sock). Originally designed by Raspberry Pi's Luke Wren, Adafruit now make their own version called the [DVI Sock for Pico](https://www.adafruit.com/product/5957). The DVI Sock connects the HSTX peripheral's pins on the RP2350 to an HDMI-shaped socket allowing a DVI monitor to be used instead of, or possibly as well as, a VGA monitor. The DVI Sock is designed to be soldered or connected to the underside of the Pico 2, but is shown here housed in the same breadboard as the Pico 2 and connected to it using jumper wires:*
+*The same circuit as used in Configuration 0 with the addition of a [Pico DVI Sock](https://github.com/Wren6991/Pico-DVI-Sock). Originally designed by Raspberry Pi's Luke Wren, Adafruit now make their own version called the [DVI Sock for Pico](https://www.adafruit.com/product/5957). The DVI Sock connects the HSTX peripheral's pins on the RP2350 to an HDMI-shaped socket allowing a DVI monitor to be used instead of, or possibly as well as, a VGA monitor. The DVI Sock is designed to be soldered or connected to the underside of the Pico 2, but is shown here housed in the same breadboard as the Pico 2 and connected to it using jumper wires:*
 
 <a id="connecting-a-pico-2-to-a-dvi-sock"></a>
 
@@ -274,7 +274,7 @@ Enter the `pico2` directory:
 cd pico2
 ```
 
-Create a suitably-named directory for this particular configuration of Palavo, and enter it:
+Create a directory for this particular configuration of Palavo, and enter it:
 
 ```bash
 mkdir config1
@@ -295,18 +295,19 @@ If all went well, when Palavo starts you should briefly see the following test s
 
 *Lots of vertical bars of various colours and lengths. The top half of the screen is made up of 19 vertical bars changing from red through the colours of the rainbow to violet, then through magenta to crimson, and finally a single black bar. The bottom half of the screen is made up of 4 rows of vertical bars of various colours with the bottom row being made up all 64 colours ranging from 0 (black) to 63 (white).*
 
-After that, you should see the same screen as you saw on the VGA monitor, which should look very similar to the screen in Configuration 0. If you now use the `tab` key to highlight the `pins` setting and change it from 8 to 20 with the `up-arrow` key, and then press the `c` key (for capture), you should see something like this:
-
+After that, you should see a screen similar to the one on the VGA monitor in Configuration 0. If you now use the `tab` key to highlight the `pins` setting and change it from 8 to 20 with the `up-arrow` key, and then press the `c` key (for capture), you should see something like this:
 
 ![As described in the long description of the start-up screen image, above, except data from 20 channels is  being displayed. A long description follows.](images/config1_on_pico2_pins_20.png "VGA and DVI logic traces.")
 
 *Twenty colourful channels of captured data. The first 8 channels are the relatively quiet VGA Out signals, the next 4 channels are absolutely silent unused GPIO pins, and the last 8 channels are the extremely busy DVI output signals, showing just how much more complex DVI is compared with VGA.*
 
-Press the 'h' key and the same help window as Configuration 0 should appear with the addition of the 'v' item:
+Press the 'h' key and a familiar help window should appear, only with the addition of a 'v' item:  
 
-![As described in the long description of the help screen image, above, except there is an extra line regarding additional DVI modes. A long description follows.](images/config1_on_pico2_pins_20_help.png "Help screen with additional DVI modes.")
+![As described in the long description of the help screen image from Configuration 0, only there's an extra line regarding DVI modes.](images/config1_on_pico2_pins_20_help.png "Help screen with additional DVI modes.")
 
-*The extra line in the help window reads `v to cycle DVI modes: mirror VGA out -> test -> VGA in`. In 'mirror VGA out' mode, whatever is displayed on VGA_Out is also displayed on DVI. In 'test' mode, the test screen is displayed on DVI. In 'mirror VGA in' mode, whatever is seen on VGA_In is displayed on DVI. However, in this particular configuration the VGA_In pins are the same as the VGA_Out pins, which I realise is a little confusing, but in other configurations VGA_In and VGA_Out don't share the same pins, and hopefully that then makes a little more sense.*
+*The extra line in the help window reads `v to cycle DVI modes: mirror VGA out -> test -> VGA in`.*
+
+In 'mirror VGA out' mode, whatever is displayed on VGA_Out is also displayed on DVI. In 'test' mode, the test screen is displayed on DVI. In 'mirror VGA in' mode, whatever is seen on VGA_In is displayed on DVI. However, in this particular configuration the VGA_In pins are the same as the VGA_Out pins, which I realise is a little confusing, but in other configurations VGA_In and VGA_Out don't share the same pins, and hopefully that then makes a little more sense.
 
 ### Thoughts
 
@@ -364,7 +365,7 @@ Skip to [Testing Configuration 21](#testing-configuration-21).
 
 #### Building the Firmware
 
-In the `build/pico2` directory create a suitably-named directory, and enter it:
+In the `build/pico2` directory create a directory, and enter it:
 
 ```bash
 mkdir config21
@@ -475,14 +476,14 @@ Skip to [Testing Configuration 2](#testing-configuration-2).
 
 #### Building the Firmware
 
-In the `build` directory create a suitably-named directory for the board, and enter it:
+In the `build` directory create a directory for the board, and enter it:
 
 ```bash
 mkdir pimoroni_pico_lipo2xl_w
 cd pimoroni_pico_lipo2xl_w
 ```
 
-Create a suitably-named directory for this particular configuration of Palavo, and enter it:
+Create a directory for this particular configuration of Palavo, and enter it:
 
 ```bash
 mkdir config2
@@ -544,14 +545,14 @@ Skip to [Testing Configuration 40](#testing-configuration-40).
 
 #### Building the Firmware
 
-In the `build` directory create a suitably-named directory for the board, and enter it:
+In the `build` directory create a directory for the board, and enter it:
 
 ```bash
 mkdir solderparty_rp2350_stamp_xl
 cd solderparty_rp2350_stamp_xl
 ```
 
-Create a suitably-named directory for this particular configuration of Palavo, and enter it:
+Create a directory for this particular configuration of Palavo, and enter it:
 
 ```bash
 mkdir config40
@@ -623,20 +624,20 @@ Press `Ctrl-P` to tell Palavo to expect a request from minicom to transmit its f
 
 Press `Ctrl-A`, then `R` (for Receive files), then select `xmodem` and press `Enter`.  
 
-Choose a suitable file name (e.g. `image1`) and press `Enter`.  
+Choose a suitable file name (e.g. `image1.pss` ) and press `Enter`.  
 
 After a while the file should be received and saved to the directory from where minicom was run. This example assumes that directory is `utils`.  
 
-The received file has an unusual format and needs to be persuaded into a recognisable one for viewing. This is a two stage process. The first stage is to use a python script in the `utils` directory called `expand-pss.py` (expand palavo screenshot) to convert our `image1` to a raw colour file:
+The received file has an unusual format and needs to be persuaded into a recognisable one for viewing. This is a two stage process. The first stage is to use a Python script in the `utils` directory called `expand-pss.py` (expand palavo screenshot) to convert our `image1.pss` to a `.rgb` file:
 
 ```bash
-python3 expand-pss.py image1 image1.raw
+python3 expand-pss.py image1.pss image1.rgb
 ```
 
-The second stage is to use the open-source application [ImageMagick](https://imagemagick.org/) to convert the raw image file, which is huge, to a much smaller `.png` file:
+The second stage is to use the open-source application [ImageMagick](https://imagemagick.org/) to convert the `.rgb` image file, which is huge, to a much smaller `.png` file:
 
 ```bash
-magick -size 640x480 -depth 8 rgb:image1.raw image1.png
+magick -size 640x480 -depth 8 image1.rgb image1.png
 ```
 
 Finally, to view `image1.png`:
@@ -667,7 +668,7 @@ When in the `utils` directory, and with a screenshot named `image1` in the same 
 ./expand-convert-and-display.sh image1
 ```
 
-This will result in `image1.png` being generated and displayed, and `image1.raw` being overwritten then deleted.
+This will result in `image1.png` being generated and displayed, and `image1.rgb` being overwritten then deleted.
 
 ### make-and-flash.sh
 
@@ -740,6 +741,11 @@ This builds the firmware of each of the configurations mentioned in this documen
 ```bash
 ./make-assets.sh
 ```
+
+### compress-rgb.py
+
+A Python script to convert a 640x480 `.rgb` image file to a monochrome palavo screenshot `.pss` image file. I lost a screenshot, which upset me, and used this script to recreate it from a `.png` file, which wasn't lost, and which had been generated from the original screenshot (before I lost it).
+
 
 ## Links
 
