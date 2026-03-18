@@ -1,6 +1,5 @@
 # palavo
 
-
 ## PIO-Assisted Logic Analyser with VGA Output
 
 TODO ![A Raspberry Pi Pico displaying some logic on a VGA monitor. A long description follows.](config0-on-pico-photo.png "Raspberry Pi Pico displaying some logic on a VGA monitor.")
@@ -13,7 +12,7 @@ When using the RP2350, Palavo can be configured to mirror its VGA output to DVI.
 
 Palavo can also be configured to forward logic-level VGA input signals (e.g. the VGA output signals from a differently configured Palavo device) to DVI.
 
-The project was inspired by, and uses code from, Raspberry Pi's [Logic Analyser (Pico SDK) example](https://github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser), Hunter Adams' [VGA Graphics Primitives demo](https://github.com/vha3/Hunter-Adams-RP2040-Demos/tree/master/VGA_Graphics/VGA_Graphics_Primitives), and Raspberry Pi's [DVI Out HSTX Encoder example for the Pico 2](https://github.com/raspberrypi/pico-examples/tree/master/hstx/dvi_out_hstx_encoder).
+The project was inspired by, and uses code from, Raspberry Pi's [Logic Analyser (Pico SDK) example](https://github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser) and their [DVI Out HSTX Encoder example for the Pico 2](https://github.com/raspberrypi/pico-examples/tree/master/hstx/dvi_out_hstx_encoder), both of which are licensed under the [BSD 3-Clause License](LICENSE-raspberry-pi). Palavo was also inspired by, and uses code from Hunter Adams' [VGA Graphics Primitives demo](https://github.com/vha3/Hunter-Adams-RP2040-Demos/tree/master/VGA_Graphics/VGA_Graphics_Primitives), which has no license, but Hunter has kindly given me permission to share my code under the same [BSD 3-Clause License](LICENSE).
 
 [Hunter Adams](https://vanhunteradams.com/) is an Assistant Teaching Professor at Cornell University, and I can't recommend enough his excellent [ECE4760](https://ece4760.github.io/) lectures and lab assignments, as well as his students' fabulous RP2040 projects.
 
@@ -49,7 +48,7 @@ At its simplest, a [Raspberry Pi Pico or Pico 2](https://www.raspberrypi.com/doc
 |        GP6         | VGA_Out_Dark_Red    |    1K    |        1          |
 |        GP7         | VGA_Out_Light_Red   |   470R   |        1          |
 
- *Not shown in the above diagram is the option to enable infra-red reception by adding 8 to PALAVO_CONFIG (when creating a build directory), and another option to enable UART comms by adding 32 to PALAVO_CONFIG . When enabled these functions use the following pins:*
+ Not shown in the diagram is the option to enable infra-red reception by adding 8 to PALAVO_CONFIG (when creating a build directory), and another option to enable UART comms by adding 32 to PALAVO_CONFIG . When enabled these functions use the following pins:
 
 | Pico Pin | Function |
 |  :---:   | :---     |
@@ -57,7 +56,7 @@ At its simplest, a [Raspberry Pi Pico or Pico 2](https://www.raspberrypi.com/doc
 |   GP9    | UART_RX  |
 |   GP10   | IR_RX    |
 
-*Also not shown in the diagram is the abilty to use CSYNC instead of HSYNC & VSYNC by adding 16 to PALAVO_CONFIG. When using CSYNC, VGA_Out_VSYNC (GP0) is not used and is configured as an input. Note. Not all VGA monitors support CSYNC, but many do.*
+Also not shown in the diagram is the abilty to use CSYNC (instead of HSYNC & VSYNC) by adding 16 to PALAVO_CONFIG. When using CSYNC, VGA_Out_VSYNC (GP0) is not used and is configured as an input. Note. Not all VGA monitors support CSYNC, but many do.
 
 ### Firmware
 
@@ -220,7 +219,7 @@ Press any key to close this window
 
 Hopefully, the above instructions are clear enough to be able to get started using Palavo. If so, congratulations! I hope you find it interesting, and maybe even useful.
 
-Note. After a period of inactivity (keyboard or infra-red) the VGA output will halt to allow the attached monitor to enter a power saving mode. Any keyboard or infra-red activity will restart the VGA output. This period of inactivity (5 minutes in the following example) can be configured by adding `-DVGA_TIMEOUT=300` to the `$ cmake` command line, above. To prevent the VGA output from ever being halted, except by pressing 'S' (uppercase), add `-DVGA_TIMEOUT=0`.
+Note. After a period of inactivity (keyboard or infra-red) the VGA output will halt to allow the attached monitor to enter a power saving mode. Any keyboard or infra-red activity will restart the VGA output. This period of inactivity (5 minutes in the following example) can be configured by adding `-DVGA_TIMEOUT=300` to the `$ cmake` command line. To prevent the VGA output from ever being halted, except by pressing 'S' (uppercase), add `-DVGA_TIMEOUT=0`.
 
 
 ## Configuration 1
@@ -340,7 +339,7 @@ If we have a second Pico 2, and change the VGA_Out\*s to VGA_In\*s we can make a
 |    GP10    | VGA_Out_CSYNC      |
 |    GP11    | VGA_Out_RGB        |
  
- *Not shown in the above diagram is the option to enable infra-red reception by adding 8 to PALAVO_CONFIG (when creating a build directory), and another option to enable UART comms by adding 32 to PALAVO_CONFIG. When enabled these functions use the following pins:*
+ Not shown in the above diagram is the option to enable infra-red reception by adding 8 to PALAVO_CONFIG (when creating a build directory), and another option to enable UART comms by adding 32 to PALAVO_CONFIG. When enabled these functions use the following pins:
 
 | Pico 2 Pin | Function |
 |   :---:    | :---     |
@@ -415,7 +414,7 @@ Place the Pico or Pico 2 in BOOTSEL mode (hold the BOOTSEL button down during bo
 For the Pico use [vga_graphics_primitives_demo_on_pico.uf2](http://github.com/peterstansfeld/palavo/releases/download/v0.14.0/vga_graphics_primitives_demo_on_pico.uf2).  
 For the Pico 2 use [vga_graphics_primitives_demo_on_pico2.uf2](http://github.com/peterstansfeld/palavo/releases/download/v0.14.0/vga_graphics_primitives_demo_on_pico2.uf2).
 
-<a id="vga-demo-screenshot"></a>
+<a id="vga-demo-screenshot-paused"></a>
 Start both devices and hopefully you should see Hunter's demo on your DVI monitor:
 
 ![A frame from Hunter Adams' VGA Graphics Primitives demo. A long description follows.](images/ha-vga-demo-paused.png "Hunter Adams' VGA Graphics Primitives demo.")
@@ -425,9 +424,9 @@ Start both devices and hopefully you should see Hunter's demo on your DVI monito
 I said it was fun.
 
 <a id="removing-vsync-jumper-wire"></a>
-Oh, and in order to obtain this screenshot I had to remove the VSYNC jumper wire because transmitting the DVI screen buffer using the [xmodem](https://en.wikipedia.org/wiki/XMODEM) protocol at 115,200 bps takes quite a long time - a good deal longer than 20 milliseconds. If you'd like to see the result of not removing the VSYNC jumper wire, take a look at [this screenshot](#vsync-jumper-wire-attached) in the [How to Download a Screenshot](#how-to-download-a-screenshot) section.
+Oh, and in order to obtain this screenshot I had to remove the VSYNC jumper wire because transmitting the DVI screen buffer using the [xmodem](https://en.wikipedia.org/wiki/XMODEM) protocol at 115,200 bps takes quite a long time - a good deal longer than 20 milliseconds. If you'd like to see the result of not removing the VSYNC jumper wire, take a look at [this screenshot](#vga-demo-screenshot-playing) in the [How to Download a Screenshot](#how-to-download-a-screenshot) section.
 
-Before we finish with Configuration 1, if you've been wondering why Palavo uses 6-bit colour (RRGGBB) it's because when converting the VGA output to DVI, using the HSTX peripheral on the RP2350, the colours remain the same as the VGA output. This is due to each colour being made up of the same number of bits, which is not the case with Hunter's and Bruce's 4-bit colour (RGGB). To save SRAM used by Palavo's VGA driver, each horizontal line consists of a maximum of two 6-bit colours.
+Before we finish with Configuration 21, if you've been wondering why Palavo uses 6-bit colour (RRGGBB) it's because when converting the VGA output to DVI, using the HSTX peripheral on the RP2350, the colours remain the same as the VGA output. This is due to each colour being made up of the same number of bits, which is not the case with Hunter's and Bruce's 4-bit colour (RGGB). To save SRAM used by Palavo's VGA driver, each horizontal line consists of a maximum of two 6-bit colours.
 
 
 ## Configuration 2
@@ -453,7 +452,7 @@ The trouble with [Configuration 0](#configuration-0) is that we're using quite a
 |         GP36        | VGA_Out_Dark_Red    |    GP6     | VGA_In_Dark_Red    |
 |         GP37        | VGA_Out_Light_Red   |    GP7     | VGA_In_Light_Red   |
 
- *Not shown in the above diagram is the option to enable infra-red reception by adding 8 to PALAVO_CONFIG (when creating a build directory), and another option to enable UART comms by adding 32 to PALAVO_CONFIG . When enabled these functions use the following pins:*
+ Not shown in the above diagram is the option to enable infra-red reception by adding 8 to PALAVO_CONFIG (when creating a build directory), and another option to enable UART comms by adding 32 to PALAVO_CONFIG . When enabled these functions use the following pins:
 
 | Pico Lipo 2XL W Pin | Function |
 |       :---:         | :---     |
@@ -500,7 +499,7 @@ Note. At the time of writing, there wasn't an official `pimoroni_pico_lipo2xl_w_
 
 ### Testing Configuration 2
 
-The screen on the DVI monitor should look the same as it does in Configuration 1, except the `base` and `trig.` settings can be set to use GP0 to GP47 (rather than GP0 to GP31).
+The screen on the should look very similar to the screen in Configuration 0, except the `base` and `trig.` settings can be set to use GP0 to GP47 (rather than GP0 to GP31).
 
 
 ## Configuration 40
@@ -646,14 +645,14 @@ Finally, to view `image1.png`:
 display image1.png
 ```
 
-<a id="vsync-jumper-wire-attached"></a>
+<a id="vga-demo-screenshot-playing"></a>
 The download is slow, especially when it's the DVI framebuffer, and this is why when I first tried to take a screenshot of Hunter Adams' VGA Demo, which updates every 20 milliseconds, it ended up looking like this:
 
 ![A screenshot of Hunter Adams' VGA demo. A long description follows.](images/ha-vga-demo-playing.png "A screenshot of Hunter Adams' VGA demo")
 
 *A screenshot of various graphical primitives drawn in 15 colours on a black background. At the top of the screen are three filled rectangles: one blue, one red, and one green. Text has been drawn on five lines in the the blue rectangle, which read "Raspberry Pi Pico", "Graphics Primitives demo", "Hunter Adams", "vha@cornell.edu" and "4-bit mod by Bruce Land". The red rectangle has two lines of large text, which read "Time Elapsed:" and "90". When running this area of the screen remains static except for the number, which increments every second. Below this static area is the animated area, which gets updated every 20 milliseconds. Here, the filled circles, which should each be filled with a single colour, are filled with roughly 10 horizontal blocks of various colours. Horizontal lines are generally of the same colour, the vertical lines are definitely not, and the section that should be made up of random diagonal lines looks as if [Jackson Pollock](https://en.wikipedia.org/wiki/Jackson_Pollock) was let loose with 16 paint pots full of pixels.*
 
-If you clicked on a link to end up here and you'd like to go back to somewhere near that link, click this link to the original [VGA Graphics Primitives demo screenshot](#vga-demo-screenshot).
+If you'd like, you can click this link to go back to the [VGA Graphics Primitives demo screenshot](#vga-demo-screenshot-paused).
 
 ## Scripts
 These scripts are mainly used when developing Palavo and can be found in the `utils` directory:
@@ -750,3 +749,7 @@ A Python script to convert a 640x480 `.rgb` image file to a monochrome palavo sc
 ## Links
 
  Information about VGA CSYNC (combined sync) can be found on this [HDRetrovision blog post](https://www.hdretrovision.com/blog/2019/10/10/engineering-csync-part-2-falling-short).
+
+---
+
+Go to the [top of this document](#palavo).
