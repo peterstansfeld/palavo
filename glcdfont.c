@@ -1,3 +1,16 @@
+/*
+* This file is from Hunter Adams's VGA Graphics Primitives demo,
+* https://github.com/vha3/Hunter-Adams-RP2040-Demos/tree/master/VGA_Graphics/VGA_Graphics_Primitives,
+* which has no license, but Hunter has kindly given me permission to share it
+* with the following license:
+*/
+
+/*
+* BSD 3-Clause License
+* 
+* Copyright (c) 2026, Peter Stansfeld
+*/
+
 #ifndef FONT5X7_H
 #define FONT5X7_H
  

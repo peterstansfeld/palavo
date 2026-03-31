@@ -1,26 +1,19 @@
+/*
+* Based on `vga16_graphics.h` from Hunter Adams's VGA Graphics Primitives demo,
+* https://github.com/vha3/Hunter-Adams-RP2040-Demos/tree/master/VGA_Graphics/VGA_Graphics_Primitives,
+* which has no license, but Hunter has kindly given me permission to share it
+* and my modifications and additions with the following license:
+*/
+
+/*
+* BSD 3-Clause License
+* 
+* Copyright (c) 2026, Peter Stansfeld
+*/
+
 /**
  * Hunter Adams (vha3@cornell.edu)
  * modifed for 16 colors by BRL4
- * 
- *
- * HARDWARE CONNECTIONS
- *  - GPIO 16 ---> VGA Hsync
- *  - GPIO 17 ---> VGA Vsync
- *  - GPIO 18 ---> 470 ohm resistor ---> VGA Green 
- *  - GPIO 19 ---> 330 ohm resistor ---> VGA Green
- *  - GPIO 20 ---> 330 ohm resistor ---> VGA Blue
- *  - GPIO 21 ---> 330 ohm resistor ---> VGA Red
- *  - RP2040 GND ---> VGA GND
- *
- * RESOURCES USED
- *  - PIO state machines 0, 1, and 2 on PIO instance 0
- *  - DMA channels 0, 1, 2, and 3
- *  - 153.6 kBytes of RAM (for pixel color data)
- *
- * NOTE
- *  - This is a translation of the display primitives
- *    for the PIC32 written by Bruce Land and students
- *
  */
 
 #include <stdint.h>
@@ -54,7 +47,7 @@ enum colors {BLACK, DARK_GREEN, MED_GREEN, GREEN,
 #define MED_RED_BIT 5 
 
 
-// Hunter Adams' 16-colour palette definitions as 64-bit colours
+// Hunter Adams' 16-colour palette definitions as 6-bit colours
 
 #define BLACK       0
 // #define DARK_GREEN  0b000001

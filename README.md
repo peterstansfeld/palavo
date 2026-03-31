@@ -15,9 +15,9 @@ When using the RP2350, Palavo can be configured to mirror its VGA output to DVI.
 
 Palavo can also be configured to forward logic-level VGA input signals (e.g. the VGA output signals from a differently configured Palavo device) to DVI.
 
-The project was inspired by, and uses code from, Raspberry Pi's [Logic Analyser (Pico SDK) example](https://github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser) and their [DVI Out HSTX Encoder example for the Pico 2](https://github.com/raspberrypi/pico-examples/tree/master/hstx/dvi_out_hstx_encoder), both of which are licensed under the [BSD 3-Clause License](LICENSE-raspberry-pi). Palavo was also inspired by, and uses code from, Hunter Adams' [VGA Graphics Primitives demo](https://github.com/vha3/Hunter-Adams-RP2040-Demos/tree/master/VGA_Graphics/VGA_Graphics_Primitives), which has no license, but Hunter has kindly given me permission to share my code under the same [BSD 3-Clause License](LICENSE).
+The project was inspired by, and uses code from, Raspberry Pi's [Logic Analyser (Pico SDK) example](https://github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser) and their [DVI Out HSTX Encoder example for the Pico 2](https://github.com/raspberrypi/pico-examples/tree/master/hstx/dvi_out_hstx_encoder), both of which are licensed with the [BSD 3-Clause License](LICENSE-raspberry-pi). Palavo was also inspired by, and uses code from, Hunter Adams's [VGA Graphics Primitives demo](https://github.com/vha3/Hunter-Adams-RP2040-Demos/tree/master/VGA_Graphics/VGA_Graphics_Primitives), which has no license, but Hunter has kindly given me permission to share my code with the same [BSD 3-Clause License](LICENSE).
 
-[Hunter Adams](https://vanhunteradams.com/) is an Assistant Teaching Professor at Cornell University, and I can't recommend enough his excellent [ECE4760](https://ece4760.github.io/) lectures and lab assignments, as well as his students' fabulous RP2040 projects.
+[Hunter Adams](https://vanhunteradams.com) is an Assistant Teaching Professor at Cornell University, and I can't recommend enough his excellent [ECE4760](https://ece4760.github.io/) lectures and lab assignments, as well as his students' fabulous RP2040 projects.
 
 
 ## How to build Palavo
@@ -313,14 +313,14 @@ In 'mirror VGA out' mode, whatever is displayed on VGA_Out is also displayed on 
 
 ### Thoughts
 
-I find it amazing that the RP2350 can output a DVI signal without too much trouble. However, the DVI framebuffer currently uses a lot of SRAM and this reduces the amount of signal data we can capture. Also this configuration doesn't leave many pins free to capture external signal data. We could lose the VGA output pins and gain a little SRAM by freeing up the VGA framebuffer, but if we had a second Pico 2...
+I find it amazing that the RP2350 can output a DVI signal without too much trouble. However, the DVI framebuffer currently uses a lot of SRAM and this reduces the amount of signal data we can capture. Also this configuration doesn't leave many pins free to capture external signal data. We could lose the VGA output pins and gain a little SRAM by freeing up the VGA framebuffer, but if we had a spare Pico 2...
 
 
 ## Configuration 21
 
 __(PALAVO_CONFIG=21)__
 
-If we have a second Pico 2, and change the VGA_Out\*s to VGA_In\*s we can make a 6-bit logic level VGA - DVI converter. We can also squeeze in a VGA_Out_CSYNC and a VGA_Out_RGB to provide a monochrome VGA output for testing purposes, which can also be mirrored to the DVI output.
+If we have a spare Pico 2, and change the VGA_Out\*s to VGA_In\*s we can make a 6-bit logic level VGA - DVI converter. We can also squeeze in a VGA_Out_CSYNC and a VGA_Out_RGB to provide a monochrome VGA output for testing purposes, which can also be mirrored to the DVI output.
 
 ### Hardware
 
@@ -390,13 +390,13 @@ cmake ../../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=21 -DSYS_CLK_HZ=125000000
 
 ### Testing Configuration 21
 
-Something fun to do here is to get Hunter Adams' [VGA Graphics Primitives demo](https://github.com/vha3/Hunter-Adams-RP2040-Demos/tree/master/VGA_Graphics/VGA_Graphics_Primitives) running on a Pico or Pico 2, and then connect it to a Pico 2 in Configuration 21:
+Something fun to do here is to get Hunter Adams's [VGA Graphics Primitives demo](https://github.com/vha3/Hunter-Adams-RP2040-Demos/tree/master/VGA_Graphics/VGA_Graphics_Primitives) running on a Pico or Pico 2, and then connect it to a Pico 2 in Configuration 21:
 
 ### Hardware
 
-![A circuit diagram showing example hardware for all this fun. A long description follows.](images/config21-with-ha-vga-demo-circuit.svg "A Raspberry Pi Pico running Hunter Adams' VGA Graphics Primitives demo connected to a Pico 2 in Configuration 21.")
+![A circuit diagram showing example hardware for all this fun. A long description follows.](images/config21-with-ha-vga-demo-circuit.svg "A Raspberry Pi Pico running Hunter Adams's VGA Graphics Primitives demo connected to a Pico 2 in Configuration 21.")
 
-*A Raspberry Pi Pico or Pico 2 running Hunter Adams' VGA Graphics Primitives demo, which housed in a half-sized breadboard. Seven of its pins are connected to corresponding pins on a Pico 2 in Configuration 21, which is housed in another half-sized breadboard and connected to a DVI Sock ([as described in Configuration 1](#connecting-a-pico-2-to-a-dvi-sock)). Here are the connections between the Pico or Pico2 running the demo and the Pico 2:*
+*A Raspberry Pi Pico or Pico 2 running Hunter Adams's VGA Graphics Primitives demo, which housed in a half-sized breadboard. Seven of its pins are connected to corresponding pins on a Pico 2 in Configuration 21, which is housed in another half-sized breadboard and connected to a DVI Sock ([as described in Configuration 1](#connecting-a-pico-2-to-a-dvi-sock)). Here are the connections between the Pico or Pico2 running the demo and the Pico 2:*
 
 | Demo Pico or Pico 2 Pin | Function            | Pico 2 in Configuration 21 Pin | Function           |
 |         :---:           | ---:                |              :---:             | :---               |
@@ -420,9 +420,9 @@ For the Pico 2 use [vga_graphics_primitives_demo_on_pico2.uf2](http://github.com
 <a id="vga-demo-screenshot-paused"></a>
 Start both devices and hopefully you should see Hunter's demo on your DVI monitor:
 
-![A frame from Hunter Adams' VGA Graphics Primitives demo. A long description follows.](images/ha-vga-demo-paused.png "Hunter Adams' VGA Graphics Primitives demo.")
+![A frame from Hunter Adams's VGA Graphics Primitives demo. A long description follows.](images/ha-vga-demo-paused.png "Hunter Adams's VGA Graphics Primitives demo.")
 
-*A screenshot of various graphical primitives drawn in 15 colours on a black background. At the top of the screen are three filled rectangles: one blue, one red, and one green. Text has been drawn on five lines in the the blue rectangle, which read "Raspberry Pi Pico", "Graphics Primitives demo", "Hunter Adams", "vha@cornell.edu" and "4-bit mod by Bruce Land". The red rectangle has two lines of large text, which read "Time Elapsed:" and "189". When running this area of the screen remains static except for the number, which increments every second. Below this area the rectangles are filled circles; unfilled circles; unfilled squares; and horizontal, vertical, and diagonal lines drawn on different sections of the screen, which get redrawn in various colours, locations and sizes every 20 milliseconds.*
+*A screenshot of various graphical primitives drawn in 15 colours on a black background. At the top of the screen are three filled rectangles: one blue, one red, and one green. Text has been drawn on five lines in the the blue rectangle, which read "Raspberry Pi Pico", "Graphics Primitives demo", "Hunter Adams", "vha@cornell.edu" and "4-bit mod by Bruce Land". The red rectangle has two lines of large text, which read "Time Elapsed:" and "189". When running this area of the screen remains static except for the number, which increments every second. Below this area are filled circles; unfilled circles; unfilled squares; and horizontal, vertical, and diagonal lines drawn on different sections of the screen, which get redrawn in various colours, locations and sizes every 20 milliseconds.*
 
 I said it was fun.
 
@@ -657,9 +657,9 @@ display image1.png
 ```
 
 <a id="vga-demo-screenshot-playing"></a>
-The download is slow, especially when it's the DVI framebuffer, and this is why when I first tried to take a screenshot of Hunter Adams' VGA Demo, which updates every 20 milliseconds, it ended up looking like this:
+The download is slow, especially when it's the DVI framebuffer, and this is why when I first tried to take a screenshot of Hunter Adams's VGA Demo, which updates every 20 milliseconds, it ended up looking like this:
 
-![A screenshot of Hunter Adams' VGA demo. A long description follows.](images/ha-vga-demo-playing.png "A screenshot of Hunter Adams' VGA demo")
+![A screenshot of Hunter Adams's VGA demo. A long description follows.](images/ha-vga-demo-playing.png "A screenshot of Hunter Adams's VGA demo")
 
 *A screenshot of various graphical primitives drawn in 15 colours on a black background. At the top of the screen are three filled rectangles: one blue, one red, and one green. Text has been drawn on five lines in the the blue rectangle, which read "Raspberry Pi Pico", "Graphics Primitives demo", "Hunter Adams", "vha@cornell.edu" and "4-bit mod by Bruce Land". The red rectangle has two lines of large text, which read "Time Elapsed:" and "90". When running this area of the screen remains static except for the number, which increments every second. Below this static area is the animated area, which gets updated every 20 milliseconds. Here, the filled circles, which should each be filled with a single colour, are filled with roughly 10 horizontal blocks of various colours. Horizontal lines are generally of the same colour, the vertical lines are definitely not, and the section that should be made up of random diagonal lines looks as if [Jackson Pollock](https://en.wikipedia.org/wiki/Jackson_Pollock) was let loose with 16 paint pots full of pixels.*
 

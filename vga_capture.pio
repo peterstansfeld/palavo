@@ -1,3 +1,9 @@
+/*
+* BSD 3-Clause License
+* 
+* Copyright (c) 2026, Peter Stansfeld
+*/
+
 ; VGA (VGA222 6-bit) Capture
 
 ; Currently this is designed for the RP2350 as it uses new features of PIO1.

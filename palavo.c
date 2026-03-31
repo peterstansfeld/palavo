@@ -1,4 +1,4 @@
-/* 
+/*
 * PALAVO
 *
 * PIO-Assisted Logic Analyser with VGA Output
@@ -11,22 +11,70 @@
 * * Raspberry Pi's Logic Analyser example for the Pico.
 *   (github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser)
 *
-* * Hunter Adams's (vha3@cornell.edu) VGA Graphics Primitives for RP2040
-*   (github.com/vha3/Hunter-Adams-RP2040-Demos/tree/master/VGA_Graphics/VGA_Graphics_Primitives)
-*   which uses Hunter's VGA Driver with Bruce Land's 4-bit mod.
-*
 * * Raspberry Pi's DVI Out HSTX Encoder example for the Pico 2.
 *   (github.com/raspberrypi/pico-examples/tree/master/hstx/dvi_out_hstx_encoder)
 *
-* There are many configurations of Palavo; please see README.md for details.
-* To view information on a programmed device (in BOOTSEL mode)
-* Raspberry Pi's `picotool` utility can be used:
+* * Hunter Adams's (vha3@cornell.edu) VGA Graphics Primitives demo
+*   (github.com/vha3/Hunter-Adams-RP2040-Demos/tree/master/VGA_Graphics/VGA_Graphics_Primitives)
+*   which uses Hunter's VGA Driver with Bruce Land's 4-bit mod.
 *
-*   `$ picotool info -a`
-*
-* To view the information in a firmware file:
-*   `$ picotool info -a palavo.uf2`
+* There are many configurations of Palavo, please see README.md for details.
 */
+
+/*
+* Below is the copyright and license information from Raspberry Pi's Logic
+* Analyser example for the Pico:
+*/
+
+/**
+ * Copyright (c) 2020 Raspberry Pi (Trading) Ltd.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
+* Raspberry Pi's HSTX Encoder example also has a BSD 3-Clause license and the
+* following copyright notice:
+*/
+
+// Copyright (c) 2024 Raspberry Pi (Trading) Ltd.
+
+ /*
+ * Hunter Adams's VGA Graphics Primitives demo has no license, but Hunter
+ * has kindly given me permission to share my code with the same BSD 3-Clause
+ * license that Raspberry Pi has used:
+ */
+
+/*
+* BSD 3-Clause License
+* 
+* Copyright (c) 2026, Peter Stansfeld
+* 
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+* 
+* Redistributions of source code must retain the above copyright notice, this
+* list of conditions and the following disclaimer.
+* 
+* Redistributions in binary form must reproduce the above copyright notice,
+* this list of conditions and the following disclaimer in the documentation
+* and/or other materials provided with the distribution.
+* 
+* Neither the name of the copyright holder nor the names of its contributors
+* may be used to endorse or promote products derived from this software without
+* specific prior written permission.
+* 
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 14

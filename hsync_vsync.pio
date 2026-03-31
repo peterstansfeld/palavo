@@ -1,10 +1,15 @@
-; Peter Stansfeld
+/*
+* BSD 3-Clause License
+* 
+* Copyright (c) 2026, Peter Stansfeld
+*/
+
 ; HSync & VSync generation for VGA driver
 ; Inspired by Hunter Adams (vha3@cornell.edu)
 
 .program hsync5
 ;.side_set 1 opt     ; used to control vsync. Max delay is 7 cycles
-;.origin 0           ; we modify the PC, which needs absolute addresseses
+;.origin 0           ; we modify the PC, which needs absolute addresses
 
 ; Horizontal Specifications
 
@@ -46,7 +51,7 @@
 ;     wait for delay0 + 1 cycle(s)
 ;     vsync & hsync GPIO pins = vsync1 & hsync1 respectively
 ;     if (rgb_flag) {
-;         set IRQ to trigger pixel data in `rgb5.pio` 
+;         set IRQ to trigger pixel data in `rgb.pio` 
 ;     }
 ;     wait for delay1 + 1 cycle(s)
 ; }

@@ -1,4 +1,21 @@
+/*
+* Based on `dvi_out_hstx_encoder.c` from Raspberry Pi's DVI Out HSTX Encoder
+* example for the Pico 2,
+* https://github.com/raspberrypi/pico-examples/tree/master/hstx/dvi_out_hstx_encoder,
+* which has a BSD 3-Clause license and the following copyright message:
+*/
+
 // Copyright (c) 2024 Raspberry Pi (Trading) Ltd.
+
+/* 
+* My modifications and additions are shared with the following:
+*/
+
+/*
+* BSD 3-Clause License
+* 
+* Copyright (c) 2026, Peter Stansfeld
+*/
 
 // Generate DVI output using the command expander and TMDS encoder in HSTX.
 

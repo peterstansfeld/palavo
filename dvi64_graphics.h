@@ -1,25 +1,8 @@
-/**
- * Todo - modify this
- * 
- * HARDWARE CONNECTIONS
- *  - GPIO 16 ---> VGA Hsync
- *  - GPIO 17 ---> VGA Vsync
- *  - GPIO 18 ---> 470 ohm resistor ---> VGA Green 
- *  - GPIO 19 ---> 330 ohm resistor ---> VGA Green
- *  - GPIO 20 ---> 330 ohm resistor ---> VGA Blue
- *  - GPIO 21 ---> 330 ohm resistor ---> VGA Red
- *  - RP2040 GND ---> VGA GND
- *
- * RESOURCES USED
- *  - PIO state machines 0, 1, and 2 on PIO instance 0
- *  - DMA channels 0, 1, 2, and 3
- *  - 153.6 kBytes of RAM (for pixel color data)
- *
- * NOTE
- *  - This is a translation of the display primitives
- *    for the PIC32 written by Bruce Land and students
- *
- */
+/*
+* BSD 3-Clause License
+* 
+* Copyright (c) 2026, Peter Stansfeld
+*/
 
 #ifndef DVI_GRAPHICS_H
 #define DVI_GRAPHICS_H

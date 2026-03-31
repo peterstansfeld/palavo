@@ -1,3 +1,10 @@
+/*
+* BSD 3-Clause License
+* 
+* Copyright (c) 2026, Peter Stansfeld
+*/
+
+; Inspired by:
 ; Hunter Adams (vha3@cornell.edu)
 ; RGB generation for VGA driver
 ; mod by Bruce Land for 16 colors
