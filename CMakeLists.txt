@@ -125,5 +125,8 @@ pico_enable_stdio_usb(palavo 1)
 if (PC_BIT5)
     message(STATUS "Use UART stdio")
     pico_enable_stdio_uart(palavo 1)
+# else()
+#     # UART stdio seems to be enabled by default
+#     pico_enable_stdio_uart(palavo 0)
 endif()
 

@@ -165,44 +165,72 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
 
     #if USE_GPIO_31_47
 
+        #ifndef VGA_IN_VSYNC_PIN
         #define VGA_IN_VSYNC_PIN 0
-        #define VGA_IN_HSYNC_CSYNC_PIN 1
+        #endif
+
+        #ifndef VGA_IN_HSYNC_CSYNC_PIN
+        #define VGA_IN_HSYNC_CSYNC_PIN (VGA_IN_VSYNC_PIN + 1)
+        #endif
+
+        #ifndef VGA_IN_RGB_BASE_PIN
         #define VGA_IN_RGB_BASE_PIN 2
+        #endif
+
+        #ifndef VGA_IN_RGB_PIN_COUNT
         #define VGA_IN_RGB_PIN_COUNT 6
+        #endif
 
+        #ifndef VGA_OUT_HSYNC_CSYNC_PIN
         #define VGA_OUT_HSYNC_CSYNC_PIN 31
-        #define VGA_OUT_RGB_BASE_PIN 32
-        #define VGA_OUT_RGB_PIN_COUNT 6
+        #endif
 
-        bi_decl(bi_1pin_with_name(31, "VGA Out - CSYNC"));
-        bi_decl(bi_1pin_with_name(32, "VGA Out - Dark Blue"));
-        bi_decl(bi_1pin_with_name(33, "VGA Out - Light Blue"));
-        bi_decl(bi_1pin_with_name(34, "VGA Out - Dark Green"));
-        bi_decl(bi_1pin_with_name(35, "VGA Out - Light Green"));
-        bi_decl(bi_1pin_with_name(36, "VGA Out - Dark Red"));
-        bi_decl(bi_1pin_with_name(37, "VGA Out - Light Red"));
+        #ifndef VGA_OUT_RGB_BASE_PIN
+        #define VGA_OUT_RGB_BASE_PIN 32
+        #endif
+
+        #ifndef VGA_OUT_RGB_PIN_COUNT
+        #define VGA_OUT_RGB_PIN_COUNT 6
+        #endif
 
         // this is applied only if USE_IR is true
+        #ifndef IR_RX_PIN
         #define IR_RX_PIN 46
+        #endif
 
     #else
         // USE_DVI && USE_VGA_IN_TO_DVI
 
         // these shouldn't really here, but for now...
+        #ifndef VGA_IN_VSYNC_PIN
         #define VGA_IN_VSYNC_PIN 0
-        #define VGA_IN_HSYNC_CSYNC_PIN 1
+        #endif
+
+        #ifndef VGA_IN_HSYNC_CSYNC_PIN
+        #define VGA_IN_HSYNC_CSYNC_PIN (VGA_IN_VSYNC_PIN + 1)
+        #endif
+
+        #ifndef VGA_IN_RGB_BASE_PIN
         #define VGA_IN_RGB_BASE_PIN 2
+        #endif
 
         // these should
+        #ifndef VGA_OUT_HSYNC_CSYNC_PIN
         #define VGA_OUT_HSYNC_CSYNC_PIN 10
-        #define VGA_OUT_RGB_BASE_PIN 11
-        #define VGA_OUT_RGB_PIN_COUNT 1
+        #endif
 
-        bi_decl(bi_1pin_with_name(10, "VGA Out - CSYNC"));
-        bi_decl(bi_1pin_with_name(11, "VGA Out - RGB"));
+        #ifndef VGA_OUT_RGB_BASE_PIN
+        #define VGA_OUT_RGB_BASE_PIN 11
+        #endif
+
+        #ifndef VGA_OUT_RGB_PIN_COUNT
+        #define VGA_OUT_RGB_PIN_COUNT 1
+        #endif
 
         // this is applied only if USE_IR is true
+        #ifndef IR_RX_PIN
         #define IR_RX_PIN 28
+        #endif
 
     #endif
 
@@ -211,44 +239,76 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
     // for now just include these VGA In pins which will capture the same as the VGA Out pins
     // ideally disable them in the main() as it is just less confusing. todo
 
+    #ifndef VGA_IN_VSYNC_PIN
     #define VGA_IN_VSYNC_PIN 0
-    #define VGA_IN_HSYNC_CSYNC_PIN 1
+    #endif
+
+    #ifndef VGA_IN_HSYNC_CSYNC_PIN
+    #define VGA_IN_HSYNC_CSYNC_PIN (VGA_IN_VSYNC_PIN + 1)
+    #endif
+
+    #ifndef VGA_IN_RGB_BASE_PIN
     #define VGA_IN_RGB_BASE_PIN 2
+    #endif
 
     // end of for now
 
     #if USE_CSYNC
 
+        #ifndef VGA_OUT_HSYNC_CSYNC_PIN
         #define VGA_OUT_HSYNC_CSYNC_PIN 1
-
-        bi_decl(bi_1pin_with_name(1, "VGA Out - CSYNC"));
+        #endif
 
     #else
 
+        #ifndef VGA_OUT_VSYNC_PIN
         #define VGA_OUT_VSYNC_PIN 0
-        #define VGA_OUT_HSYNC_CSYNC_PIN 1
+        #endif
 
-        bi_decl(bi_1pin_with_name(0, "VGA Out - VSYNC"));
-        bi_decl(bi_1pin_with_name(1, "VGA Out - HSYNC"));
+        #ifndef VGA_OUT_HSYNC_CSYNC_PIN
+        #define VGA_OUT_HSYNC_CSYNC_PIN 1
+        #endif
 
     #endif
 
+    #ifndef VGA_OUT_RGB_BASE_PIN
     #define VGA_OUT_RGB_BASE_PIN 2
-    #define VGA_OUT_RGB_PIN_COUNT 6
+    #endif
 
-    bi_decl(bi_1pin_with_name(2, "VGA Out - Dark Blue"));
-    bi_decl(bi_1pin_with_name(3, "VGA Out - Light Blue"));
-    bi_decl(bi_1pin_with_name(4, "VGA Out - Dark Green"));
-    bi_decl(bi_1pin_with_name(5, "VGA Out - Light Green"));
-    bi_decl(bi_1pin_with_name(6, "VGA Out - Dark Red"));
-    bi_decl(bi_1pin_with_name(7, "VGA Out - Light Red"));
+    #ifndef VGA_OUT_RGB_PIN_COUNT
+    #define VGA_OUT_RGB_PIN_COUNT 6
+    #endif
 
     // this is applied only if USE_IR is true
+    #ifndef IR_RX_PIN
     #define IR_RX_PIN 10
+    #endif
 
     // #define VGA_OUT_RGB_BASE_PIN 2
     // #define VGA_OUT_RGB_PIN_COUNT 6
 
+#endif
+
+// We're always outputting VGA, using either CSYNC, or VSYNC & HSYNC...
+
+#if USE_CSYNC
+    bi_decl(bi_1pin_with_name(VGA_OUT_HSYNC_CSYNC_PIN, "VGA Out - CSYNC"));
+#else
+    bi_decl(bi_1pin_with_name(VGA_OUT_VSYNC_PIN, "VGA Out - VSYNC"));
+    bi_decl(bi_1pin_with_name(VGA_OUT_HSYNC_CSYNC_PIN, "VGA Out - HSYNC"));
+#endif
+
+// ... and on 1 pin of monochrome, or 6 pins of RRGGBB.
+
+#if VGA_OUT_RGB_PIN_COUNT == 1
+    bi_decl(bi_1pin_with_name(VGA_OUT_RGB_BASE_PIN, "VGA Out - RGB"));
+#else
+    bi_decl(bi_1pin_with_name(VGA_OUT_RGB_BASE_PIN + 0, "VGA Out - Dark Blue"));
+    bi_decl(bi_1pin_with_name(VGA_OUT_RGB_BASE_PIN + 1, "VGA Out - Light Blue"));
+    bi_decl(bi_1pin_with_name(VGA_OUT_RGB_BASE_PIN + 2, "VGA Out - Dark Green"));
+    bi_decl(bi_1pin_with_name(VGA_OUT_RGB_BASE_PIN + 3, "VGA Out - Light Green"));
+    bi_decl(bi_1pin_with_name(VGA_OUT_RGB_BASE_PIN + 4, "VGA Out - Dark Red"));
+    bi_decl(bi_1pin_with_name(VGA_OUT_RGB_BASE_PIN + 5, "VGA Out - Light Red"));
 #endif
 
 
@@ -267,21 +327,20 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
     bi_decl(bi_1pin_with_name(19, "DVI Out - D2+"));
 
 
-    // we're sometimes capturing VGA In and mirroring it to DVI, in which case
-    // it's always on GPIO 0 - 7
+    // we're sometimes capturing VGA In and mirroring it to DVI
 
     #if (USE_VGA_IN_TO_DVI || USE_GPIO_31_47)
 
         bi_decl(bi_program_feature("VGA input"));
 
-        bi_decl(bi_1pin_with_name(0, "VGA In - VSYNC"));
-        bi_decl(bi_1pin_with_name(1, "VGA In - HSYNC / CSYNC"));
-        bi_decl(bi_1pin_with_name(2, "VGA In - Dark Blue"));
-        bi_decl(bi_1pin_with_name(3, "VGA In - Light Blue"));
-        bi_decl(bi_1pin_with_name(4, "VGA In - Dark Green"));
-        bi_decl(bi_1pin_with_name(5, "VGA In - Light Green"));
-        bi_decl(bi_1pin_with_name(6, "VGA In - Dark Red"));
-        bi_decl(bi_1pin_with_name(7, "VGA In - Light Red"));
+        bi_decl(bi_1pin_with_name(VGA_IN_VSYNC_PIN, "VGA In - VSYNC"));
+        bi_decl(bi_1pin_with_name(VGA_IN_HSYNC_CSYNC_PIN, "VGA In - HSYNC / CSYNC"));
+        bi_decl(bi_1pin_with_name(VGA_IN_RGB_BASE_PIN, "VGA In - Dark Blue"));
+        bi_decl(bi_1pin_with_name(VGA_IN_RGB_BASE_PIN + 1, "VGA In - Light Blue"));
+        bi_decl(bi_1pin_with_name(VGA_IN_RGB_BASE_PIN + 2, "VGA In - Dark Green"));
+        bi_decl(bi_1pin_with_name(VGA_IN_RGB_BASE_PIN + 3, "VGA In - Light Green"));
+        bi_decl(bi_1pin_with_name(VGA_IN_RGB_BASE_PIN + 4, "VGA In - Dark Red"));
+        bi_decl(bi_1pin_with_name(VGA_IN_RGB_BASE_PIN + 5, "VGA In - Light Red"));
 
     #endif
 
