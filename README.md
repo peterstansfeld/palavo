@@ -251,13 +251,15 @@ __(PALAVO_CONFIG=1)__
 |    GP18    |     18/D1+     |
 |    GP19    |     19/D1-     |
 
-Adafruit make other products that could be used instead of the DVI Sock, such as their [DVI Breakout Board](https://www.adafruit.com/product/4984) or their [PiCowBell HSTX DVI Output for Pico](https://www.adafruit.com/product/6363). The PiCowBell, however, would need to have its SDA (GP4) and SCL (GP5) traces cut as they go to the Mini HDMI socket. I hope to offer another PALAVO_CONFIG option which will move the VGA Out RGB pins to GP6-GP11 so that the PiCowBell can be used without any modifications.
+Adafruit make other products that could be used instead of the DVI Sock, such as their [DVI Breakout Board](https://www.adafruit.com/product/4984) or their [PiCowBell HSTX DVI Output for Pico](https://www.adafruit.com/product/6363). ~~The PiCowBell, however, would need to have its SDA (GP4) and SCL (GP5) traces cut as they go to the Mini HDMI socket. I hope to offer another PALAVO_CONFIG option which will move the VGA Out RGB pins to GP6-GP11 so that the PiCowBell can be used without any modifications.~~ Instead of another PALAVO_CONFIG option, the custom board definition file [pico2_with_picowbell_hstx.h](boards/pico2_with_picowbell_hstx.h) is used, and its definitions take precedence over previously used ones.
 
 ### Firmware
 
 #### Using pre-built firmware
 
-Place the Pico or Pico 2 in BOOTSEL mode (hold the BOOTSEL button down during board power-up) and copy the [palavo_config1_on_pico2.uf2](http://github.com/peterstansfeld/palavo/releases/latest/download/palavo_config1_on_pico2.uf2) file onto the device.
+Place the Pico 2 in BOOTSEL mode (hold the BOOTSEL button down during board power-up) and copy the [palavo_config1_on_pico2.uf2](http://github.com/peterstansfeld/palavo/releases/latest/download/palavo_config1_on_pico2.uf2) file onto the device.
+
+If using the Pico 2 with Adafruit's PiCowBell HSTX DVI Output for Pico use [palavo_config1_on_pico2_with_picowbell_hstx.uf2](http://github.com/peterstansfeld/palavo/releases/latest/download/palavo_config1_on_pico2_with_picowbell_hstx.uf2)
 
 Skip to [Testing Configuration 1](#testing-configuration-1).
 
@@ -357,10 +359,13 @@ Note. Some DVI monitors don't support the 640x480 resolution at 72 Hz, which is 
 
 #### Using pre-built firmware
 
-Place the Pico 2 in BOOTSEL mode (hold the BOOTSEL button down during board power-up) and copy the appropriate `.uf2` file onto the device:
-
+Place the Pico 2 in BOOTSEL mode (hold the BOOTSEL button down during board power-up) and copy the appropriate `.uf2` file onto the device:  
 For the 72 Hz DVI refresh rate use [palavo_config21_on_pico2.uf2](http://github.com/peterstansfeld/palavo/releases/latest/download/palavo_config21_on_pico2.uf2).  
 For the 60 Hz DVI refresh rate use [palavo_config21_at_125mhz_on_pico2.uf2](http://github.com/peterstansfeld/palavo/releases/latest/download/palavo_config21_at_125mhz_on_pico2.uf2).
+
+If using the Pico 2 with Adafruit's [PiCowBell HSTX DVI Output for Pico](https://www.adafruit.com/product/6363) copy one of these files instead:  
+For the 72 Hz DVI refresh rate use [palavo_config21_on_pico2_with_picowbell_hstx.uf2](http://github.com/peterstansfeld/palavo/releases/latest/download/palavo_config21_on_pico2_with_picowbell_hstx.uf2)  
+For the 60 Hz DVI refresh rate use [palavo_config21_at_125_mhz_on_pico2_with_picowbell_hstx.uf2](http://github.com/peterstansfeld/palavo/releases/latest/download/palavo_config21_at_125_mhz_on_pico2_with_picowbell_hstx.uf2)
 
 Skip to [Testing Configuration 21](#testing-configuration-21).
 
@@ -386,6 +391,7 @@ For the 60 Hz refresh rate use:
 ```bash
 cmake ../../../ -DPICO_BOARD=pico2 -DPALAVO_CONFIG=21 -DSYS_CLK_HZ=125000000
 ```
+Note. If using the Pico 2 with Adafruit's [PiCowBell HSTX DVI Output for Pico](https://www.adafruit.com/product/6363) create and enter a suitably named directory, e.g. `/build/pico2_with_picowbell_hstx/config21`, and instead of `-DPICO_BOARD=pico2` in one the above `cmake` commands`, use `-DPICO_BOARD=pico2_with_picowbell_hstx`.
 
 ### Testing Configuration 21
 
@@ -409,6 +415,20 @@ Something fun to do here is to get Hunter Adams's [VGA Graphics Primitives demo]
 |          GP21           | VGA_Out_Red         |               GP6              | VGA_In_Dark_Red    |
 |          GP21           | VGA_Out_Red         |               GP7              | VGA_In_Light_Red   |
 
+Note. Here are the connections if using the Pico 2 with Adafruit's [PiCowBell HSTX DVI Output for Pico](https://www.adafruit.com/product/6363):
+
+| Demo Pico or Pico 2 Pin | Function            | Pico 2 with PiCowBell HSTX in Configuration 21 Pin | Function           |
+|         :---:           | :---                |                        :---:                       | :---               |
+|          GP17           | VGA_Out_VSYNC       |                         GP0                        | VGA_In_VSYNC       |
+|          GP16           | VGA_Out_HSYNC       |                         GP1                        | VGA_In_HSYNC_CSYNC |
+|          GND            | GND                 |                         GND                        | GND                |
+|          GP20           | VGA_Out_Blue        |                         GP6                        | VGA_In_Dark_Blue   |
+|          GP20           | VGA_Out_Blue        |                         GP7                        | VGA_In_Light_Blue  |
+|          GP18           | VGA_Out_Dark_Green  |                         GP8                        | VGA_In_Dark_Green  |
+|          GP19           | VGA_Out_Light_Green |                         GP9                        | VGA_In_Light_Green |
+|          GP21           | VGA_Out_Red         |                         GP10                       | VGA_In_Dark_Red    |
+|          GP21           | VGA_Out_Red         |                         GP11                       | VGA_In_Light_Red   |
+
 ### Firmware
 
 Place the Pico or Pico 2 in BOOTSEL mode (hold the BOOTSEL button down during board power-up) and copy the appropriate `.uf2` file onto the device:
@@ -426,7 +446,7 @@ Start both devices and hopefully you should see Hunter's demo on your DVI monito
 I said it was fun.
 
 <a id="removing-vsync-jumper-wire"></a>
-Oh, and in order to obtain this screenshot I had to remove the VSYNC jumper wire because transmitting the DVI screen buffer using the [xmodem](https://en.wikipedia.org/wiki/XMODEM) protocol at 115,200 bps takes quite a long time - a good deal longer than 20 milliseconds. If you'd like to see the result of not removing the VSYNC jumper wire, take a look at [this screenshot](#vga-demo-screenshot-playing) in the [How to Download a Screenshot](#how-to-download-a-screenshot) section.
+Oh, and in order to obtain this screenshot I had to remove the VSYNC jumper wire because transmitting the DVI screen buffer using the [xmodem](https://en.wikipedia.org/wiki/XMODEM) protocol at 115,200 bps takes quite a long time - a good deal longer than 20 milliseconds. If you'd like to see the result of not removing the VSYNC jumper wire, take a look at [this screenshot](#vga-demo-screenshot-playing) in the [How to download a screenshot](#how-to-download-a-screenshot) section.
 
 Before we finish with Configuration 21, if you've been wondering why Palavo uses 6-bit colour (RRGGBB) it's because when converting the VGA output to DVI, using the HSTX peripheral on the RP2350, the colours remain the same as the VGA output. This is due to each colour being made up of the same number of bits, which is not the case with Hunter's and Bruce's 4-bit colour (RGGB). To save SRAM used by Palavo's VGA driver, each horizontal line consists of a maximum of two 6-bit colours.
 
@@ -467,7 +487,7 @@ The trouble with [Configuration 0](#configuration-0) is that we're using quite a
 
 #### Using pre-built firmware
 
-Place the Pico or Pico 2 in BOOTSEL mode (hold the BOOTSEL button down during board power-up) and copy [palavo_config2_on_pimoroni_pico_lipo2xl_w_rp2350.uf2](http://github.com/peterstansfeld/palavo/releases/latest/download/palavo_config2_on_pimoroni_pico_lipo2xl_w_rp2350.uf2) onto the device.
+Place the Pico LiPo 2 XL W in BOOTSEL mode (hold the BOOTSEL button down during board power-up) and copy [palavo_config2_on_pimoroni_pico_lipo2xl_w_rp2350.uf2](http://github.com/peterstansfeld/palavo/releases/latest/download/palavo_config2_on_pimoroni_pico_lipo2xl_w_rp2350.uf2) onto the device.
 
 Skip to [Testing Configuration 2](#testing-configuration-2).
 
@@ -660,7 +680,7 @@ The download is slow, especially when it's the DVI framebuffer, and this is why 
 
 ![A screenshot of Hunter Adams's VGA demo. A long description follows.](images/ha-vga-demo-playing.png "A screenshot of Hunter Adams's VGA demo")
 
-*A screenshot of various graphical primitives drawn in 15 colours on a black background. At the top of the screen are three filled rectangles: one blue, one red, and one green. Text has been drawn on five lines in the the blue rectangle, which read "Raspberry Pi Pico", "Graphics Primitives demo", "Hunter Adams", "vha@cornell.edu" and "4-bit mod by Bruce Land". The red rectangle has two lines of large text, which read "Time Elapsed:" and "90". When running this area of the screen remains static except for the number, which increments every second. Below this static area is the animated area, which gets updated every 20 milliseconds. Here, the filled circles, which should each be filled with a single colour, are filled with roughly 10 horizontal blocks of various colours. Horizontal lines are generally of the same colour, the vertical lines are definitely not, and the section that should be made up of random diagonal lines looks as if [Jackson Pollock](https://en.wikipedia.org/wiki/Jackson_Pollock) was let loose with 16 paint pots full of pixels.*
+*A screenshot of various graphical primitives drawn in 15 colours on a black background. At the top of the screen are three filled rectangles: one blue, one red, and one green. Text has been drawn on five lines in the blue rectangle, which read "Raspberry Pi Pico", "Graphics Primitives demo", "Hunter Adams", "vha@cornell.edu" and "4-bit mod by Bruce Land". The red rectangle has two lines of large text, which read "Time Elapsed:" and "90". When running this area of the screen remains static except for the number, which increments every second. Below this static area is the animated area, which gets updated every 20 milliseconds. Here, the filled circles, which should each be filled with a single colour, are filled with roughly 10 horizontal blocks of various colours. Horizontal lines are generally of the same colour, the vertical lines are definitely not, and the section that should be made up of random diagonal lines looks as if [Jackson Pollock](https://en.wikipedia.org/wiki/Jackson_Pollock) was let loose with 16 paint pots full of pixels.*
 
 Go to the [VGA Graphics Primitives demo screenshot](#vga-demo-screenshot-paused).
 
@@ -669,7 +689,7 @@ These scripts are mainly used when developing Palavo and can be found in the `ut
 
 ### expand-convert-and-display.sh
 
-This combines the two stage process of expanding and converting a screenshot to a PNG file as described above in [How to Download a Screenshot](#how-to-download-a-screenshot) and adds displaying the PNG. Use with caution as files are overwritten and one is deleted during the process.
+This combines the two stage process of expanding and converting a screenshot to a PNG file as described above in [How to download a screenshot](#how-to-download-a-screenshot) and adds displaying the PNG. Use with caution as files are overwritten and one is deleted during the process.
 
 When in the `utils` directory, and with a screenshot named `image1` in the same `utils` directory:
 

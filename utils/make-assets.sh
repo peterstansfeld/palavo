@@ -17,6 +17,9 @@ declare -a srcs=("pico/config0"
                  "pico2/config21_at_125mhz"
                  "pimoroni_pico_lipo2xl_w_rp2350/config2"
                  "solderparty_rp2350_stamp_xl/config40"
+                 "pico2_with_picowbell_hstx/config1"
+                 "pico2_with_picowbell_hstx/config21"
+                 "pico2_with_picowbell_hstx/config21_at_125mhz"
                 )
 
 # Create dests array from srcs array

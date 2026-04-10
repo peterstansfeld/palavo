@@ -78,7 +78,7 @@
 
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 14
-#define VERSION_PATCH 0
+#define VERSION_PATCH 1
 
 #ifndef VGA_TIMEOUT
 // If the number of idle seconds before the VGA output is blanked and

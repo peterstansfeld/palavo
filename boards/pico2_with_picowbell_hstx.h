@@ -22,21 +22,21 @@
 
 #define VGA_IN_VSYNC_PIN 0
 #define VGA_IN_HSYNC_CSYNC_PIN 1
-#define VGA_IN_RGB_BASE_PIN 4
+#define VGA_IN_RGB_BASE_PIN 6
 
 #if (PALAVO_CONFIG & (1 << 2))
 // #if USE_VGA_IN_TO_DVI // VGA to DVI converter
 // VGA Out uses CSYNC and a monochrome pin
 
-#define VGA_OUT_HSYNC_CSYNC_PIN 10
-#define VGA_OUT_RGB_BASE_PIN 11
+#define VGA_OUT_HSYNC_CSYNC_PIN 20
+#define VGA_OUT_RGB_BASE_PIN 21
 #define VGA_OUT_RGB_PIN_COUNT 1
 
 #else
 // VGA Out uses CSYNC and 6 colour pins (RRGGBB)
 
 #define VGA_OUT_HSYNC_CSYNC_PIN 1
-#define VGA_OUT_RGB_BASE_PIN 4
+#define VGA_OUT_RGB_BASE_PIN 6
 #define VGA_OUT_RGB_PIN_COUNT 6
 
 #endif
