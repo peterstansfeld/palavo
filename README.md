@@ -365,7 +365,7 @@ For the 60 Hz DVI refresh rate use [palavo_config21_at_125mhz_on_pico2.uf2](http
 
 If using the Pico 2 with Adafruit's [PiCowBell HSTX DVI Output for Pico](https://www.adafruit.com/product/6363) copy one of these files instead:  
 For the 72 Hz DVI refresh rate use [palavo_config21_on_pico2_with_picowbell_hstx.uf2](http://github.com/peterstansfeld/palavo/releases/latest/download/palavo_config21_on_pico2_with_picowbell_hstx.uf2)  
-For the 60 Hz DVI refresh rate use [palavo_config21_at_125_mhz_on_pico2_with_picowbell_hstx.uf2](http://github.com/peterstansfeld/palavo/releases/latest/download/palavo_config21_at_125_mhz_on_pico2_with_picowbell_hstx.uf2)
+For the 60 Hz DVI refresh rate use [palavo_config21_at_125_mhz_on_pico2_with_picowbell_hstx.uf2](http://github.com/peterstansfeld/palavo/releases/latest/download/palavo_config21_at_125mhz_on_pico2_with_picowbell_hstx.uf2)
 
 Skip to [Testing Configuration 21](#testing-configuration-21).
 
