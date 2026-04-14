@@ -9,11 +9,10 @@
 //       SHOULD ONLY CONSIST OF PREPROCESSOR DIRECTIVES
 // -----------------------------------------------------
 
-// I don't understand why the following line *needs* to be there - it's commented out?
-// pico_cmake_set PICO_PLATFORM=rp2350
-
 #ifndef _BOARDS_PICO2_WITH_PICOWBELL_HSTX
 #define _BOARDS_PICO2_WITH_PICOWBELL_HSTX
+
+pico_board_cmake_set(PICO_PLATFORM, rp2350)
 
 #include "boards/pico2.h"
 
