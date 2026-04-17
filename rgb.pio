@@ -346,7 +346,7 @@ jmp_table_2a:
 
 % c-sdk {
 
-#if SYS_CLK_KHZ == 125000u
+// #if SYS_CLK_KHZ == 125000u
 
 static inline void rgb5_program_init(PIO pio, uint sm, uint offset, uint pin, uint no_of_pins) {
 
@@ -399,7 +399,7 @@ static inline void rgb5_program_init(PIO pio, uint sm, uint offset, uint pin, ui
 }
 
 
-#elif SYS_CLK_KHZ == 150000u
+// #elif SYS_CLK_KHZ == 150000u
 
 static inline void rgb5_150_mhz_program_init(PIO pio, uint sm, uint offset, uint pin) {
 
@@ -488,8 +488,8 @@ static inline void rgb5_150_mhz_rp235x_program_init(PIO pio, uint sm, uint offse
     // pio_sm_set_enabled(pio, sm, true);
 }
 
-
-#elif SYS_CLK_KHZ == 250000u
+/*
+// #elif SYS_CLK_KHZ == 250000u
 
 static inline void rgb5_250_mhz_program_init(PIO pio, uint sm, uint offset, uint pin) {
 
@@ -533,6 +533,7 @@ static inline void rgb5_250_mhz_program_init(PIO pio, uint sm, uint offset, uint
     // pio_sm_set_enabled(pio, sm, true);
 }
 
-#endif
+// #endif
+*/
 
 %}

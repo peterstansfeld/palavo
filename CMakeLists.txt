@@ -102,10 +102,10 @@ endif()
 # initialization. Without this a number of transmissions are lost
 # because the host (PC) isn't ready to receive. 
 target_compile_definitions(palavo PRIVATE
-    PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=1000)
+    PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=5000)
 
 # must match with executable name
-target_link_libraries(palavo PRIVATE pico_stdlib hardware_pio hardware_dma hardware_irq hardware_clocks)
+target_link_libraries(palavo PRIVATE pico_stdlib pico_stdio_uart hardware_pio hardware_dma hardware_irq hardware_clocks)
 
 if (PC_BIT0)
     # If we're using DVI we run it on the second core, otherwise
@@ -121,12 +121,3 @@ pico_add_extra_outputs(palavo)
 
 message(STATUS "Use USB stdio")
 pico_enable_stdio_usb(palavo 1)
-
-if (PC_BIT5)
-    message(STATUS "Use UART stdio")
-    pico_enable_stdio_uart(palavo 1)
-else()
-    # UART stdio seems to be enabled by default
-    pico_enable_stdio_uart(palavo 0)
-endif()
-

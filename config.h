@@ -150,6 +150,8 @@
 
 #if (PALAVO_CONFIG & (1 << PC_BIT_USE_DVI))
     #define USE_DVI 1
+#else
+    #define USE_DVI 0
 #endif
 
 
@@ -165,16 +167,22 @@
 
 #if (PALAVO_CONFIG & (1 << PC_BIT_USE_IR))
     #define USE_IR 1
+#else
+    #define USE_IR 0
 #endif
 
 
 #if (PALAVO_CONFIG & (1 << PC_BIT_USE_CSYNC))
     #define USE_CSYNC 1
+#else
+    #define USE_CSYNC 0
 #endif
 
 
 #if (PALAVO_CONFIG & (1 << PC_BIT_USE_UART_STDIO))
     #define USE_UART_STDIO 1
+#else
+    #define USE_UART_STDIO 0
 #endif
 
 
@@ -241,6 +249,11 @@
     // #error "CSYNC must be used with this configuration"
 
     #pragma message "CSYNC must be set with this configuration"
+
+    #ifdef USE_CSYNC
+    #undef USE_CSYNC
+    #endif
+
     #define USE_CSYNC 1
     #pragma message "Added `#define USE_CSYNC 1`"
 
