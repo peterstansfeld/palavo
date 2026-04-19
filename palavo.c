@@ -289,6 +289,12 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
 
 #endif
 
+#if USE_DVI
+    #ifndef VGA_IN_RGB_PIN_COUNT
+    #define VGA_IN_RGB_PIN_COUNT 6
+    #endif
+#endif
+
 
 // we're sometimes outputting DVI
 
@@ -455,8 +461,14 @@ bi_decl(bi_ptr_int32(0x1111, FG_UI, ui_channel, 0));
 
 // vga interface configuration and initialisation
 bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_out_timeout, VGA_TIMEOUT));
+
+#if USE_DVI
+bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_in_rgb_pins_count, VGA_IN_RGB_PIN_COUNT));
 bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_in_rgb_pins_base, VGA_IN_RGB_BASE_PIN));
 bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_in_hsync_pin, VGA_IN_HSYNC_CSYNC_PIN));
+#endif
+
+bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_out_rgb_pins_count, VGA_OUT_RGB_PIN_COUNT));
 bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_out_rgb_pins_base, VGA_OUT_RGB_BASE_PIN));
 bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_out_hsync_pin, VGA_OUT_HSYNC_CSYNC_PIN));
 bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_out_use_csync, USE_CSYNC));
@@ -1504,33 +1516,34 @@ void change_plot_line_colour_palette(char palette) {
 }
 
 
+int get_colour_index(int pin) {
+
+#if PICO_PIO_USE_GPIO_BASE
+    if (g_pins_base_captured < 16) {
+        return (g_pins_base_captured + pin) % 32;
+    } else {
+        // sample is between GP16 and GP47
+        return ((g_pins_base_captured + pin + 16) % 32) + 16;
+    }
+#else
+    return (ui_pins_base + pin) % 32;
+#endif
+
+
+}
+
+
 void set_plot_line_colors(uint pin_count) {
     int trace_height = get_plot_height(g_no_of_captured_pins);
     int y_padding = get_plot_padding();
     int y = PLOT_TOP;
 
-    int get_colour_index(int pin) {
-
-#if PICO_PIO_USE_GPIO_BASE
-        if (g_pins_base_captured < 16) {
-            return (g_pins_base_captured + pin) % 32;
-        } else {
-            // sample is between GP16 and GP47
-            return ((g_pins_base_captured + pin + 16) % 32) + 16;
-        }
-#else
-        return (ui_pins_base + pin) % 32;
-#endif
-
-    }
-
     for (int pin = 0; pin < pin_count; ++pin) {
 
-#if VGA_OUT_RGB_PIN_COUNT == 6
-        char line_col = colours[get_colour_index(pin)];
-#else 
         char line_col = WHITE;
-#endif
+        if (vga_out_rgb_pins_count == 6) {
+            line_col = colours[get_colour_index(pin)];
+        }
 
         // char back_col = BLACK;
         // if (pin == g_channel) {
@@ -1554,11 +1567,10 @@ void set_plot_line_colors(uint pin_count) {
     int minimap_height = get_minimap_height();
     int minimap_padding = get_minimap_padding();
     for (int pin = 0; pin < pin_count; ++pin) {
-#if VGA_OUT_RGB_PIN_COUNT == 6
-        char line_col = colours[get_colour_index(pin)];
-#else
         char line_col = WHITE;
-#endif
+        if (vga_out_rgb_pins_count == 6) {
+            line_col = colours[get_colour_index(pin)];
+        }
         for (int i = 0; i < minimap_height; i++) {
             set_line_colors(y + i, BLACK, line_col, 0, 0);
         }
@@ -3726,7 +3738,8 @@ void deinit_vga_capture_interrupts_and_dma() {
 }
 
 
-// capture the RGB of pins 0 to 5 using HSYNC and VSYNC of pins 26 & 27, or CSYNC on pin 26.
+// Capture the RGB on GP(vga_in_rgb_pins_base) to GP(vga_in_rgb_pins_base + vga_in_rgb_pins_count - 1)
+// using  CSYNC on GP(vga_in_hsync_pin), and - if vga_in_rgb_pins_count == 6 - VSYNC and HSYNC on GP(vga_in_hsync_pin - 1) and GP(vga_in_hsync_pin).
 void vga_in_capture_set_enabled(bool enabled) {
     static bool is_enabled;
 
@@ -3735,33 +3748,51 @@ void vga_in_capture_set_enabled(bool enabled) {
             if (vga_capture_mode == VC_NONE) {
 
 #if PICO_PIO_USE_GPIO_BASE
-
-                if ((vga_in_rgb_pins_base + 6) >= 32) {
+                if ((vga_in_rgb_pins_base + vga_in_rgb_pins_count) >= 32) {
                     my_pio_set_gpio_base(vga_capture_pio, 16);
+                } else {
+                    my_pio_set_gpio_base(vga_capture_pio, 0);
                 }
-
 #endif
 
-                if (sys_clock_freq == 125 * MHZ) {
-                    vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_125_mhz_program);
-                    vga_capture_125_mhz_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_in_rgb_pins_base);
-                } else if (sys_clock_freq == 150 * MHZ) {
-                    vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
-                    vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_in_rgb_pins_base);
-                }
-                vga_detect_vsync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_program);
-                vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, vga_in_hsync_pin - 1);
-                // vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, 0);
+                if (vga_in_rgb_pins_count == 1) {
+                    if (sys_clock_freq == 125 * MHZ) {
+                        vga_capture_offset = pio_add_program(vga_capture_pio, &vga_1bit_capture_125_mhz_program);
+                        vga_1bit_capture_125_mhz_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_in_rgb_pins_base);
+                    } else if (sys_clock_freq == 150 * MHZ) {
+                        vga_capture_offset = pio_add_program(vga_capture_pio, &vga_1bit_capture_program);
+                        vga_1bit_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_in_rgb_pins_base);
+                    }
+                    // Capturing 1 pin of colour take more PIO instructions than 6 pins and we don't have enough
+                    // space to sample vsync on vsync and hsync. We'll have to make do with just vsync on csync.
+                    // Let's leave the following two lines below in case we can find some space in the future.
 
+                    // vga_detect_vsync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_program);
+                    // vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, vga_in_hsync_pin - 1);
+                } else {
+                    if (sys_clock_freq == 125 * MHZ) {
+                        vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_125_mhz_program);
+                        vga_capture_125_mhz_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_in_rgb_pins_base);
+                    } else if (sys_clock_freq == 150 * MHZ) {
+                        vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
+                        vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_in_rgb_pins_base);
+                    }
+                    vga_detect_vsync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_program);
+                    vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, vga_in_hsync_pin - 1);
+                }
+
+                // always detect csync
                 vga_detect_vsync_on_csync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_on_csync_program);
                 vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, vga_in_hsync_pin);
-                // vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, 0);
 
                 init_vga_capture_dma_and_start_capturing();
-
                 vga_sync_detect_interrupt_set_enabled(true);
 
-                pio_enable_sm_mask_in_sync(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_sm) | (1u << vga_detect_vsync_on_csync_sm));
+                if (vga_in_rgb_pins_count == 1) {
+                    pio_enable_sm_mask_in_sync(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_on_csync_sm));
+                } else {
+                    pio_enable_sm_mask_in_sync(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_sm) | (1u << vga_detect_vsync_on_csync_sm));
+                }
 
                 vga_capture_mode = VC_VGA_IN; // this needs to be moved
             }
@@ -3770,26 +3801,30 @@ void vga_in_capture_set_enabled(bool enabled) {
     } else {
         if (is_enabled) {
 
-        // stop the state machine
-            pio_sm_set_enabled(vga_capture_pio, vga_capture_sm, false);
-
-    #if USE_CSYNC
-            pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_on_csync_sm, false);
-    #else
-            pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_on_csync_sm, false);
-    #endif
-
-            // stop the other state machine
-            pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_sm, false);
-
-            // and free it
-            pio_remove_program(vga_capture_pio, &vga_detect_vsync_program, vga_detect_vsync_offset);
-            if (sys_clock_freq == 125 * MHZ) {
-                pio_remove_program(vga_capture_pio, &vga_capture_125_mhz_program, vga_capture_offset);
-            } else if (sys_clock_freq == 150 * MHZ) {
-                pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
+            if (vga_in_rgb_pins_count == 1) {
+                pio_set_sm_mask_enabled(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_on_csync_sm), false);
+            } else {
+                pio_set_sm_mask_enabled(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_sm) | (1u << vga_detect_vsync_on_csync_sm), false);
             }
-            // free the remaining state machine
+
+            if (vga_in_rgb_pins_count == 1) {
+                if (sys_clock_freq == 125 * MHZ) {
+                    pio_remove_program(vga_capture_pio, &vga_1bit_capture_125_mhz_program, vga_capture_offset);
+                } else if (sys_clock_freq == 150 * MHZ) {
+                    pio_remove_program(vga_capture_pio, &vga_1bit_capture_program, vga_capture_offset);
+                }
+                // free the remaining state machine
+                // pio_remove_program(vga_capture_pio, &vga_detect_vsync_program, vga_detect_vsync_offset);
+            } else {
+                if (sys_clock_freq == 125 * MHZ) {
+                    pio_remove_program(vga_capture_pio, &vga_capture_125_mhz_program, vga_capture_offset);
+                } else if (sys_clock_freq == 150 * MHZ) {
+                    pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
+                }
+                // free the remaining state machine
+                pio_remove_program(vga_capture_pio, &vga_detect_vsync_program, vga_detect_vsync_offset);
+            }
+
             pio_remove_program(vga_capture_pio, &vga_detect_vsync_on_csync_program, vga_detect_vsync_on_csync_offset);
 
             deinit_vga_capture_interrupts_and_dma();
@@ -3800,46 +3835,42 @@ void vga_in_capture_set_enabled(bool enabled) {
 }
 
 
-// capture the RGB of pins 6 to 11 using CSYNC of pins 22.
-// or the RGB of pins 32 to 37 using CSYNC of pin 31
+// Capture the RGB on GP(vga_out_rgb_pins_base) to GP(vga_out_rgb_pins_base + vga_out_rgb_pins_count - 1)
+// using  CSYNC on GP(vga_in_hsync_pin), or - if vga_out_use_csync == 0 - VSYNC and HSYNC on GP(vga_out_hsync_pin - 1) and GP(vga_in_hsync_pin).
 void vga_out_capture_set_enabled(bool enabled) {
     static bool is_enabled;
 
     if (enabled) {
         if (!is_enabled) {
-
             if (vga_capture_mode == VC_NONE) {
 
-
 #if PICO_PIO_USE_GPIO_BASE
-                if ((vga_out_rgb_pins_base + 6) >= 32) {
+                if ((vga_out_rgb_pins_base + vga_out_rgb_pins_count) >= 32) {
                     my_pio_set_gpio_base(vga_capture_pio, 16);
+                } else {
+                    my_pio_set_gpio_base(vga_capture_pio, 0);
                 }
-
 #endif
+                if (vga_out_rgb_pins_count == 1) {
+                    if (sys_clock_freq == 125 * MHZ) {
+                        vga_capture_offset = pio_add_program(vga_capture_pio, &vga_1bit_capture_125_mhz_program);
+                        vga_1bit_capture_125_mhz_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_out_rgb_pins_base);
+                    } else if (sys_clock_freq == 150 * MHZ) {
 
-    #if VGA_OUT_RGB_PIN_COUNT == 1
-                if (sys_clock_freq == 125 * MHZ) {
-                    vga_capture_offset = pio_add_program(vga_capture_pio, &vga_1bit_capture_125_mhz_program);
-                    vga_1bit_capture_125_mhz_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_out_rgb_pins_base);
-                } else if (sys_clock_freq == 150 * MHZ) {
-
-                    vga_capture_offset = pio_add_program(vga_capture_pio, &vga_1bit_capture_program);
-                    vga_1bit_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_out_rgb_pins_base);
+                        vga_capture_offset = pio_add_program(vga_capture_pio, &vga_1bit_capture_program);
+                        vga_1bit_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_out_rgb_pins_base);
+                    }
+                } else {
+                    if (sys_clock_freq == 125 * MHZ) {
+                        vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_125_mhz_program);
+                        vga_capture_125_mhz_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_out_rgb_pins_base);
+                    } else if (sys_clock_freq == 150 * MHZ) {
+                        vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
+                        vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_out_rgb_pins_base);
+                    }
                 }
-
-    #else
-                if (sys_clock_freq == 125 * MHZ) {
-                    vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_125_mhz_program);
-                    vga_capture_125_mhz_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_out_rgb_pins_base);
-                } else if (sys_clock_freq == 150 * MHZ) {
-                    vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
-                    vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_out_rgb_pins_base);
-                }
-    #endif
 
                 if (vga_out_use_csync) {
-
                     vga_detect_vsync_on_csync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_on_csync_program);
                     vga_detect_vsync_on_csync_program_init(vga_capture_pio, vga_detect_vsync_on_csync_sm, vga_detect_vsync_on_csync_offset, vga_out_hsync_pin);
                 } else {
@@ -3853,7 +3884,6 @@ void vga_out_capture_set_enabled(bool enabled) {
                 if (vga_out_use_csync) {
                     pio_enable_sm_mask_in_sync(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_on_csync_sm));
                 } else {
-                // pio_enable_sm_mask_in_sync(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_on_csync_sm));
                     pio_enable_sm_mask_in_sync(vga_capture_pio, (1u << vga_capture_sm) | (1u << vga_detect_vsync_sm));
                 }
 
@@ -3872,36 +3902,38 @@ void vga_out_capture_set_enabled(bool enabled) {
         // stop the state machine
             pio_sm_set_enabled(vga_capture_pio, vga_capture_sm, false);
 
-#if USE_CSYNC
-            pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_on_csync_sm, false);
-#else
-            // pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_on_csync_sm, false);
-            pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_sm, false);
-
-#endif
-
-    #if VGA_OUT_RGB_PIN_COUNT == 1
-            if (sys_clock_freq == 125 * MHZ) {
-                pio_remove_program(vga_capture_pio, &vga_1bit_capture_125_mhz_program, vga_capture_offset);
-            } else if (sys_clock_freq == 150 * MHZ) {
-                pio_remove_program(vga_capture_pio, &vga_1bit_capture_program, vga_capture_offset);
-        }
-
-    #else
-            if (sys_clock_freq == 125 * MHZ) {
-                pio_remove_program(vga_capture_pio, &vga_capture_125_mhz_program, vga_capture_offset);
-            } else if (sys_clock_freq == 150 * MHZ) {
-                pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
+            if (vga_out_use_csync) {
+                pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_on_csync_sm, false);
+            } else {
+                // pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_on_csync_sm, false);
+                pio_sm_set_enabled(vga_capture_pio, vga_detect_vsync_sm, false);
             }
-    #endif
+
+            if (vga_out_rgb_pins_count == 1) {
+
+                if (sys_clock_freq == 125 * MHZ) {
+                    pio_remove_program(vga_capture_pio, &vga_1bit_capture_125_mhz_program, vga_capture_offset);
+                } else if (sys_clock_freq == 150 * MHZ) {
+                    pio_remove_program(vga_capture_pio, &vga_1bit_capture_program, vga_capture_offset);
+                }
+
+            } else {
+                if (sys_clock_freq == 125 * MHZ) {
+                    pio_remove_program(vga_capture_pio, &vga_capture_125_mhz_program, vga_capture_offset);
+                } else if (sys_clock_freq == 150 * MHZ) {
+                    pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
+                }
+            }
 
             // free the remaining state machine
-#if USE_CSYNC
-            pio_remove_program(vga_capture_pio, &vga_detect_vsync_on_csync_program, vga_detect_vsync_on_csync_offset);
-#else
-            pio_remove_program(vga_capture_pio, &vga_detect_vsync_program, vga_detect_vsync_offset);
-#endif
-
+// #if USE_CSYNC
+            if (vga_out_use_csync) {
+                pio_remove_program(vga_capture_pio, &vga_detect_vsync_on_csync_program, vga_detect_vsync_on_csync_offset);
+// #else
+            } else {
+                pio_remove_program(vga_capture_pio, &vga_detect_vsync_program, vga_detect_vsync_offset);
+// #endif
+            }
             deinit_vga_capture_interrupts_and_dma();
 
             is_enabled = false;
@@ -4962,15 +4994,15 @@ int main() {
     // The VGA driver state machines are on pio1
 
 #if PICO_PIO_USE_GPIO_BASE
-    if ((VGA_OUT_RGB_BASE_PIN + 6) >= 32) {
-        if ((vga_out_rgb_pins_base + 6) >= 32) {
+        if ((vga_out_rgb_pins_base + vga_out_rgb_pins_count) >= 32) {
             my_pio_set_gpio_base(pio1, 16);
+        } else {
+            my_pio_set_gpio_base(pio1, 0);
         }
-    }
 #endif
 
     uart_my_putcf("With RGB base pin on: %d\n", vga_out_rgb_pins_base);
-    uart_my_putcf("And: %d pins\n", VGA_OUT_RGB_PIN_COUNT);
+    uart_my_putcf("And: %d pins\n", vga_out_rgb_pins_count);
 
     bool use_csync;
 
@@ -4978,7 +5010,7 @@ int main() {
     use_csync = true;
 #endif
 
-    initVGA(vga_out_hsync_pin, vga_out_use_csync, vga_out_rgb_pins_base, VGA_OUT_RGB_PIN_COUNT, sys_clock_freq);
+    initVGA(vga_out_hsync_pin, vga_out_use_csync, vga_out_rgb_pins_base, vga_out_rgb_pins_count, sys_clock_freq);
     init_line_colours();
 
     // We're going to capture into a u32 buffer, for best DMA efficiency. Need
