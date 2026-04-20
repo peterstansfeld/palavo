@@ -35,7 +35,8 @@ enum DVI_COLOURS {
 
 // We can pack 5 6-bit (RGB222) pixels into 32 bits (4 bytes),
 // so our frame buffer is 4/5 the size, saving 307,200 - 245,760 = 61440 bytes.
-extern char dvi_framebuf[((640 * 4) / 5) * 480];
+// extern char dvi_framebuf[((640 * 4) / 5) * 480];
+extern char* dvi_framebuf;
 
 uint8_t get_four_bit_col(uint8_t);
 

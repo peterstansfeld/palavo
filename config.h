@@ -162,6 +162,8 @@
 
 #if (PALAVO_CONFIG & (1 << PC_BIT_USE_VGA_IN_TO_DVI))
     #define USE_VGA_IN_TO_DVI 1
+#else
+    #define USE_VGA_IN_TO_DVI 0
 #endif
 
 

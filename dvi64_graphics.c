@@ -38,6 +38,8 @@
 // #include "mountains_640x480_rgb332.h"
 // #include "my_mountains_640x480_rgb332.h"
 
+#include <stdlib.h>
+
 #include <string.h>
 
 // #define framebuf mountains_640x480
@@ -82,7 +84,9 @@ static char __attribute__((aligned(4))) framebuf[(640 / 2) * 480];
 
 #elif COLOUR_MODE == 2226
 
-char __attribute__((aligned(4))) dvi_framebuf[((640 * 4) / 5) * 480];
+// char __attribute__((aligned(4))) dvi_framebuf[((640 * 4) / 5) * 480];
+
+char* dvi_framebuf;
 
 #endif
 
@@ -1115,6 +1119,14 @@ void dvi_init_vars() {
 
 
 void dvi_init() {
+
+    static bool allocated;
+
+    if (!allocated) {
+        dvi_framebuf = malloc(((640 * 4) / 5) * 480);
+        allocated = true;
+    }
+
     dvi_init_vars();
     dvi_init_hstx_regs();
     dvi_init_hstx_gpio();

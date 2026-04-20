@@ -449,6 +449,10 @@ bi_decl(bi_program_feature_group(0x1111, FG_UART, "UART Configuration"));
 bi_decl(bi_program_feature_group(0x1111, FG_IR, "IR Configuration"));
 bi_decl(bi_program_feature_group(0x1111, FG_INTERFACES, "Enabled Interfaces"));
 
+#if USE_DVI
+bi_decl(bi_program_feature_group(0x1111, FG_DVI, "DVI Configuration"));
+#endif
+
 // user interface configuration and initialisation
 bi_decl(bi_ptr_int32(0x1111, FG_UI, ui_trig_type, CAPTUTRE_TRIGGER_TYPE));
 bi_decl(bi_ptr_int32(0x1111, FG_UI, ui_trig_pin, CAPTURE_TRIGGER_PIN_BASE));
@@ -489,8 +493,8 @@ bi_decl(bi_ptr_int32(0x1111, FG_IR, ir_rx_pin, IR_RX_PIN));
 
 #if USE_DVI
 // bi_decl(bi_program_feature_group(0x1111, FG_DVI, "DVI Configuration"));
-// bi_decl(bi_ptr_int32(0x1111, FG_DVI, use_dvi, USE_DVI));
-// bi_decl(bi_ptr_int32(0x1111, FG_DVI, use_60_hz_dvi, 0));
+bi_decl(bi_ptr_int32(0x1111, FG_INTERFACES, use_dvi, USE_DVI));
+bi_decl(bi_ptr_int32(0x1111, FG_DVI, vga_in_to_dvi_on_boot, USE_VGA_IN_TO_DVI));
 #endif
 
 bi_decl(bi_ptr_int32(0x1111, FG_SYS, sys_clock_freq, SYS_CLK_HZ));
@@ -538,7 +542,10 @@ uint8_t g_pins_base_captured;
     #define TOTAL_SAMPLE_BITS (((SAMPLES_TO_CAPTURE * CHANNELS_PER_SAMPLE)) + (HSYNCS_IN_640_LINE * (VERTICAL_BLANKING_LINES + 3)))
 #endif
 
-#define BUF_SIZE_WORDS (TOTAL_SAMPLE_BITS / 32)
+// we are very close to being out of memory on the RP2040
+#define VGA_BUF_SIZE_WITH_RP2040 (((SAMPLES_TO_CAPTURE * 4) + (HSYNCS_IN_640_LINE * (0 + 0) / 2)) / 32)
+#define VGA_BUF_SIZE_WITH_RP2350 (((SAMPLES_TO_CAPTURE * 8) + (HSYNCS_IN_640_LINE * (VERTICAL_BLANKING_LINES + 3))) / 32)
+#define VGA_BUF_SIZE_WITH_RP2350_WITH_DVI (((SAMPLES_TO_CAPTURE * 4) + (HSYNCS_IN_640_LINE * (VERTICAL_BLANKING_LINES + 3) / 2)) / 32)
 
 // // equivalent to: uint8_t array[210,000] 
 // uint32_t capture_buffer[BUF_SIZE_WORDS];
@@ -3442,7 +3449,9 @@ uint8_t vga_capture_mode = VC_NONE;
 
 
 void test_DVI_framebuf() {
-    dvi_testbars();
+    if (use_dvi) {
+        dvi_testbars();
+    }
 }
 #endif
 
@@ -3602,12 +3611,10 @@ void init_vga_capture_dma_and_start_capturing() {
 
     #define DVI_BUF_TRANSFER_SIZE ((((640 * 4) / 5) * 480) / 4)
 
-    static uint32_t testReadValue = /* 0xffffffff */((RED_BITS) | (GREEN_BITS << 6) | (BLUE_BITS << 12)) << 2;
-
      dma_channel_configure(
         rgb_test_chan_0,            // Channel to be configured
         &vga_capture_dma_ch0,                        // The configuration we just created
-        &dvi_framebuf[0],              // The initial write address (pixel color array)
+        dvi_framebuf,              // The initial write address (pixel color array)
         &vga_capture_pio->rxf[vga_capture_sm],       // read address (RGB PIO RX FIFO)
         // (0x0 << 28) | (DVI_LINE_LENGTH_BYTES * 480 / 4),                  // Number of transfers in words; in this case each word is 4 byte. this doesn't crash
         DVI_BUF_TRANSFER_SIZE,
@@ -3621,13 +3628,11 @@ void init_vga_capture_dma_and_start_capturing() {
     channel_config_set_write_increment(&c1, false);                       // no write incrementing
     channel_config_set_chain_to(&c1, rgb_test_chan_0);                    // chain to other channel
 
-    static char * dvi_framebuf_ptr = &dvi_framebuf[0];
-
     dma_channel_configure(
         rgb_test_chan_1,                        // Channel to be configured
         &c1,                                // The configuration we just created
         &dma_hw->ch[rgb_test_chan_0].write_addr,  // Write address (channel 0 write address)
-        &dvi_framebuf_ptr,                 // Read address (POINTER TO AN ADDRESS)
+        &dvi_framebuf,                 // Read address (POINTER TO AN ADDRESS)
         1,                                  // Number of transfers, in this case each is 4 byte
         false                               // Don't start immediately.
     );
@@ -3676,7 +3681,7 @@ void pio0_irq_handler() {
     if (++vsync_counter >= VGA_VERTICAL_REFRESH_FREQ) {
         // every second
         uint write_addr = dma_hw->ch[rgb_test_chan_0].write_addr;
-        if (write_addr != (uintptr_t) &dvi_framebuf) {
+        if (write_addr != (uintptr_t) dvi_framebuf) {
             vga_capture_dma_write_addr = write_addr;
         }
 #if defined(PICO_DEFAULT_LED_PIN)
@@ -3952,20 +3957,22 @@ void deinit_vga_capture() {
 
 
 void set_vga_capture(uint8_t new_capture_mode) {
+    if (use_dvi) {
 
-    deinit_vga_capture();
+        deinit_vga_capture();
 
-    switch (new_capture_mode) {
-        case VC_NONE:
-            break;
+        switch (new_capture_mode) {
+            case VC_NONE:
+                break;
 
-        case VC_VGA_IN:
-            vga_in_capture_set_enabled(true);
-            break;
+            case VC_VGA_IN:
+                vga_in_capture_set_enabled(true);
+                break;
 
-        case VC_VGA_OUT:
-            vga_out_capture_set_enabled(true);
-            break;
+            case VC_VGA_OUT:
+                vga_out_capture_set_enabled(true);
+                break;
+        }
     }
 }
 
@@ -4655,22 +4662,24 @@ uint total_sample_bits;
 #if USE_VGA_CAPTURE
 
                 case UIC_V:
-                    switch (vga_capture_mode) {
-                        case VC_NONE:
-                            set_vga_capture(VC_VGA_IN);
-                            writeString("capture VGA IN to DVI");
-                            break;
+                    if (use_dvi) {
+                        switch (vga_capture_mode) {
+                            case VC_NONE:
+                                set_vga_capture(VC_VGA_IN);
+                                writeString("capture VGA IN to DVI");
+                                break;
 
-                        case VC_VGA_IN:
-                            set_vga_capture(VC_VGA_OUT);
-                            writeString("mirror VGA OUT to DVI");
-                            break;
+                            case VC_VGA_IN:
+                                set_vga_capture(VC_VGA_OUT);
+                                writeString("mirror VGA OUT to DVI");
+                                break;
 
-                        case VC_VGA_OUT:
-                            set_vga_capture(VC_NONE);
-                            writeString("display DVI test pattern");
-                            test_DVI_framebuf();
-                            break;
+                            case VC_VGA_OUT:
+                                set_vga_capture(VC_NONE);
+                                writeString("display DVI test pattern");
+                                test_DVI_framebuf();
+                                break;
+                        }
                     }
                     break;
 #endif
@@ -4809,6 +4818,7 @@ void draw_ui() {
     clear_statusbar_hint(); // set the cursor etc.
 }
 
+// uint32_t* malloc_test_var;
 
 int main() {
     // system clock frequency is initially defined by SYS_CLK_HZ
@@ -4916,57 +4926,61 @@ int main() {
 
 
 #if USE_DVI
-    // Initialise the HSTX DVI driver
-    uart_my_puts("Initialising DVI...\n");
 
-    #if SYS_CLK_HZ == 250 * MHZ
-    // clock_configure_int_divider (clk_hstx, 0, 0, clock_get_hz(clk_sys), 2);
+    if (use_dvi) {
+
+        // Initialise the HSTX DVI driver
+        uart_my_puts("Initialising DVI...\n");
+
+        #if SYS_CLK_HZ == 250 * MHZ
+        // clock_configure_int_divider (clk_hstx, 0, 0, clock_get_hz(clk_sys), 2);
+        #endif
+
+        uart_my_putcf("clk_hstx: %d\n", clock_get_hz (clk_hstx));
+        // uart_my_putcf("HSTX Frequency: %d\n", clock_get_hz (CLK_DEST_HSTX));
+
+    #if USE_MULTI_CORE
+
+        #if USE_UART_STDIO
+        // for some reason we need a delay here. find out why. todo
+
+        // sleep_ms(1); // if using DVI this seems to be required ??? needs to empty the UART perhaps? todo
+
+        // try sleep_us()...
+        // sleep_us(100); // if using DVI this seems to be required ??? needs to empty the UART perhaps? todo
+        // 190 fails everytime, 200 fails sometimes, 201 passes everty time
+
+        // This only seems to be needed following a programming of the flash via SWD, or a reset via SWD.
+        // If given a hardware reset (RUN driven low and then released) it works every time, ie needs no delay.
+        // Also, it doesn't need a delay if programming the flash via picotool. So for now let's leave it at
+        // 500 and investigate further later.
+
+        sleep_us(500);
+
+        #endif
+
+        multicore_launch_core1(core1_main);
+
+        // wait for core 1 to acknowledge that it's initialised the DVI output
+        if (multicore_fifo_pop_blocking()) {   
+            uart_my_puts("DVI initialised\n");
+        }
+
+        // show the test bars
+        // dvi_testbars();
+        sleep_ms(500); 
+
+    #else
+
+        sleep_ms(1000); // if using DVI this seems to be required
+                        // doesn't like powering up (versus reset).
+
+        dvi_init();
+
+        dvi_testbars();
+
     #endif
-
-    uart_my_putcf("clk_hstx: %d\n", clock_get_hz (clk_hstx));
-    // uart_my_putcf("HSTX Frequency: %d\n", clock_get_hz (CLK_DEST_HSTX));
-
- #if USE_MULTI_CORE
-
-    #if USE_UART_STDIO
-    // for some reason we need a delay here. find out why. todo
-
-    // sleep_ms(1); // if using DVI this seems to be required ??? needs to empty the UART perhaps? todo
-
-    // try sleep_us()...
-    // sleep_us(100); // if using DVI this seems to be required ??? needs to empty the UART perhaps? todo
-    // 190 fails everytime, 200 fails sometimes, 201 passes everty time
-
-    // This only seems to be needed following a programming of the flash via SWD, or a reset via SWD.
-    // If given a hardware reset (RUN driven low and then released) it works every time, ie needs no delay.
-    // Also, it doesn't need a delay if programming the flash via picotool. So for now let's leave it at
-    // 500 and investigate further later.
-
-    sleep_us(500);
-
-    #endif
-
-    multicore_launch_core1(core1_main);
-
-    // wait for core 1 to acknowledge that it's initialised the DVI output
-    if (multicore_fifo_pop_blocking()) {   
-        uart_my_puts("DVI initialised\n");
     }
-
-    // show the test bars
-    // dvi_testbars();
-    sleep_ms(500); 
-
-#else
-
-    sleep_ms(1000); // if using DVI this seems to be required
-                    // doesn't like powering up (versus reset).
-
-    dvi_init();
-
-    dvi_testbars();
-
-#endif
 
     // print_dvi_regs();
 
@@ -5023,11 +5037,23 @@ int main() {
     // uint buf_size_words = total_sample_bits / bits_packed_per_word(g_no_of_captured_pins);
 
     // As we know that BUF_SIZE_WORDS is a power of 2 we don't need to bother with bits_packed_per_word()
-    buf_size_words = BUF_SIZE_WORDS; // todo - replace buf_size_words with BUF_SIZE_WORDS
+    // buf_size_words = BUF_SIZE_WORDS; // todo - replace buf_size_words with BUF_SIZE_WORDS
 
-    // equivalent to: uint8_t array[210,000] 
+    #if PICO_RP2040
+        buf_size_words = VGA_BUF_SIZE_WITH_RP2040;
+    #else
+        if (use_dvi) {
+            buf_size_words = VGA_BUF_SIZE_WITH_RP2350_WITH_DVI;
+        } else {
+            buf_size_words = VGA_BUF_SIZE_WITH_RP2350;
+        }
+    #endif
+
     capture_buf = malloc(buf_size_words * sizeof(uint32_t));
     hard_assert(capture_buf);
+
+    // malloc_test_var = malloc(1);
+    // uart_my_putuif("malloc_test_var: %x\n", (uint32_t)malloc_test_var);
 
     total_sample_bits = buf_size_words * bits_packed_per_word(g_no_of_captured_pins);
 
@@ -5084,19 +5110,20 @@ int main() {
 // #endif
 
 #if USE_VGA_CAPTURE
-    sleep_ms(500);
+    if (use_dvi) {
 
-    #if USE_VGA_IN_TO_DVI
+        sleep_ms(500);
 
-    set_vga_capture(VC_VGA_IN);
+        if (vga_in_to_dvi_on_boot) {
 
-    #else
+            set_vga_capture(VC_VGA_IN);
 
-    set_vga_capture(VC_VGA_OUT);
+        } else {
+            set_vga_capture(VC_VGA_OUT);
 
-    #endif
+        }
 
-    // set_vga_capture(VC_NONE);
+    }
 
  #endif
 
