@@ -107,17 +107,15 @@ target_compile_definitions(palavo PRIVATE
 # must match with executable name
 target_link_libraries(palavo PRIVATE pico_stdlib pico_stdio_uart hardware_pio hardware_dma hardware_irq hardware_clocks)
 
-if (PC_BIT0)
-    # If we're using DVI we run it on the second core, otherwise
-    # it can fall over, especially if we're using USB STDIO.
+if (PICO_RP2350)
+    # If we're using the RP235x we can use its HSTX peripheral to output DVI.
+    # Seems we need to run it on the second core, otherwise it can fall over.
     target_link_libraries(palavo PRIVATE pico_multicore)
 endif()
-
 
 # must match with executable name
 pico_add_extra_outputs(palavo)
 
 # Select stdio peripheral(s)
-
 message(STATUS "Use USB stdio")
 pico_enable_stdio_usb(palavo 1)

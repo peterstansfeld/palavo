@@ -4,6 +4,8 @@
 #ifndef _PALAVO_CONFIG_H
 #define _PALAVO_CONFIG_H
 
+#define CAN_USE_DVI defined(PICO_RP2350)
+
 // PALAVO_CONFIG bit locations
 #define PC_BIT_USE_DVI 0
 
@@ -188,7 +190,7 @@
 #endif
 
 
-#if USE_DVI
+#if CAN_USE_DVI
     // Using DVI - define what mode to show on startup.
     #pragma message "Using DVI"
 
