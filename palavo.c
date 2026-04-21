@@ -78,7 +78,7 @@
 
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 15
-#define VERSION_PATCH 1
+#define VERSION_PATCH 2
 
 #ifndef VGA_TIMEOUT
 // If the number of idle seconds before the VGA output is blanked and
@@ -92,8 +92,6 @@
 
 // Use core 1 for the DVI output (initialisation and interrupt service routine)
 
-#define USE_STDIO_UART 1
-
 #include "hardware/clocks.h"
 #include "nec_ir_rx.pio.h"
 
@@ -103,15 +101,6 @@
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
 #include "hardware/dma.h"
-
-#if !USE_STDIO_UART
-
-#include "hardware/uart.h"
-#else
-// #include "pico/stdio_uart.h"
-// #include "pico/stdio_usb.h"
-#endif
-
 #include "pico/binary_info.h"
 
 // #include "hardware/timer.h"
@@ -121,11 +110,6 @@
 // VGA graphics library
 #include "vga2_graphics.h"
 
-#if !USE_STDIO_UART
-
-#define UART_ID uart1
-
-#endif
 #define BAUD_RATE 115200
 
 #define DEBUG_PIN 28
@@ -145,11 +129,28 @@
 // Pins that are not available on the Pico, Pico 2, and others which are based are based of the Pico.
 #define PICO_RESERVED_GPIO_0_31 ((1 << 31) | (1 << 30) | (1 << 29) | (1 << 25) | (1 << 24)  | (1 << 23))
 
-#define ENABLE_GRAPHICS_DEMO 0
-
 bi_decl(bi_program_version_string(STR(VERSION_MAJOR) "." STR(VERSION_MINOR) "." STR(VERSION_PATCH)));
 bi_decl(bi_program_description("PIO-Assisted Logic Analyser with VGA Output"));
 bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
+
+// we can always use the UART for STDIO (as well as the always enabled USB)
+bi_decl(bi_program_feature("UART stdin / stdout (if use_uart == 1)"));
+
+// we can always enable infra-red remote control
+bi_decl(bi_program_feature("Infra-red remote control (if use_ir == 1)"));
+
+#if CAN_USE_DVI
+    // we can sometimes enable DVI output
+    bi_decl(bi_program_feature("DVI output (if use_dvi == 1)"));
+    bi_decl(bi_1pin_with_name(12, "DVI Out - D0+"));
+    bi_decl(bi_1pin_with_name(13, "DVI Out - D0-"));
+    bi_decl(bi_1pin_with_name(14, "DVI Out - CK+"));
+    bi_decl(bi_1pin_with_name(15, "DVI Out - CK-"));
+    bi_decl(bi_1pin_with_name(16, "DVI Out - D1-"));
+    bi_decl(bi_1pin_with_name(17, "DVI Out - D1+"));
+    bi_decl(bi_1pin_with_name(18, "DVI Out - D2-"));
+    bi_decl(bi_1pin_with_name(19, "DVI Out - D2+"));
+#endif
 
 // Maybe make this a feature?...
 bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
@@ -192,7 +193,6 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
         #define VGA_OUT_RGB_PIN_COUNT 6
         #endif
 
-        // this is applied only if USE_IR is true
         #ifndef IR_RX_PIN
         #define IR_RX_PIN 46
         #endif
@@ -226,7 +226,6 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
         #define VGA_OUT_RGB_PIN_COUNT 1
         #endif
 
-        // this is applied only if USE_IR is true
         #ifndef IR_RX_PIN
         #define IR_RX_PIN 28
         #endif
@@ -278,7 +277,6 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
     #define VGA_OUT_RGB_PIN_COUNT 6
     #endif
 
-    // this is applied only if USE_IR is true
     #ifndef IR_RX_PIN
     #define IR_RX_PIN 10
     #endif
@@ -292,21 +290,6 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
     #ifndef VGA_IN_RGB_PIN_COUNT
     #define VGA_IN_RGB_PIN_COUNT 6
     #endif
-#endif
-
-
-// we're sometimes outputting DVI
-
-#if CAN_USE_DVI
-    bi_decl(bi_program_feature("DVI output (if use_dvi == 1)"));
-    bi_decl(bi_1pin_with_name(12, "DVI Out - D0+"));
-    bi_decl(bi_1pin_with_name(13, "DVI Out - D0-"));
-    bi_decl(bi_1pin_with_name(14, "DVI Out - CK+"));
-    bi_decl(bi_1pin_with_name(15, "DVI Out - CK-"));
-    bi_decl(bi_1pin_with_name(16, "DVI Out - D1-"));
-    bi_decl(bi_1pin_with_name(17, "DVI Out - D1+"));
-    bi_decl(bi_1pin_with_name(18, "DVI Out - D2-"));
-    bi_decl(bi_1pin_with_name(19, "DVI Out - D2+"));
 #endif
 
 #if BOARD_HAS_SAME_RESERVED_GPIO_AS_PICO
@@ -576,12 +559,7 @@ static inline uint bits_packed_per_word(uint pin_count) {
 
 
 void uart_my_puts(const char * s) {
-
-#if !USE_STDIO_UART
-    uart_puts(UART_ID, s);    
-#else
     stdio_put_string(s, strlen(s), false, false);
-#endif
 }
 
 
@@ -2537,13 +2515,8 @@ void clear_screen() {
 uint check_keyboard() {
 
     uint ui_command = UIC_NONE;
-
-#if !USE_STDIO_UART
-    if ((last_uart_char == 27) || uart_is_readable(UART_ID)) {
-#else
     int uart_int = stdio_getchar_timeout_us(0);
     if ((last_uart_char == 27) || (uart_int != PICO_ERROR_TIMEOUT)) {
-#endif
         ui_command = UIC_ANY;
 
         // set_statusbar_text();
@@ -2555,11 +2528,7 @@ uint check_keyboard() {
         uint8_t ch = last_uart_char;
 
         if (ch != 27) {
-#if !USE_STDIO_UART
-            ch = uart_getc(UART_ID);
-#else
             ch = uart_int;            
-#endif
             last_uart_char = ch;
         }
 
@@ -2594,14 +2563,9 @@ uint check_keyboard() {
             // the "us" parameter was 1 or 1800. Turns out that pressing the Esc
             // key in minicom (serial terminal) has a little delay before it is transmitted
             // unlike any other key. Thank goodness for LEDs on the debug probe.
-#if !USE_STDIO_UART
-            while (uart_is_readable_within_us(UART_ID, 1800)) {
-            ch = uart_getc(UART_ID);
-#else
             int new_uart_int;
             while ((new_uart_int = stdio_getchar_timeout_us(1800)) != PICO_ERROR_TIMEOUT) {
                 ch = new_uart_int;
- #endif
                 last_uart_char = ch;
 
                 if (ch == 27 /* ESC */) {
@@ -3923,13 +3887,10 @@ void vga_out_capture_set_enabled(bool enabled) {
             }
 
             // free the remaining state machine
-// #if USE_CSYNC
             if (vga_out_use_csync) {
                 pio_remove_program(vga_capture_pio, &vga_detect_vsync_on_csync_program, vga_detect_vsync_on_csync_offset);
-// #else
             } else {
                 pio_remove_program(vga_capture_pio, &vga_detect_vsync_program, vga_detect_vsync_offset);
-// #endif
             }
             deinit_vga_capture_interrupts_and_dma();
 
@@ -3971,8 +3932,6 @@ void set_vga_capture(uint8_t new_capture_mode) {
 
 #endif
 
-
-// #if USE_IR
 
 uint32_t time_ms() {
     return time_us_64() / 1000;
@@ -4148,8 +4107,6 @@ uint check_ir() {
 void ir_flush() {
     pio_sm_clear_fifos(ir_rx_pio, ir_rx_sm);
 }
-
-// #endif
 
 
 #if CAN_USE_DVI
@@ -4879,13 +4836,6 @@ int main() {
     }
 #endif
 
-#if !USE_STDIO_UART
-    uart_init(UART_ID, BAUD_RATE);
-    gpio_set_function(UART_TX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_TX_PIN));
-    gpio_set_function(UART_RX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_RX_PIN));
-#endif
-
-
 #if USE_LED_AS_IR_DEBUG
 
 #ifdef LED_PIN
@@ -4990,12 +4940,6 @@ int main() {
     uart_my_putcf("With RGB base pin on: %d\n", vga_out_rgb_pins_base);
     uart_my_putcf("And: %d pins\n", vga_out_rgb_pins_count);
 
-    bool use_csync;
-
-#if USE_CSYNC
-    use_csync = true;
-#endif
-
     initVGA(vga_out_hsync_pin, vga_out_use_csync, vga_out_rgb_pins_base, vga_out_rgb_pins_count, sys_clock_freq);
     init_line_colours();
 
@@ -5073,13 +5017,9 @@ int main() {
     writeString(start_help_text);
     uart_my_puts(start_help_text);
 
-// #if USE_IR
-
     if (use_ir) {
         init_ir_rx(true);
     }
-
-// #endif
 
 #if CAN_USE_DVI
     if (use_dvi) {
@@ -5153,14 +5093,11 @@ int main() {
 
         uint ui_command = check_keyboard();
 
-// #if USE_IR
-
         if (use_ir) {
             if (!ui_command) {
                 ui_command = check_ir();
             }
         }
-// #endif
 
         if (ui_command) {
 

@@ -159,6 +159,8 @@
 
 #if (PALAVO_CONFIG & (1 << PC_BIT_USE_GPIO_31_47))
     #define USE_GPIO_31_47 1
+#else
+    #define USE_GPIO_31_47 0
 #endif
 
 
@@ -214,7 +216,7 @@
 #if USE_GPIO_31_47
 
     #if (!PICO_PIO_USE_GPIO_BASE)
-        #error "Can't use more than 32 pins on this microcontroller"
+        #error "Can't use more than 32 GPIO pins on this microcontroller"
     #else
         #pragma message "Using GPIO 31-47 for user interface"
     #endif
