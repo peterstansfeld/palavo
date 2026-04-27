@@ -78,7 +78,7 @@
 
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 15
-#define VERSION_PATCH 2
+#define VERSION_PATCH 3
 
 #ifndef VGA_TIMEOUT
 // If the number of idle seconds before the VGA output is blanked and
@@ -476,7 +476,7 @@ bi_decl(bi_ptr_int32(0x1111, FG_INTERFACES, use_dvi, USE_DVI));
 #endif
 
 bi_decl(bi_ptr_int32(0x1111, FG_SYS, sys_clock_freq, SYS_CLK_HZ));
-bi_decl(bi_ptr_string(0x1111, FG_SYS, sys_string, "Text (configurable using picotool)", 50));
+bi_decl(bi_ptr_string(0x1111, FG_SYS, sys_string, "This may come in useful.", 64));
 
 uint8_t g_no_of_captured_pins = CAPTURE_PIN_COUNT;
 uint8_t g_pins_base_captured;
