@@ -104,6 +104,8 @@
 #include "hardware/flash.h"
 #include "pico/binary_info.h"
 
+#include "binary_info_access.h"
+
 // #include "hardware/timer.h"
 // #include "hardware/structs/bus_ctrl.h"
 #include <string.h>
@@ -143,14 +145,14 @@ bi_decl(bi_program_feature("Infra-red remote control (if use_ir == 1)"));
 #if CAN_USE_DVI
     // we can sometimes enable DVI output
     bi_decl(bi_program_feature("DVI output (if use_dvi == 1)"));
-    bi_decl(bi_1pin_with_name(12, "DVI Out - D0+"));
-    bi_decl(bi_1pin_with_name(13, "DVI Out - D0-"));
-    bi_decl(bi_1pin_with_name(14, "DVI Out - CK+"));
-    bi_decl(bi_1pin_with_name(15, "DVI Out - CK-"));
-    bi_decl(bi_1pin_with_name(16, "DVI Out - D1-"));
-    bi_decl(bi_1pin_with_name(17, "DVI Out - D1+"));
-    bi_decl(bi_1pin_with_name(18, "DVI Out - D2-"));
     bi_decl(bi_1pin_with_name(19, "DVI Out - D2+"));
+    bi_decl(bi_1pin_with_name(18, "DVI Out - D2-"));
+    bi_decl(bi_1pin_with_name(17, "DVI Out - D1+"));
+    bi_decl(bi_1pin_with_name(16, "DVI Out - D1-"));
+    bi_decl(bi_1pin_with_name(15, "DVI Out - CK-"));
+    bi_decl(bi_1pin_with_name(14, "DVI Out - CK+"));
+    bi_decl(bi_1pin_with_name(13, "DVI Out - D0-"));
+    bi_decl(bi_1pin_with_name(12, "DVI Out - D0+"));
 #endif
 
 // Maybe make this a feature?...
@@ -4762,183 +4764,36 @@ void draw_ui() {
     clear_statusbar_hint(); // set the cursor etc.
 }
 
-// uint32_t* malloc_test_var;
 
-uint32_t address_mapping_table;
-
-uint32_t get_flash_address(uint32_t address) {
-    uint32_t r = 0;
-    if (address >= 0x20000000) {
-        // address is in SRAM so use the address_mapping_table to
-        // map it to an address in flash
-        uint32_t * pam = (uint32_t *)address_mapping_table;
-        while (*pam) {
-            uint32_t source_addr_start = *pam;
-            uint32_t dest_addr_start = *(pam + 1);
-            uint32_t dest_addr_end = *(pam + 2);
-            if ((address >= dest_addr_start) && address < dest_addr_end) {
-                r = source_addr_start + (address - dest_addr_start);
-                break;
-            }
-            pam += 3;
-        }
-    } else {
-        r = address;
-    }
-    return r;
+void print_rp_binary_info(uint32_t id) {
+    print_binary_info((1 << BINARY_INFO_TYPE_ID_AND_STRING), BINARY_INFO_TAG_RASPBERRY_PI, id);
 }
 
 
-// #define PRINT_ONLY
+void print_all_binary_info() {
+    stdio_printf("\nProgram Info:\n");
+    print_rp_binary_info(BINARY_INFO_ID_RP_PROGRAM_NAME);
+    print_rp_binary_info(BINARY_INFO_ID_RP_PROGRAM_DESCRIPTION);
+    print_rp_binary_info(BINARY_INFO_ID_RP_PROGRAM_VERSION_STRING);
+    print_rp_binary_info(BINARY_INFO_ID_RP_PROGRAM_URL);
+    print_rp_binary_info(BINARY_INFO_ID_RP_PICO_BOARD);
 
-// #if 
+    stdio_printf(" features:\n");
+    print_rp_binary_info(BINARY_INFO_ID_RP_PROGRAM_FEATURE);
 
+    stdio_printf("\nFixed Pin Information:\n");
+    print_binary_info(
+        (1 << BINARY_INFO_TYPE_PINS64_WITH_NAME) |
+        0, 0, 0);
 
-void print_binary_info(uint32_t print_types) {
+    stdio_printf("\nBoot Settings (can be configured using picotool):\n");
+    print_binary_info(
+        (1 << BINARY_INFO_TYPE_PTR_INT32_WITH_NAME) |
+        (1 << BINARY_INFO_TYPE_PTR_STRING_WITH_NAME) |
+        0, 0, 0);
 
-    // Note the layout is:
-    //
-    // addr      : BINARY_INFO_MARKER_START
-    // addr+0x04 : __binary_info_start
-    // addr+0x08 : __binary_info_end
-    // addr+0x0c : __address_mapping_table
-    // addr+0x10 | BINARY_INFO_MARKER_END
-    //
-    // __binary_info_start to __binary_info_end are the start, end (non inclusive) of an array
-    // of pointers to binary_info_t structures
-    //
-    // __address_mapping_table is an array of the following items:
-    //
-    // uint32_t source_addr_start
-    // uint32_t dest_addr_start
-    // uint32_t dest_addr_end
-
-    uint32_t *p = (uint32_t *)XIP_BASE + (0x100 / sizeof(uint32_t));
-
-    uint32_t binary_info_start;
-    uint32_t binary_info_end;
-
-    for (int i = 0; i < 256; i++) {
-        uint32_t flash_word = *p;
-
-        if (flash_word == BINARY_INFO_MARKER_START) {
-            // stdio_printf("BINARY_INFO_MARKER_START (0x%x) ", flash_word);
-            // stdio_printf("found at flash address: 0x%x\n", (uint32_t)p);
-            binary_info_start = *(p + 1);
-            binary_info_end = *(p + 2);
-            address_mapping_table = *(p + 3);
-
-            // stdio_printf("binary_info_start: 0x%x\n", binary_info_start);
-            // stdio_printf("binary_info_end: 0x%x\n", binary_info_end);
-            // stdio_printf("binary_info words: %d\n", (binary_info_end - binary_info_start) / sizeof(uint32_t));
-            // stdio_printf("address_mapping_table: 0x%x\n", (address_mapping_table));
-
-            uint32_t * p2 = (uint32_t *)binary_info_start;
-
-            int no_of_items = (binary_info_end - binary_info_start) / sizeof(uint32_t);
-            for (int j =  0; j < no_of_items; j++) {
-                // copy 
-                // stdio_printf("0x%x\n", *p2);
-
-                uint32_t * p3 = (uint32_t *)*p2;
-                binary_info_t bi;
-                memcpy(&bi, p3, sizeof(binary_info_t));
-
-                // if (bi.type)
-                if (print_types & (1 << bi.type)) {
-                    switch (bi.type){
-
-                        case BINARY_INFO_TYPE_ID_AND_INT:
-                            binary_info_id_and_int_t bi_id_and_int;
-                            memcpy(&bi_id_and_int, p3, sizeof(binary_info_id_and_int_t));
-                            // uint32_t mask_lo = bi_p64.pin_mask & 0xffffffff;
-                            stdio_printf("0x%x: %d\n", bi_id_and_int.id, bi_id_and_int.value);
-                            break;
-
-                        case BINARY_INFO_TYPE_PINS64_WITH_NAME:
-                            binary_info_pins64_with_name_t bi_p64;
-                            memcpy(&bi_p64, p3, sizeof(binary_info_pins64_with_name_t));
-                            uint32_t mask_lo = bi_p64.pin_mask & 0xffffffff;
-                            stdio_printf("%x: %s\n", mask_lo, (char*)get_flash_address((uint32_t)bi_p64.label));
-                            break;
-
-                        case BINARY_INFO_TYPE_ID_AND_STRING:
-                            binary_info_id_and_string_t bi_id_and_str;
-                            memcpy(&bi_id_and_str, p3, sizeof(binary_info_id_and_string_t));
-                            if (bi.tag == ('R' | ('P' << 8))) {
-                                stdio_printf("RP tag Id: 0x%x ", bi_id_and_str.id);
-                                switch (bi_id_and_str.id) {
-                                    case 0x1856239a:
-                                        stdio_printf("web site: ");
-                                        break;
-                                    case 0xb6a07c19:
-                                        stdio_printf("description: ");
-                                        break;
-                                    case 0x11a9bc3a:
-                                        stdio_printf("version: ");
-                                        break;
-                                    case 0x4275f0d3:
-                                        stdio_printf("build attributes: ");
-                                        break;
-                                    case 0x7f8882e1:
-                                        stdio_printf("boot2_name: ");
-                                        break;
-                                    case 0x5360b3ab:
-                                        stdio_printf("sdk version: ");
-                                        break;
-                                    case 0xb63cffbb:
-                                        stdio_printf("pico_board");
-                                        break;
-                                    case 0x2031c86: 
-                                        stdio_printf("name: ");
-                                        break;
-                                    case 0x9da22254:
-                                        stdio_printf("build date: ");
-                                        break;
-                                    case 0xa1f4b453:
-                                        stdio_printf("feature: ");
-                                        break;
-                                }
-
-                            } else {
-                                stdio_printf("Other tag 0x%x:", bi.tag);
-                            }
-                            stdio_printf("%s\n", (char*)get_flash_address((uint32_t)bi_id_and_str.value));
-                            break;
-
-                        case BINARY_INFO_TYPE_PTR_INT32_WITH_NAME:
-                            binary_info_ptr_int32_with_name_t bi_ptr_int32_with_name;
-                            memcpy(&bi_ptr_int32_with_name, p3, sizeof(binary_info_ptr_int32_with_name_t));
-                            stdio_printf(" %s = %d\n", (char*)get_flash_address((uint32_t)bi_ptr_int32_with_name.label),
-                                *(int32_t*)get_flash_address((uint32_t)bi_ptr_int32_with_name.value));
-                            break;
-
-                        case BINARY_INFO_TYPE_PTR_STRING_WITH_NAME:
-                            binary_info_ptr_string_with_name_t bi_ptr_string_with_name;
-                            memcpy(&bi_ptr_string_with_name, p3, sizeof(binary_info_ptr_string_with_name_t));
-                            stdio_printf(" %s = %s\n", (char*)get_flash_address((uint32_t)bi_ptr_string_with_name.label),
-                                (char*)get_flash_address((uint32_t)bi_ptr_string_with_name.value));
-                            break;
-
-                        case BINARY_INFO_TYPE_NAMED_GROUP:
-                            binary_info_named_group_t bi_named_group;
-                            memcpy(&bi_named_group, p3, sizeof(binary_info_named_group_t));
-                            stdio_printf("%s\n", (char*)get_flash_address((uint32_t)bi_named_group.label));
-                            break;
-
-                        default: 
-                            stdio_printf("unknown type: %d\n", bi.type);
-                            break;
-                    }
-                }
-                p2 += 1;
-            }
-            break;
-        }
-        p += 1;
-    }
+    stdio_printf("\n");
 }
-
 
 
 int main() {
@@ -5032,14 +4887,7 @@ int main() {
 
     show_about_info(false);
 
-    stdio_printf("Boot Settings, which can be configured using picotool:\n");
-
-    print_binary_info((1 << BINARY_INFO_TYPE_PTR_INT32_WITH_NAME) |
-                      (1 << BINARY_INFO_TYPE_PTR_STRING_WITH_NAME) |
-                    //   (1 << BINARY_INFO_TYPE_ID_AND_STRING) |
-                    0);
-
-    stdio_printf("\n");
+    print_all_binary_info();
 
 // #ifdef PICO_SDK_VERSION_STRING
 //     uart_my_puts("SDK Version: ");
