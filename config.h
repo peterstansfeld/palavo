@@ -4,6 +4,8 @@
 #ifndef _PALAVO_CONFIG_H
 #define _PALAVO_CONFIG_H
 
+#define CAN_USE_DVI defined(PICO_RP2350)
+
 // PALAVO_CONFIG bit locations
 #define PC_BIT_USE_DVI 0
 
@@ -150,35 +152,47 @@
 
 #if (PALAVO_CONFIG & (1 << PC_BIT_USE_DVI))
     #define USE_DVI 1
+#else
+    #define USE_DVI 0
 #endif
 
 
 #if (PALAVO_CONFIG & (1 << PC_BIT_USE_GPIO_31_47))
     #define USE_GPIO_31_47 1
+#else
+    #define USE_GPIO_31_47 0
 #endif
 
 
 #if (PALAVO_CONFIG & (1 << PC_BIT_USE_VGA_IN_TO_DVI))
     #define USE_VGA_IN_TO_DVI 1
+#else
+    #define USE_VGA_IN_TO_DVI 0
 #endif
 
 
 #if (PALAVO_CONFIG & (1 << PC_BIT_USE_IR))
     #define USE_IR 1
+#else
+    #define USE_IR 0
 #endif
 
 
 #if (PALAVO_CONFIG & (1 << PC_BIT_USE_CSYNC))
     #define USE_CSYNC 1
+#else
+    #define USE_CSYNC 0
 #endif
 
 
 #if (PALAVO_CONFIG & (1 << PC_BIT_USE_UART_STDIO))
     #define USE_UART_STDIO 1
+#else
+    #define USE_UART_STDIO 0
 #endif
 
 
-#if USE_DVI
+#if CAN_USE_DVI
     // Using DVI - define what mode to show on startup.
     #pragma message "Using DVI"
 
@@ -202,7 +216,7 @@
 #if USE_GPIO_31_47
 
     #if (!PICO_PIO_USE_GPIO_BASE)
-        #error "Can't use more than 32 pins on this microcontroller"
+        #error "Can't use more than 32 GPIO pins on this microcontroller"
     #else
         #pragma message "Using GPIO 31-47 for user interface"
     #endif
@@ -241,6 +255,11 @@
     // #error "CSYNC must be used with this configuration"
 
     #pragma message "CSYNC must be set with this configuration"
+
+    #ifdef USE_CSYNC
+    #undef USE_CSYNC
+    #endif
+
     #define USE_CSYNC 1
     #pragma message "Added `#define USE_CSYNC 1`"
 

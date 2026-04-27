@@ -186,7 +186,7 @@ void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour, ui
     uint csync_sm = 0;
 
 
-void initVGA(uint hsync_or_csync_pin, bool use_csync, uint rgb_base_pin, uint rgb_pin_count) {
+void initVGA(uint hsync_or_csync_pin, bool use_csync, uint rgb_base_pin, uint rgb_pin_count, uint32_t clock_hz) {
     // Choose which PIO instance to use (there are two instances (three for rp2350), each with 4 state machines)
 
     // note: needed to make the variables below `static` to get this working - work out why - todo
@@ -224,14 +224,13 @@ void initVGA(uint hsync_or_csync_pin, bool use_csync, uint rgb_base_pin, uint rg
     // or for csync is that at one stage they were both implemented for testing
     // CSYNC. We could get combine them in one `sync_sm` .
 
-#if SYS_CLK_HZ == 125 * MHZ
-    uint rgb5_offset = pio_add_program(vga_out_pio, &rgb5_program);
-#elif SYS_CLK_HZ == 150 * MHZ
-    // uint rgb5_offset = pio_add_program(vga_out_pio, &rgb5_150_mhz_program);
-    uint rgb5_offset = pio_add_program(vga_out_pio, &rgb5_150_mhz_rp235x_program);
-#elif SYS_CLK_HZ == 250 * MHZ
-    uint rgb5_offset = pio_add_program(vga_out_pio, &rgb5_250_mhz_program);
-#endif
+    uint rgb5_offset;
+
+    if (clock_hz == 125 * MHZ) {
+        rgb5_offset = pio_add_program(vga_out_pio, &rgb5_program);
+    } else if (clock_hz == 150 * MHZ) {
+        rgb5_offset = pio_add_program(vga_out_pio, &rgb5_150_mhz_rp235x_program);
+    }
 
     uint hsync5_offset = pio_add_program(vga_out_pio, &hsync5_program);
 
@@ -251,13 +250,11 @@ void initVGA(uint hsync_or_csync_pin, bool use_csync, uint rgb_base_pin, uint rg
 
 // todo - tidy these GPIO pin definitions below
 
-#if SYS_CLK_HZ == 125 * MHZ
+    if (clock_hz == 125 * MHZ) {
       rgb5_program_init(vga_out_pio, rgb5_sm, rgb5_offset, rgb_base_pin, rgb_pin_count);
-#elif SYS_CLK_HZ == 150 * MHZ
+    } else if (clock_hz == 150 * MHZ) {
     rgb5_150_mhz_rp235x_program_init(vga_out_pio, rgb5_sm, rgb5_offset, rgb_base_pin, rgb_pin_count);
-#elif SYS_CLK_HZ == 250 * MHZ
-      rgb5_250_mhz_program_init(vga_out_pio, rgb5_250_mhz_sm, rgb5_offset, LO_GRN);
-#endif
+    }
 
 #ifdef PICO_PLATFORM
 

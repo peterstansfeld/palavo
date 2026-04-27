@@ -21,7 +21,7 @@ if (PICO_RP2350)
 endif()
 
 # must match with executable name and source file names
-target_sources(palavo PRIVATE palavo.c vga2_graphics.c)
+target_sources(palavo PRIVATE palavo.c vga2_graphics.c binary_info_access.c)
 #if (PICO_BOARD STREQUAL "pico2")
 if (PICO_RP2350)
     target_sources(palavo PRIVATE dvi64_graphics.c)
@@ -102,31 +102,20 @@ endif()
 # initialization. Without this a number of transmissions are lost
 # because the host (PC) isn't ready to receive. 
 target_compile_definitions(palavo PRIVATE
-    PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=1000)
+    PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=5000)
 
 # must match with executable name
-target_link_libraries(palavo PRIVATE pico_stdlib hardware_pio hardware_dma hardware_irq hardware_clocks)
+target_link_libraries(palavo PRIVATE pico_stdlib pico_stdio_uart hardware_pio hardware_dma hardware_irq hardware_clocks)
 
-if (PC_BIT0)
-    # If we're using DVI we run it on the second core, otherwise
-    # it can fall over, especially if we're using USB STDIO.
+if (PICO_RP2350)
+    # If we're using the RP235x we can use its HSTX peripheral to output DVI.
+    # Seems we need to run it on the second core, otherwise it can fall over.
     target_link_libraries(palavo PRIVATE pico_multicore)
 endif()
-
 
 # must match with executable name
 pico_add_extra_outputs(palavo)
 
 # Select stdio peripheral(s)
-
 message(STATUS "Use USB stdio")
 pico_enable_stdio_usb(palavo 1)
-
-if (PC_BIT5)
-    message(STATUS "Use UART stdio")
-    pico_enable_stdio_uart(palavo 1)
-else()
-    # UART stdio seems to be enabled by default
-    pico_enable_stdio_uart(palavo 0)
-endif()
-

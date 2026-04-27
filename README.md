@@ -23,7 +23,9 @@ The project was inspired by, and uses code from, Raspberry Pi's [Logic Analyser 
 
 There are a number of configurations, which can capture any of the 32 GPIOs of the RP2040/RP2350A, or the 48 GPIOs of the RP2350B. Pre-built binaries (`.uf2` files) are available to get up and running without the need to build any firmware.  
 
-If you plan to build your own firmware, configurations are defined by adding the appropriate `PALAVO_CONFIG` variable to the `cmake` command line that's used to create a build directory, in which the firmware is then built. Instructions for this are detailed in each of the configurations:
+If you plan to build your own firmware, configurations are defined by adding the appropriate `PALAVO_CONFIG` variable to the `cmake` command line that's used to create a build directory, in which the firmware is then built. Instructions for this are detailed in each of the configurations.
+
+Update. Various settings, e.g. GPIO pins; enabling/disabling of interfaces; UI settings; etc., can be configured using Raspberry Pi's [`picotool`](https://github.com/raspberrypi/picotool) command line utility. A `.uf2` file can be configured with the settings, or the settings can configured on a device. For more details please see the [Configuring settings with Picotool](#configuring-settings-with-picotool) section.
 
 
 ## Configuration 0
@@ -775,6 +777,95 @@ This builds the firmware of each of the configurations mentioned in this documen
 
 A Python script to convert a 640x480 `.rgb` image file to a monochrome palavo screenshot `.pss` image file. I lost a screenshot, which upset me, and used this script to recreate it from a `.png` file, which wasn't lost, and which had been generated from the original screenshot (before I lost it).
 
+
+## Configuring settings with Picotool
+
+Various settings can be configured using Raspberry Pi's [`picotool`](https://github.com/raspberrypi/picotool) command line utility. A `.uf2` file can be configured with the settings, or the settings can configured on a device.
+
+To view all the configurable settings in a `.uf2` file:
+
+```bash
+picotool config palavo.uf2
+```
+
+which will return something like:
+
+```
+File palavo.uf2:
+
+DVI Configuration:
+ vga_in_to_dvi_on_boot = 1
+Enabled Interfaces:
+ use_dvi = 1
+ use_ir = 0
+ use_uart = 0
+IR Configuration:
+ ir_rx_pin = 28
+System Configuration:
+ sys_clock_freq = 150000000
+ sys_string = "Text (configurable using picotool)"
+UART Configuration:
+ uart_baud = 115200
+ uart_num = 1
+ uart_tx_pin = 8
+ uart_rx_pin = 9
+UI Configuration:
+ ui_channel = 0
+ ui_palette = 0
+ ui_zoom = 1
+ ui_freq_div = 6
+ ui_pins_base = 10
+ ui_pins_count = 10
+ ui_trig_pin = 10
+ ui_trig_type = 9
+VGA Configuration:
+ vga_out_use_csync = 1
+ vga_out_hsync_pin = 10
+ vga_out_rgb_pins_base = 11
+ vga_out_rgb_pins_count = 1
+ vga_in_hsync_pin = 1
+ vga_in_rgb_pins_base = 2
+ vga_in_rgb_pins_count = 6
+ vga_out_timeout = 60
+```
+
+To configure a setting (e.g. enable the UART) in a `.uf2` file:
+
+```bash
+picotool config palavo.uf2 -s use_uart 1
+```
+
+which should return:
+
+```
+File palavo.uf2:
+
+use_uart = 0
+setting use_uart -> 1
+```
+
+To view all the configurable settings on a device:
+
+```bash
+picotool config -f
+```
+
+To configure a setting (e.g. enable the infra-red reception) on a device:
+
+```bash
+picotool config -f -s use_ir 1
+```
+which should return something like:
+
+```
+Tracking device serial number F51508674660002F for reboot
+The device was asked to reboot into BOOTSEL mode so the command can be executed.
+
+use_ir = 0
+setting use_ir -> 1
+
+The device was asked to reboot back into application mode.
+```
 
 ## Links
 
