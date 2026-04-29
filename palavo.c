@@ -78,7 +78,7 @@
 
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 15
-#define VERSION_PATCH 3
+#define VERSION_PATCH 4
 
 #ifndef VGA_TIMEOUT
 // If the number of idle seconds before the VGA output is blanked and
@@ -3991,119 +3991,129 @@ uint check_ir() {
         }
 
         if (ir_command) {
+            // Supported ir remotes
+            // Adafruit Mini Remote Control (https://www.adafruit.com/product/389)
+            // Argon IR Remote (https://argon40.com/products/argon-remote?_pos=1&_psq=remote&_ss=e&_v=1.0)
+            // Pimoroni AYE ARR REMOTE (https://pimoroni.com/irremote)
 
-            uint8_t ir_button = (ir_command >> 16) & 0xff;
+            #define ADAFRUIT_IR_ID 0xbf00
+            #define ARGON_IR_ID 0xff00
+            #define PIMORONI_IR_ID 0xff00
 
-            if ((ir_command & 0xffff) == 0xbf00) {
-                // Adafruit Mini Remote Control (https://www.adafruit.com/product/389)
+            #define IR_CMND(id, btn) (((btn ^ 0xff) << 24) | (btn << 16) | id)
 
+            #define ADAFRUIT_IR_BUTTON(btn) IR_CMND(ADAFRUIT_IR_ID, btn)
+            #define ARGON_IR_BUTTON(btn) IR_CMND(ARGON_IR_ID, btn)
+            #define PIMORONI_IR_BUTTON(btn) IR_CMND(PIMORONI_IR_ID, btn)
 
+            #define ADAFRUIT_IR_PLAY_PAUSE ADAFRUIT_IR_BUTTON(0x01)
+            #define ARGON_IR_HOME ARGON_IR_BUTTON(0xcb)
+            #define PIMORONI_IR_PLAY_PAUSE PIMORONI_IR_BUTTON(0x4a)
 
-                uart_my_putcf("  btn: %d\n", ir_button);
+            #define ADAFRUIT_IR_CENTRE_BUTTON ADAFRUIT_IR_BUTTON(0x09)
+            #define ARGON_IR_CENTRE_BUTTON ARGON_IR_BUTTON(0xce)
+            #define PIMORONI_IR_CENTRE_BUTTON PIMORONI_IR_BUTTON(0x40)
 
-                switch (ir_button) {
+            #define ADAFRUIT_IR_LEFT ADAFRUIT_IR_BUTTON(0x08)
+            #define ARGON_IR_LEFT ARGON_IR_BUTTON(0x99)
+            #define PIMORONI_IR_LEFT PIMORONI_IR_BUTTON(0x44)
 
-                    case 1:
-                        // 'play/pause'
-                        ui_command = UIC_C; // capture
-                        last_ir_command = 0;
-                        break;
+            #define ADAFRUIT_IR_RIGHT ADAFRUIT_IR_BUTTON(0x0a)
+            #define ARGON_IR_RIGHT ARGON_IR_BUTTON(0xc1)
+            #define PIMORONI_IR_RIGHT PIMORONI_IR_BUTTON(0x43)
 
-                    case 8:
-                        ui_command = UIC_LEFT;
-                        break;
+            #define ADAFRUIT_IR_UP ADAFRUIT_IR_BUTTON(0x05)
+            #define ARGON_IR_UP ARGON_IR_BUTTON(0xca)
+            #define PIMORONI_IR_UP PIMORONI_IR_BUTTON(0x46)
 
-                    case 10:
-                        ui_command = UIC_RIGHT;
-                        break;
+            #define ADAFRUIT_IR_DOWN ADAFRUIT_IR_BUTTON(0x0d)
+            #define ARGON_IR_DOWN ARGON_IR_BUTTON(0xd2)
+            #define PIMORONI_IR_DOWN PIMORONI_IR_BUTTON(0x15)
 
-    #if CAN_USE_DVI
+            #define ADAFRUIT_IR_SETUP ADAFRUIT_IR_BUTTON(0x04)
+            #define ARGON_IR_HAMBURGER ARGON_IR_BUTTON(0x9d)
+            #define PIMORONI_IR_MENU PIMORONI_IR_BUTTON(0x09)
 
-        #if USE_DVI_DEBUG
-    
-                    case 14:
-                        ui_command = UIC_R; // reset DVI
-                        break;
-        #endif
-    
-    #endif
+            #define ADAFRUIT_IR_VOL_PLUS ADAFRUIT_IR_BUTTON(0x02)
+            #define ARGON_IR_PLUS ARGON_IR_BUTTON(0x80)
+            #define PIMORONI_IR_CLOCKWISE PIMORONI_IR_BUTTON(0x47)
 
-                    case 9:
-                        // 'enter/save'
-                        break;
+            #define ADAFRUIT_IR_VOL_MINUS ADAFRUIT_IR_BUTTON(0x00)
+            #define ARGON_IR_MINUS ARGON_IR_BUTTON(0x81)
+            #define PIMORONI_IR_ANTICLOCKWISE PIMORONI_IR_BUTTON(0x45)
 
-    #if CAN_USE_DVI
+            #define ADAFRUIT_IR_ONE ADAFRUIT_IR_BUTTON(0x010)
+            // #define ARGON_IR_ONE ARGON_IR_BUTTON(0xd2)
+            #define PIMORONI_IR_ONE PIMORONI_IR_BUTTON(0x16)
 
-                    case 16:
-                        // '1'
-                        set_vga_capture(VC_NONE);
-                        test_DVI_framebuf();
-                        break;
+            switch (ir_command) {
+                case ADAFRUIT_IR_CENTRE_BUTTON:
+                case ARGON_IR_CENTRE_BUTTON:
+                case PIMORONI_IR_CENTRE_BUTTON:
+                    ui_command = UIC_C; // capture
+                    last_ir_command = 0;
+                    break;
 
-                    case 17:
-                        set_vga_capture(VC_VGA_IN);
-                        // '2'
-                        break;
+                case ADAFRUIT_IR_LEFT:
+                case ARGON_IR_LEFT:
+                case PIMORONI_IR_LEFT:
+                    ui_command = UIC_LEFT;
+                    break;
 
-                    case 18:
-                        // '3'
-                        set_vga_capture(VC_VGA_OUT);
-                        break;
+                case ADAFRUIT_IR_RIGHT:
+                case ARGON_IR_RIGHT:
+                case PIMORONI_IR_RIGHT:
+                    ui_command = UIC_RIGHT;
+                    break;
 
-    #endif
+                case ADAFRUIT_IR_UP:
+                case ARGON_IR_UP:
+                case PIMORONI_IR_UP:
+                    ui_command = UIC_UP;
+                    break;
 
-                }
+                case ADAFRUIT_IR_DOWN:
+                case ARGON_IR_DOWN:
+                case PIMORONI_IR_DOWN:
+                    ui_command = UIC_DOWN;
+                    break;
 
-                last_ir_command = ir_command;
+                case ADAFRUIT_IR_SETUP:
+                case ARGON_IR_HAMBURGER:
+                case PIMORONI_IR_MENU:
+                    ui_command = UIC_TAB;
+                    break;
 
-            } else {
-                // from a different ir remote
+                case ADAFRUIT_IR_VOL_PLUS:
+                case ARGON_IR_PLUS:
+                case PIMORONI_IR_CLOCKWISE:
+                    ui_command = UIC_PLUS;
+                    break;
 
-                if ((ir_command & 0xffff) == 0xff00) {
-                    // Argon IR Remote (https://argon40.com/products/argon-remote?_pos=1&_psq=remote&_ss=e&_v=1.0)
+                case ADAFRUIT_IR_VOL_MINUS:
+                case ARGON_IR_MINUS:
+                case PIMORONI_IR_ANTICLOCKWISE:
+                    ui_command = UIC_MINUS;
+                    break;
 
-                    switch (ir_button) {
-                        case 0xce:
-                            // 'play/pause'
-                            ui_command = UIC_C; // capture
-                            last_ir_command = 0;
-                            break;
+                case ADAFRUIT_IR_PLAY_PAUSE:
+                case ARGON_IR_HOME:
+                case PIMORONI_IR_PLAY_PAUSE:
+                    ui_command = UIC_UPPER_S; // Wake-up / Start screensaver
+                    break;
 
-                        case 0xca:
-                            ui_command = UIC_UP;
-                            break;
+#if CAN_USE_DVI
+                case ADAFRUIT_IR_ONE:
+                // case ARGON_IR_ONE:
+                case PIMORONI_IR_ONE:
+                    ui_command = UIC_V; // Change DVI output source
+                    break;
+#endif
 
-                        case 0xd2:
-                            ui_command = UIC_DOWN;
-                            break;
-
-                        case 0x99:
-                            ui_command = UIC_LEFT;
-                            break;
-
-                        case 0xc1:
-                            ui_command = UIC_RIGHT;
-                            break;
-
-                        case 0x9d:
-                            ui_command = UIC_TAB;
-                            break;
-
-                        case 0x80:
-                            ui_command = UIC_PLUS;
-                            break;
-
-                        case 0x81:
-                            ui_command = UIC_MINUS;
-                            break;
-
-                    }
-                    last_ir_command = ir_command;
-                }
             }
+            last_ir_command = ir_command;
         }
     }
-    
     return ui_command;
 }
 
