@@ -450,6 +450,7 @@ bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_out_timeout, VGA_TIMEOUT));
 bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_in_rgb_pins_count, VGA_IN_RGB_PIN_COUNT));
 bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_in_rgb_pins_base, VGA_IN_RGB_BASE_PIN));
 bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_in_hsync_pin, VGA_IN_HSYNC_CSYNC_PIN));
+bi_decl(bi_ptr_int32(0x1111, FG_INTERFACES, use_vga_in, 1));
 #endif
 
 bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_out_rgb_pins_count, VGA_OUT_RGB_PIN_COUNT));
@@ -479,12 +480,6 @@ bi_decl(bi_ptr_int32(0x1111, FG_INTERFACES, use_dvi, USE_DVI));
 
 bi_decl(bi_ptr_int32(0x1111, FG_SYS, sys_clock_freq, SYS_CLK_HZ));
 bi_decl(bi_ptr_string(0x1111, FG_SYS, sys_string, "This may come in useful.", 64));
-
-#if USE_VGA_IN
-bool use_vga_in = true;
-#else 
-bool use_vga_in = false;
-#endif
 
 uint8_t g_no_of_captured_pins = CAPTURE_PIN_COUNT;
 uint8_t g_pins_base_captured;
@@ -4677,7 +4672,7 @@ uint total_sample_bits;
 #define CORE1_CMD_INIT_DVI 789
 
 void core1_main() { 
-    dvi_init();
+    dvi_init(use_vga_in);
     dvi_testbars();
 
     multicore_fifo_push_blocking(FLAG_VALUE);
@@ -4692,7 +4687,7 @@ void core1_main() {
                 break;
 
                 case CORE1_CMD_INIT_DVI:
-                dvi_init();
+                dvi_init(use_vga_in);
                 break;
             }
         } else {
@@ -5119,6 +5114,13 @@ int main() {
                 handle_command(ui_command);
             } else {
                 restart_vga_out();
+#if CAN_USE_DVI
+                if ((use_dvi) && (use_vga_in == 0)) {
+                    uart_my_puts("Restarting DVI output...\n");
+                    multicore_fifo_push_blocking(CORE1_CMD_INIT_DVI);
+                    main_dvi_state = MDS_ACTIVE;
+                }
+#endif
             }
         } else {
 
@@ -5140,6 +5142,13 @@ int main() {
                 case MS_BLANK:
                 if (time_us_64() - last_event_time >= (1 * 1000 * 1000)) {
                     halt_vga_out();
+#if CAN_USE_DVI
+                    if ((use_dvi) && (use_vga_in == 0)) {
+                        uart_my_puts("Halting DVI output...\n");
+                        multicore_fifo_push_blocking(CORE1_CMD_DEINIT_DVI);
+                        main_dvi_state = MDS_NO_SIGNAL;
+                    }
+#endif
                 }
                 break;
 

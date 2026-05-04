@@ -47,10 +47,9 @@
 #include "dvi64_graphics.h"
 #include "globals.h"
 
-#if !USE_VGA_IN
 #include "vga_capture.pio.h"
-#endif
 
+uint32_t main_use_vga_in;
 
 #define USE_EXCLUSIVE_IRQ_HANDLER 1
 
@@ -94,13 +93,10 @@ static char __attribute__((aligned(4))) framebuf[(640 / 2) * 480];
 
 char* dvi_framebuf;
 
-#if !USE_VGA_IN
 #define DVI_LINEBUF_LEN (((640 * 4) / 5))
 char* dvi_linebuf;
-#endif
 
 #endif
-
 
 // DVI constants
 
@@ -185,10 +181,8 @@ static uint32_t vactive_line[] = {
 #define DMACH_PING 0
 #define DMACH_PONG 1
 
-#if !USE_VGA_IN
 #define DMACH_VGA_TO_PIO 2
 #define DMACH_PIO_TO_LINE_BUF 3
-#endif
 
 // dma_channel_claim(0); // todo - why isn't this ok?
 // dma_channel_claim(1); // todo - why isn't this ok?
@@ -262,106 +256,6 @@ void __scratch_x("") dma_irq_handler() {
         ch->read_addr = (uintptr_t)vactive_line;
         ch->transfer_count = count_of(vactive_line);
         vactive_cmdlist_posted = true;
-
-#if !USE_VGA_IN
-        // Not sure which is better this...
-        // start copying the line buffer
-        // ch = &dma_hw->ch[DMACH_PIO_TO_LINE_BUF];
-        // ch->read_addr = (uintptr_t)&dvi_framebuf[(v_scanline - (MODE_V_TOTAL_LINES - MODE_V_ACTIVE_LINES)) * ((MODE_H_ACTIVE_PIXELS * 4) / 5)];
-        // ch->write_addr = (uintptr_t)&dvi_linebuf[0];
-        // dma_channel_start(DMACH_PIO_TO_LINE_BUF);
-
-    #if USE_VGA_IN
-
-    // ...or this
-        dma_channel_set_read_addr(DMACH_PIO_TO_LINE_BUF, &dvi_framebuf[(v_scanline - (MODE_V_TOTAL_LINES - MODE_V_ACTIVE_LINES)) * ((MODE_H_ACTIVE_PIXELS * 4) / 5)], false);
-        dma_channel_set_write_addr(DMACH_PIO_TO_LINE_BUF, &dvi_linebuf[0], true);
-
-
-#else
-
-        // if (int_count++ == 60) {
-        //     dummy_word += 1;
-        //     int_count = 0;
-        // } 
-
-        // pio_sm_exec(vga_capture_pio, vga_capture_sm, pio_encode_jmp(expand_compressed_vga_line_offset_start));
-
-
-        // pio_sm_set_enabled(vga_capture_pio, vga_capture_sm, false);
-        // Need to clear _input shift counter_, as well as FIFO, because there may be
-        // partial ISR contents left over from a previous run. sm_restart does this.
-        // pio_sm_set_enabled(vga_capture_pio, vga_capture_sm, false);
-        // pio_sm_clear_fifos(vga_capture_pio, vga_capture_sm);
-        // pio_sm_restart(vga_capture_pio, vga_capture_sm);
-        // pio_sm_exec(vga_capture_pio, vga_capture_sm, pio_encode_jmp(expand_compressed_vga_line_offset_start));
-        // pio_sm_set_enabled(vga_capture_pio, vga_capture_sm, true);
-
-
-/*
-        // pio_sm_exec(vga_capture_pio, vga_capture_sm, pio_encode_jmp(expand_compressed_vga_line_offset_start));
-        pio_sm_exec(vga_capture_pio, vga_capture_sm, jmp_pio_op_code);
-
-        ch = &dma_hw->ch[DMACH_VGA_TO_PIO];
-        ch->read_addr = (uintptr_t)&vga_1bit_data_array[(v_scanline - (MODE_V_TOTAL_LINES - MODE_V_ACTIVE_LINES)) * WORDS_PER_LINE]; 
-        dma_channel_start(DMACH_VGA_TO_PIO);
-
-        ch = &dma_hw->ch[DMACH_PIO_TO_LINE_BUF];
-        ch->write_addr = (uintptr_t)&dvi_linebuf[0];
-        dma_channel_start(DMACH_PIO_TO_LINE_BUF);
-*/
-
-
-        // dma_start_channel_mask((1u << DMACH_VGA_TO_PIO) | (1u << DMACH_PIO_TO_LINE_BUF));
-
-
-
-
-        // ch->transfer_count = DVI_LINEBUF_LEN / sizeof(uint32_t);
-        // dma_channel_start(DMACH_PIO_TO_LINE_BUF);
-
-        // this is experimental
-
-        // prepare the DMACH_PIO_TO_LINE_BUF DMA channel to receive any data 'push'ed from it
-        // dma_channel_set_read_addr(DMACH_PIO_TO_LINE_BUF,  &vga_capture_pio->rxf[vga_capture_sm], false); // this should not have changed
-        // dma_channel_set_write_addr(DMACH_PIO_TO_LINE_BUF, &dvi_linebuf[0], true);
-
-        // &dvi_linebuf[0], // write address
-        // &vga_capture_pio->rxf[vga_capture_sm], // read address
-        // DVI_LINEBUF_LEN / sizeof(uint32_t), // transfer count
-        // DVI_LINEBUF_LEN / sizeof(uint32_t), // transfer count
-
-
-        // prepare the DMACH_VGA_TO_PIO DMA channel to transmit VGA data to the PIO's TX buffer
-
-        // restart the VGA TO PIO state machine because we don't have enough SM registers to do the 640 bit count
-
-
-        // pio_sm_set_enabled(vga_capture_pio, vga_capture_sm, false);
-        // Need to clear _input shift counter_, as well as FIFO, because there may be
-        // partial ISR contents left over from a previous run. sm_restart does this.
-        // pio_sm_clear_fifos(vga_capture_pio, vga_capture_sm);
-        // pio_sm_restart(vga_capture_pio, vga_capture_sm);
-        // // set up a new DMA transfer
-        // dma_channel_set_read_addr(DMACH_VGA_TO_PIO, &vga_1bit_data_array[(v_scanline - (MODE_V_TOTAL_LINES - MODE_V_ACTIVE_LINES)) * WORDS_PER_LINE], true);
-        // dma_channel_set_write_addr(DMACH_PIO_TO_LINE_BUF, &dvi_linebuf[0], true);
-
-        // dma_channel_set_read_addr(DMACH_VGA_TO_PIO, &vga_1bit_data_array[(v_scanline - (MODE_V_TOTAL_LINES - MODE_V_ACTIVE_LINES)) * WORDS_PER_LINE], false);
-        // dma_channel_set_write_addr(DMACH_PIO_TO_LINE_BUF, &vga_capture_pio->txf[vga_capture_sm], true); // this should not have changed
-
-#endif
-
-        // next is to set up two dma channels, one to and one from a pio sm.
-
-        // 1. one dma channel writes the compressed 1-bit vga_framebuf[line] into the pio sm
-        // 2. the pio sm then expands the 1-bit data into 6-bit data
-        // 3. a second dma channel reads the expanded data from the pio sm into the dvi_linebuf
-
-        // we need access to the vga_framebuf as well as the pio number and state machine number
-
-        // and hopefully there's enough time to do that before the hstx needs the dvi_linebuf
-#endif
-
     } else {
 #if COLOUR_MODE == 332
         ch->read_addr = (uintptr_t)&framebuf[(v_scanline - (MODE_V_TOTAL_LINES - MODE_V_ACTIVE_LINES)) * (MODE_H_ACTIVE_PIXELS)];
@@ -382,50 +276,42 @@ void __scratch_x("") dma_irq_handler() {
         ch->transfer_count = (MODE_H_ACTIVE_PIXELS / 2) / sizeof(uint32_t);
 
 #elif COLOUR_MODE == 2226
-        // ch->read_addr = (uintptr_t)&dvi_framebuf[(v_scanline - (MODE_V_TOTAL_LINES - MODE_V_ACTIVE_LINES)) * ((MODE_H_ACTIVE_PIXELS * 4) / 5)];
-        // ch->transfer_count = ((MODE_H_ACTIVE_PIXELS * 4) / 5) / sizeof(uint32_t);
+        if (main_use_vga_in) {
+            ch->read_addr = (uintptr_t)&dvi_framebuf[(v_scanline - (MODE_V_TOTAL_LINES - MODE_V_ACTIVE_LINES)) * ((MODE_H_ACTIVE_PIXELS * 4) / 5)];
+            ch->transfer_count = ((MODE_H_ACTIVE_PIXELS * 4) / 5) / sizeof(uint32_t);
+        } else {
+            // Instead of using a huge dvi framebuffer (6 bits per pixel) we can use the compressed
+            // vga framebuffer (1 bit per pixel (plus 32 bits for colours etc.)) and expand each
+            // line, using one PIO SM and two DMA channels, into a dvi linebuffer.
 
-#if USE_VGA_IN
-        ch->read_addr = (uintptr_t)&dvi_framebuf[(v_scanline - (MODE_V_TOTAL_LINES - MODE_V_ACTIVE_LINES)) * ((MODE_H_ACTIVE_PIXELS * 4) / 5)];
-        ch->transfer_count = ((MODE_H_ACTIVE_PIXELS * 4) / 5) / sizeof(uint32_t);
-#else
-        // Instead of using a huge dvi framebuffer (6 bits per pixel) we can use the compressed
-        // vga framebuffer (1 bit per pixel (plus 32 bits for colours etc.)) and expand each
-        // line, using one PIO SM and two DMA channels, into a dvi linebuffer.
+            // As we don't have enough PIO SM registers (x, y, isr and osr are all in use) to maintain a
+            // horizontal pixel counter, we rely on the DMA transfer count, but we need to reset the SM
+            // to its start address (so that it picks up the foreground colour of each line). This
+            // address is defined in `vga_captue.pio.h`, which is generated by the pio assembler and can
+            // be found in the `build/board/config` directory.
 
-        // As we don't have enough PIO SM registers (x, y, isr and osr are all in use) to maintain a
-        // horizontal pixel counter, we rely on the DMA transfer count, but we need to reset the SM
-        // to its start address (so that it picks up the foreground colour of each line). This
-        // address is defined in `vga_captue.pio.h`, which is generated by the pio assembler and can
-        // be found in the `build/board/config` directory.
+            // pio_sm_exec(vga_capture_pio, vga_capture_sm, pio_encode_jmp(expand_compressed_vga_line_offset_start));
+            // This is a bit cheeky, but it should save a little time compared with the above.
+            // (A jmp instruction is just the desired destination address.)
+            pio_sm_exec(vga_capture_pio, vga_capture_sm, expand_compressed_vga_line_offset_start);
 
-        // pio_sm_exec(vga_capture_pio, vga_capture_sm, pio_encode_jmp(expand_compressed_vga_line_offset_start));
-        // This is a bit cheeky, but it should save a little time compared with the above.
-        // (A jmp instruction is just the desired destination address.)
-        pio_sm_exec(vga_capture_pio, vga_capture_sm, expand_compressed_vga_line_offset_start);
+            dma_channel_hw_t *exp_ch  = &dma_hw->ch[DMACH_VGA_TO_PIO];
+            exp_ch->read_addr = (uintptr_t)&vga_1bit_data_array[(v_scanline - (MODE_V_TOTAL_LINES - MODE_V_ACTIVE_LINES)) * WORDS_PER_LINE]; 
+            // dma_channel_start(DMACH_VGA_TO_PIO);
+            // dma_hw->multi_channel_trigger = (1 << DMACH_VGA_TO_PIO); // should be quicker than the above line
 
-        dma_channel_hw_t *exp_ch  = &dma_hw->ch[DMACH_VGA_TO_PIO];
-        exp_ch->read_addr = (uintptr_t)&vga_1bit_data_array[(v_scanline - (MODE_V_TOTAL_LINES - MODE_V_ACTIVE_LINES)) * WORDS_PER_LINE]; 
-        // dma_channel_start(DMACH_VGA_TO_PIO);
-        // dma_hw->multi_channel_trigger = (1 << DMACH_VGA_TO_PIO); // should be quicker than the above line
+            exp_ch = &dma_hw->ch[DMACH_PIO_TO_LINE_BUF];
+            exp_ch->write_addr = (uintptr_t)&dvi_linebuf[0];
+            // dma_channel_start(DMACH_PIO_TO_LINE_BUF);
+            // dma_hw->multi_channel_trigger = (1 << DMACH_PIO_TO_LINE_BUF); // should be quicker than the above line
 
-        exp_ch = &dma_hw->ch[DMACH_PIO_TO_LINE_BUF];
-        exp_ch->write_addr = (uintptr_t)&dvi_linebuf[0];
-        // dma_channel_start(DMACH_PIO_TO_LINE_BUF);
-        // dma_hw->multi_channel_trigger = (1 << DMACH_PIO_TO_LINE_BUF); // should be quicker than the above line
+            // This should be quicker than the above two - multi_channel_trigger instructions, however it
+            // might be beneficial to start the DMACH_VGA_TO_PIO channel first, but it doesn't seem to be.
+            dma_hw->multi_channel_trigger = ((1 << DMACH_VGA_TO_PIO) | (1 << DMACH_PIO_TO_LINE_BUF));
 
-        // This should be quicker than the above two - multi_channel_trigger instructions, however it
-        // might be beneficial to start the DMACH_VGA_TO_PIO channel first, but it doesn't seem to be.
-        dma_hw->multi_channel_trigger = ((1 << DMACH_VGA_TO_PIO) | (1 << DMACH_PIO_TO_LINE_BUF));
-
-        // ch = &dma_hw->ch[ch_num];
-        ch->read_addr = (uintptr_t)&dvi_linebuf[0]; // [(v_scanline - (MODE_V_TOTAL_LINES - MODE_V_ACTIVE_LINES)) * ((MODE_H_ACTIVE_PIXELS * 4) / 5)];
-        // ch->read_addr = (uintptr_t)&dvi_linebuf; // [(v_scanline - (MODE_V_TOTAL_LINES - MODE_V_ACTIVE_LINES)) * ((MODE_H_ACTIVE_PIXELS * 4) / 5)];
-        // ch->read_addr = dvi_linebuf; // [(v_scanline - (MODE_V_TOTAL_LINES - MODE_V_ACTIVE_LINES)) * ((MODE_H_ACTIVE_PIXELS * 4) / 5)];
-        // ch->transfer_count = ((MODE_H_ACTIVE_PIXELS * 4) / 5) / sizeof(uint32_t);
-        ch->transfer_count = DVI_LINEBUF_LEN / sizeof(uint32_t);
-
-#endif
+            ch->read_addr = (uintptr_t)&dvi_linebuf[0];
+            ch->transfer_count = DVI_LINEBUF_LEN / sizeof(uint32_t);
+        }
 
 #endif
         vactive_cmdlist_posted = false;
@@ -767,139 +653,135 @@ uint8_t get_fract_rgb(uint8_t rgb, int8_t quot, int8_t div) {
 
 
 void dvi_testbars() {
-#if USE_VGA_IN
     uint32_t *framebuf_ptr = (uint32_t*) &dvi_framebuf[0]; 
 
+    if (main_use_vga_in) {
+        for (int y = 0; y < MODE_V_ACTIVE_LINES / 2 ; y++) {
+            uint32_t sr = 0;
+            uint8_t shifts = 0;
+            uint8_t pixcol;
+            for (int x = 0; x < MODE_H_ACTIVE_PIXELS; x++) {
+                // pixcol = FOUR_BIT_COLS[x / 40];
+                pixcol = SIX_BIT_COLOURS[x /34];
+                sr = (sr >> 6) | (pixcol << 26);
+                if (++shifts == 5) {
+                    // Every 5 shifts (pixels) save the shift register into the frame buffer
+                    *framebuf_ptr++ = sr;
+                    shifts = 0;
+                }
+            }
+        }
 
+    /*
 
+        for (int y =  MODE_V_ACTIVE_LINES / 4; y < MODE_V_ACTIVE_LINES / 2 ; y++) {
+            uint32_t sr = 0;
+            uint8_t shifts = 0;
+            uint8_t pixcol;
+            for (int x = 0; x < MODE_H_ACTIVE_PIXELS; x++) {
+                // pixcol = FOUR_BIT_COLS[x / 40];
 
-    for (int y = 0; y < MODE_V_ACTIVE_LINES / 2 ; y++) {
-        uint32_t sr = 0;
-        uint8_t shifts = 0;
-        uint8_t pixcol;
-        for (int x = 0; x < MODE_H_ACTIVE_PIXELS; x++) {
-            // pixcol = FOUR_BIT_COLS[x / 40];
-            pixcol = SIX_BIT_COLOURS[x /34];
-            sr = (sr >> 6) | (pixcol << 26);
-            if (++shifts == 5) {
-                // Every 5 shifts (pixels) save the shift register into the frame buffer
-                *framebuf_ptr++ = sr;
-                shifts = 0;
+                pixcol = get_fract_rgb(SIX_BIT_COLS[x / 10], 3, 2);
+
+                sr = (sr >> 6) | (pixcol << 26);
+                if (++shifts == 5) {
+                    // Every 5 shifts (pixels) save the shift register into the frame buffer
+                    *framebuf_ptr++ = sr;
+                    shifts = 0;
+                }
+            }
+        }
+
+    */
+
+        for (int y = MODE_V_ACTIVE_LINES /2; y < MODE_V_ACTIVE_LINES * 5 / 8; y++) {
+            uint32_t sr = 0;
+            uint8_t shifts = 0;
+            uint8_t pixcol;
+            for (int x = 0; x < MODE_H_ACTIVE_PIXELS; x++) {
+                pixcol = SIX_BIT_COLS[x / 10];
+                // pixcol = 21;
+                sr = (sr >> 6) | (pixcol << 26);
+                if (++shifts == 5) {
+                    // Every 5 shifts (pixels) save the shift register into the frame buffer
+                    *framebuf_ptr++ = sr;
+                    shifts = 0;
+                }
+            }
+        }
+        
+        // for (int y = MODE_V_ACTIVE_LINES / 2; y < MODE_V_ACTIVE_LINES * 3 / 4; y++) {
+        //     uint32_t sr = 0;
+        //     uint8_t shifts = 0;
+        //     uint8_t pixcol;
+        //     for (int x = 0; x < MODE_H_ACTIVE_PIXELS; x++) {
+        //         // pixcol = x / 10;
+        //         pixcol = 0b010101; // dark grey?
+        //         sr = (sr >> 6) | (pixcol << 26);
+        //         if (++shifts == 5) {
+        //             // Every 5 shifts (pixels) save the shift register into the frame buffer
+        //             *framebuf_ptr++ = sr;
+        //             shifts = 0;
+        //         }
+        //     }
+        // }
+
+        for (int y = MODE_V_ACTIVE_LINES * 5 / 8; y < MODE_V_ACTIVE_LINES * 6 / 8; y++) {
+            uint32_t sr = 0;
+            uint8_t shifts = 0;
+            uint8_t pixcol;
+            for (int x = 0; x < MODE_H_ACTIVE_PIXELS; x++) {
+
+                // pixcol = get_fract_rgb(SIX_BIT_COLS[x / 10], 3, 2);
+
+                pixcol = get_three_quarters_rgb(SIX_BIT_COLS[x / 10]);
+                // pixcol = 0b101010; // light grey?
+                sr = (sr >> 6) | (pixcol << 26);
+                if (++shifts == 5) {
+                    // Every 5 shifts (pixels) save the shift register into the frame buffer
+                    *framebuf_ptr++ = sr;
+                    shifts = 0;
+                }
+            }
+        }
+
+        for (int y = MODE_V_ACTIVE_LINES * 6 / 8; y < MODE_V_ACTIVE_LINES * 7 / 8; y++) {
+            uint32_t sr = 0;
+            uint8_t shifts = 0;
+            uint8_t pixcol;
+            for (int x = 0; x < MODE_H_ACTIVE_PIXELS; x++) {
+                pixcol = get_half_rgb(SIX_BIT_COLS[x / 10]);
+                // pixcol = 0b101010; // light grey?
+                sr = (sr >> 6) | (pixcol << 26);
+                if (++shifts == 5) {
+                    // Every 5 shifts (pixels) save the shift register into the frame buffer
+                    *framebuf_ptr++ = sr;
+                    shifts = 0;
+                }
+            }
+        }
+
+        for (int y = MODE_V_ACTIVE_LINES * 7 / 8; y < MODE_V_ACTIVE_LINES; y++) {
+            uint32_t sr = 0;
+            uint8_t shifts = 0;
+            uint8_t pixcol;
+            for (int x = 0; x < MODE_H_ACTIVE_PIXELS; x++) {
+                // pixcol = get_three_eighths_rgb(SIX_BIT_COLS[x / 10]);
+                pixcol = x / 10;
+                // pixcol = 0b101010; // light grey?
+                sr = (sr >> 6) | (pixcol << 26);
+                if (++shifts == 5) {
+                    // Every 5 shifts (pixels) save the shift register into the frame buffer
+                    *framebuf_ptr++ = sr;
+                    shifts = 0;
+                }
             }
         }
     }
-
-/*
-
-    for (int y =  MODE_V_ACTIVE_LINES / 4; y < MODE_V_ACTIVE_LINES / 2 ; y++) {
-        uint32_t sr = 0;
-        uint8_t shifts = 0;
-        uint8_t pixcol;
-        for (int x = 0; x < MODE_H_ACTIVE_PIXELS; x++) {
-            // pixcol = FOUR_BIT_COLS[x / 40];
-
-            pixcol = get_fract_rgb(SIX_BIT_COLS[x / 10], 3, 2);
-
-            sr = (sr >> 6) | (pixcol << 26);
-            if (++shifts == 5) {
-                // Every 5 shifts (pixels) save the shift register into the frame buffer
-                *framebuf_ptr++ = sr;
-                shifts = 0;
-            }
-        }
-    }
-
-*/
-
-    for (int y = MODE_V_ACTIVE_LINES /2; y < MODE_V_ACTIVE_LINES * 5 / 8; y++) {
-        uint32_t sr = 0;
-        uint8_t shifts = 0;
-        uint8_t pixcol;
-        for (int x = 0; x < MODE_H_ACTIVE_PIXELS; x++) {
-            pixcol = SIX_BIT_COLS[x / 10];
-            // pixcol = 21;
-            sr = (sr >> 6) | (pixcol << 26);
-            if (++shifts == 5) {
-                // Every 5 shifts (pixels) save the shift register into the frame buffer
-                *framebuf_ptr++ = sr;
-                shifts = 0;
-            }
-        }
-    }
-    
-    // for (int y = MODE_V_ACTIVE_LINES / 2; y < MODE_V_ACTIVE_LINES * 3 / 4; y++) {
-    //     uint32_t sr = 0;
-    //     uint8_t shifts = 0;
-    //     uint8_t pixcol;
-    //     for (int x = 0; x < MODE_H_ACTIVE_PIXELS; x++) {
-    //         // pixcol = x / 10;
-    //         pixcol = 0b010101; // dark grey?
-    //         sr = (sr >> 6) | (pixcol << 26);
-    //         if (++shifts == 5) {
-    //             // Every 5 shifts (pixels) save the shift register into the frame buffer
-    //             *framebuf_ptr++ = sr;
-    //             shifts = 0;
-    //         }
-    //     }
-    // }
-
-    for (int y = MODE_V_ACTIVE_LINES * 5 / 8; y < MODE_V_ACTIVE_LINES * 6 / 8; y++) {
-        uint32_t sr = 0;
-        uint8_t shifts = 0;
-        uint8_t pixcol;
-        for (int x = 0; x < MODE_H_ACTIVE_PIXELS; x++) {
-
-            // pixcol = get_fract_rgb(SIX_BIT_COLS[x / 10], 3, 2);
-
-            pixcol = get_three_quarters_rgb(SIX_BIT_COLS[x / 10]);
-            // pixcol = 0b101010; // light grey?
-            sr = (sr >> 6) | (pixcol << 26);
-            if (++shifts == 5) {
-                // Every 5 shifts (pixels) save the shift register into the frame buffer
-                *framebuf_ptr++ = sr;
-                shifts = 0;
-            }
-        }
-    }
-
-    for (int y = MODE_V_ACTIVE_LINES * 6 / 8; y < MODE_V_ACTIVE_LINES * 7 / 8; y++) {
-        uint32_t sr = 0;
-        uint8_t shifts = 0;
-        uint8_t pixcol;
-        for (int x = 0; x < MODE_H_ACTIVE_PIXELS; x++) {
-            pixcol = get_half_rgb(SIX_BIT_COLS[x / 10]);
-            // pixcol = 0b101010; // light grey?
-            sr = (sr >> 6) | (pixcol << 26);
-            if (++shifts == 5) {
-                // Every 5 shifts (pixels) save the shift register into the frame buffer
-                *framebuf_ptr++ = sr;
-                shifts = 0;
-            }
-        }
-    }
-
-    for (int y = MODE_V_ACTIVE_LINES * 7 / 8; y < MODE_V_ACTIVE_LINES; y++) {
-        uint32_t sr = 0;
-        uint8_t shifts = 0;
-        uint8_t pixcol;
-        for (int x = 0; x < MODE_H_ACTIVE_PIXELS; x++) {
-            // pixcol = get_three_eighths_rgb(SIX_BIT_COLS[x / 10]);
-            pixcol = x / 10;
-            // pixcol = 0b101010; // light grey?
-            sr = (sr >> 6) | (pixcol << 26);
-            if (++shifts == 5) {
-                // Every 5 shifts (pixels) save the shift register into the frame buffer
-                *framebuf_ptr++ = sr;
-                shifts = 0;
-            }
-        }
-    }
-    #endif
 
 }
 
 #endif
-
 
 
 void dvi_init_hstx_regs() {
@@ -1187,18 +1069,20 @@ void dvi_init_hstx_dma() {
         dma_channel_claim(DMACH_PING);
         dma_channel_claim(DMACH_PONG);
 
-#if !USE_VGA_IN
-        dma_channel_claim(DMACH_VGA_TO_PIO);
-        dma_channel_claim(DMACH_PIO_TO_LINE_BUF);
-        memset(&dvi_linebuf[0], 0x00, DVI_LINEBUF_LEN); // fill the line buffer with white
-        memset(&dvi_linebuf[0], 0xff, DVI_LINEBUF_LEN / 4); // fill the line buffer with white
+        if (!main_use_vga_in) {
+            dma_channel_claim(DMACH_VGA_TO_PIO);
+            dma_channel_claim(DMACH_PIO_TO_LINE_BUF);
+            // memset(&dvi_linebuf[0], 0x00, DVI_LINEBUF_LEN); // fill the line buffer with black
+            // memset(&dvi_linebuf[0], 0xff, DVI_LINEBUF_LEN / 4); // fill left hand quarter of line buffer with white
+        }
 
+        inited = true;
+    }
+
+    if (!main_use_vga_in) {
         vga_capture_offset = pio_add_program(vga_capture_pio, &expand_compressed_vga_line_program);
         expand_compressed_vga_line_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset);
-        // vga_capture_offset = pio_add_program(vga_capture_pio, &send_words_program);
-        // send_words_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset);
         pio_sm_set_enabled(vga_capture_pio, vga_capture_sm, true);
-#endif
     }
 
     // Both DMACH_PING & DMACH_PONG are set up identically, to transfer a whole scanline and
@@ -1229,146 +1113,47 @@ void dvi_init_hstx_dma() {
         false
     );
 
-#if !USE_VGA_IN
-    // channel_config_set_read_increment(&c0, true);                        // yes read incrementing
-    // channel_config_set_write_increment(&c0, false);                      // no write incrementing
+    if (!main_use_vga_in) {
+        // this channel copies a line from the vga_1bit_data_array into the vga_capture_pio sm
+        c = dma_channel_get_default_config(DMACH_VGA_TO_PIO);
+        channel_config_set_dreq(&c, pio_get_dreq(vga_capture_pio, vga_capture_sm, true));     // vga_capture_sm TX FIFO pacing
+        channel_config_set_write_increment(&c, false); // default value, so no need
+        channel_config_set_read_increment(&c, true); // default value, so no need
+        dma_channel_configure(
+            DMACH_VGA_TO_PIO,                       // Channel to be configured
+            &c,                                     // The configuration we just created
+            &vga_capture_pio->txf[vga_capture_sm],  // write address (vga_capture state machine's TXBUF)
+            &vga_1bit_data_array,                   // The initial read address (pixel color array)
+            WORDS_PER_LINE,                         // Number of transfers; in this case each is 4 byte.
+            false                                   // Don't start yet.
+        );
 
-    // channel_config_set_dreq(&c0, pio_get_dreq(vga_out_pio, rgb5_sm, true));     // rgb5_sm tx FIFO pacing
-
-    // this channel just copies a line from the framebuffer into the linebuffer
-    c = dma_channel_get_default_config(DMACH_VGA_TO_PIO);
-    // channel_config_set_chain_to(&c, DMACH_PING);
-    // channel_config_set_dreq(&c, DREQ_HSTX);
-
-    channel_config_set_dreq(&c, pio_get_dreq(vga_capture_pio, vga_capture_sm, true));     // vga_capture_sm TX FIFO pacing
-
-    channel_config_set_write_increment(&c, false); // default value, so no need
-    channel_config_set_read_increment(&c, true); // default value, so no need
-
-    dma_channel_configure(
-        DMACH_VGA_TO_PIO,                       // Channel to be configured
-        &c,                                     // The configuration we just created
-        &vga_capture_pio->txf[vga_capture_sm],  // write address (vga_capture state machine's TXBUF)
-        &vga_1bit_data_array,                   // The initial read address (pixel color array)
-        WORDS_PER_LINE,                         // Number of transfers; in this case each is 4 byte.
-        false                                   // Don't start immediately.
-        // true                                   // Start now
-    );
-
-    #if USE_VGA_IN
-
-    // this channel just copies a line from the framebuffer into the linebuffer
-    c = dma_channel_get_default_config(DMACH_PIO_TO_LINE_BUF);
-    // channel_config_set_chain_to(&c, DMACH_PING);
-    // channel_config_set_dreq(&c, DREQ_HSTX);
-    channel_config_set_write_increment(&c, true);
-    dma_channel_configure(
-        DMACH_PIO_TO_LINE_BUF,
-        &c,
-        // dvi_linebuf, // write address
-        // dvi_framebuf, // read address
-        // ch->read_addr = (uintptr_t)&dvi_framebuf[(v_scanline - (MODE_V_TOTAL_LINES - MODE_V_ACTIVE_LINES)) * ((MODE_H_ACTIVE_PIXELS * 4) / 5)];
-        &dvi_linebuf[0], // write address
-        &dvi_framebuf[0], // read address
-        // DVI_LINEBUF_LEN / sizeof(uint32_t), // transfer count
-        // DVI_LINEBUF_LEN / sizeof(uint32_t), // transfer count
-
-        DVI_LINEBUF_LEN / sizeof(uint32_t), // transfer count
-        // 4, // transfer count
-
-        true // start
-        // false // don't start yet
-    );
-
-    #else
-/*
-  // this channel just copies a line from the vga_capture_pio sm into the linebuffer
-    c = dma_channel_get_default_config(DMACH_PIO_TO_LINE_BUF);
-    // channel_config_set_chain_to(&c, DMACH_PING);
-    // channel_config_set_dreq(&c, DREQ_HSTX);
-
-    channel_config_set_dreq(&c, pio_get_dreq(vga_capture_pio, vga_capture_sm, false));     // vga_capture_sm RX FIFO pacing
-    channel_config_set_write_increment(&c, true);
-    channel_config_set_read_increment(&c, false);
-    dma_channel_configure(
-        DMACH_PIO_TO_LINE_BUF,
-        &c,
-        // dvi_linebuf, // write address
-        // dvi_framebuf, // read address
-        // ch->read_addr = (uintptr_t)&dvi_framebuf[(v_scanline - (MODE_V_TOTAL_LINES - MODE_V_ACTIVE_LINES)) * ((MODE_H_ACTIVE_PIXELS * 4) / 5)];
-        &dvi_linebuf[0], // write address
-        &vga_capture_pio->rxf[vga_capture_sm], // read address
-        // DVI_LINEBUF_LEN / sizeof(uint32_t), // transfer count
-        // DVI_LINEBUF_LEN / sizeof(uint32_t), // transfer count
-
-        DVI_LINEBUF_LEN / sizeof(uint32_t), // transfer count
-        // 4, // transfer count
-
-        // false // don't start yet
-        true                                   // Start now
-
-    );
-*/
-  // this channel just copies a line from the vga_capture_pio sm into the linebuffer
-
-    c = dma_channel_get_default_config(DMACH_PIO_TO_LINE_BUF);
-    // channel_config_set_chain_to(&c, DMACH_PING);
-    // channel_config_set_dreq(&c, DREQ_HSTX);
-    channel_config_set_dreq(&c, pio_get_dreq(vga_capture_pio, vga_capture_sm, false));     // vga_capture_sm RX FIFO pacing
-
-    channel_config_set_write_increment(&c, true);
-    channel_config_set_read_increment(&c, false);
-    dma_channel_configure(
-        DMACH_PIO_TO_LINE_BUF,
-        &c,
-        // dvi_linebuf, // write address
-        // dvi_framebuf, // read address
-        // ch->read_addr = (uintptr_t)&dvi_framebuf[(v_scanline - (MODE_V_TOTAL_LINES - MODE_V_ACTIVE_LINES)) * ((MODE_H_ACTIVE_PIXELS * 4) / 5)];
-        &dvi_linebuf[0], // write address
-        &vga_capture_pio->rxf[vga_capture_sm], // read address
-        // &dummy_word, // read address
-        // DVI_LINEBUF_LEN / sizeof(uint32_t), // transfer count
-        // DVI_LINEBUF_LEN / sizeof(uint32_t), // transfer count
-
-        DVI_LINEBUF_LEN / sizeof(uint32_t), // transfer count
-        // 4, // transfer count
-
-        false // don't start yet
-        // true                                   // Start now
-
-    );
-
-    #endif
-
-    // start it now
-    // dma_channel_start(DMACH_LINE_BUF);
-#endif
-
-// #ifndef IGNORE_THIS
-// IGNORE_THIS works when here
-
+        // this channel copies a line from the vga_capture_pio sm into the linebuffer
+        c = dma_channel_get_default_config(DMACH_PIO_TO_LINE_BUF);
+        channel_config_set_dreq(&c, pio_get_dreq(vga_capture_pio, vga_capture_sm, false));     // vga_capture_sm RX FIFO pacing
+        channel_config_set_write_increment(&c, true);
+        channel_config_set_read_increment(&c, false);
+        dma_channel_configure(
+            DMACH_PIO_TO_LINE_BUF,
+            &c,
+            &dvi_linebuf[0],                        // write address
+            &vga_capture_pio->rxf[vga_capture_sm],  // read address
+            DVI_LINEBUF_LEN / sizeof(uint32_t),     // transfer count
+            false                                   // don't start yet
+        );
+    }
 
     // Modify DMA Interrupt Status for IRQ 0 - clear any pending DMACH_P*NG interrupts, I think
     dma_hw->ints0 = (1u << DMACH_PING) | (1u << DMACH_PONG);
 
-// #ifndef IGNORE_THIS
-// IGNORE_THIS works when here
-
     // Modify DMA Interrupt Enables for IRQ 0 -  pass interrupts from DMACH_P*NG channels to DMA IRQ 0, I think
     dma_hw->inte0 = (1u << DMACH_PING) | (1u << DMACH_PONG);
-
-// #ifndef IGNORE_THIS
-// IGNORE_THIS starts to fail when here
-// Some of the VGA screen is painted but not the samples, so maybe the sampling DMA stuff is messing with this DVI DMA stuff
 
 #if USE_EXCLUSIVE_IRQ_HANDLER
     irq_set_exclusive_handler(DMA_IRQ_0, dma_irq_handler);
 #else
     irq_add_shared_handler(DMA_IRQ_0, dma_irq_handler, PICO_SHARED_IRQ_HANDLER_HIGHEST_ORDER_PRIORITY);
 #endif
-
-// #ifndef IGNORE_THIS
-// IGNORE_THIS completely fails when here
 
     irq_set_enabled(DMA_IRQ_0, true);
 
@@ -1382,11 +1167,6 @@ void dvi_init_hstx_dma() {
     // bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_R_BITS; // it still crashed with just this enabled
 
     dma_channel_start(DMACH_PING);
-
-// #endif
-
-inited = true;
-
 }
 
 
@@ -1405,29 +1185,6 @@ void dvi_init_vars() {
 }
 
 
-void dvi_init() {
-
-    static bool allocated;
-
-    if (!allocated) {
-
-#if USE_VGA_IN
-        dvi_framebuf = malloc(((640 * 4) / 5) * 480);
-#else
-        // allocate a dvi linebuffer to use instead of the dvi framebuffer
-        dvi_linebuf = malloc(DVI_LINEBUF_LEN);
-#endif
-
-        allocated = true;
-    }
-
-    dvi_init_vars();
-    dvi_init_hstx_regs();
-    dvi_init_hstx_gpio();
-    dvi_init_hstx_dma();
-}
-
-
 void dvi_deinit_hstx_regs() {
     hstx_ctrl_hw->csr = 0;
 }
@@ -1435,10 +1192,13 @@ void dvi_deinit_hstx_regs() {
 
 void dvi_deinit_hstx_dma() {
     // stop and free the dma channels
-#if !USE_VGA_IN
-    dma_channel_cleanup(DMACH_PIO_TO_LINE_BUF);
-    dma_channel_cleanup(DMACH_VGA_TO_PIO);
-#endif
+    if (!main_use_vga_in) {
+        // stop the expand_compressed_vga_line_program pio sm and remove it
+        pio_set_sm_mask_enabled(vga_capture_pio, (1u << vga_capture_sm), false);
+        pio_remove_program(vga_capture_pio, &expand_compressed_vga_line_program, vga_capture_offset);
+        dma_channel_cleanup(DMACH_PIO_TO_LINE_BUF);
+        dma_channel_cleanup(DMACH_VGA_TO_PIO);
+    }
     dma_channel_cleanup(DMACH_PONG);
     dma_channel_cleanup(DMACH_PING);
 
@@ -1462,17 +1222,49 @@ void dvi_deinit_hstx_dma() {
     // dma_channel_unclaim(DMACH_PING);
 }
 
+
+void dvi_set_initialised(bool initialise) {
+    static bool initialised;
+    if (initialise) {
+        if (!initialised) {
+            dvi_init_vars();
+            dvi_init_hstx_regs();
+            dvi_init_hstx_gpio();
+            dvi_init_hstx_dma();
+            initialised = true;
+        }
+    } else {
+        if (initialised) {
+            dvi_deinit_hstx_dma();
+            dvi_deinit_hstx_gpio();
+            // hstx_ctrl_hw->csr = 0;
+            dvi_deinit_hstx_regs();
+            // dvi_init_vars();
+            initialised = false;
+        }
+    }
+}
+
+
+void dvi_init(bool use_vga_capture) {
+    static bool allocated;
+    main_use_vga_in = use_vga_capture;
+    if (!allocated) {
+        if (main_use_vga_in) {
+             // allocate a dvi framebuffer
+            dvi_framebuf = malloc(DVI_LINEBUF_LEN * 480);
+        } else {
+            // allocate a dvi linebuffer
+            dvi_linebuf = malloc(DVI_LINEBUF_LEN);
+        }
+        allocated = true;
+    }
+    dvi_set_initialised(true);
+}
+
+
 void dvi_deinit() {
-    
-    dvi_deinit_hstx_dma();
-
-    dvi_deinit_hstx_gpio();
-
-    // hstx_ctrl_hw->csr = 0;
-
-    dvi_deinit_hstx_regs();
-
-    // dvi_init_vars();
+    dvi_set_initialised(false);
 }
 
 

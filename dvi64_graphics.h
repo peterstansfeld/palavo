@@ -45,7 +45,7 @@ void dvi_testbars();
 
 // Initialises the HSTX peripheral to drive a DVI monitor at 640 x 480
 // and then calls dvi_testbars().
-void dvi_init();
+void dvi_init(bool use_vga_capture);
 
 
 void dvi_reinit();

@@ -22,6 +22,4 @@ extern uint rgb5_sm;
 
 extern uint vga_capture_offset;
 
-#define USE_VGA_IN 1
-
 #endif
