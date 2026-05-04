@@ -1,0 +1,105 @@
+jmp_table_0:
+    jmp set_rgb_pins                ; can't use wrap
+
+jmp_table_1:
+    in null, 6                      ; shift the ISR 6 places to the right
+
+set_rgb_pins:
+    ; mov pins, isr                   ; put the 6 colour bits on the colour pins
+    push                            ; put 6 colour bits in 
+
+
+
+test_end_of_line:
+    jmp x-- get_bit
+; X is zero, which means we've out'ed all 640 1-bit values from the TX FIFO
+
+
+public start:
+    nop [BLANK_DELAY]                ; wait for the last pixel. bit of a waste, but we can't blank all 8 pins with 'set pins,'   
+    mov pins, !x                     ; blank the colour pins
+    out x, 16                        ; load x with 639 repeats (640 loops)
+
+    wait 1 irq 5 [0]                ; wait for vsync active mode
+
+    set y, DELAY_LOOPS [SET_DELAY_LOOPS_DELAY]    ; load a delay counter
+delay_loop:
+    jmp y-- delay_loop [DELAY_LOOP_DELAY]         ; delay, delay, delay
+
+get_colours:
+    out y, 16                       ; save the 2 or 4, 4-bit, or 6-bit colours for this line
+
+get_bit:
+    mov isr, y                      ; put the 4-bit colours in the ISR
+    out PC, 1 [GET_BIT_DELAY]       ; jump to the address stored in bit 0 of the OSR, ie jmp_table_0 or jmp_table_1
+
+
+
+.program expand_compressed_vga_line
+
+; Expands a compressed VGA line buffer. It takes a line of the compressed buffer,
+; extracts the 6-bit foreground colour and for every high bit in the rest of the 
+; buffer it returns the 6-bit foreground colour, and for every low bit it returns
+; black (0b000000).
+
+.origin 0                           ; we modify the PC, which needs absolute addresses
+
+jmp_table_0:
+    jmp set_rgb_pins0               ; can't use wrap
+
+jmp_table_1:
+    mov y, x                        ; copy foreground colour into y
+    in y, 6                         ; shift the 6 colour bits into the isr (auto-push when 30 bits have been shifted)
+.wrap_target
+    out PC, 1                       ; jump to the address stored in bit 0 of the OSR, ie jmp_table_0 or jmp_table_1
+
+set_rgb_pins0:
+    in null, 6                      ; shift 6 zeroes (black) into the isr (auto-push when 30 bits have been shifted)
+    ; save the following instruction by using .wrap
+.wrap
+;    out PC, 1                       ; jump to the address stored in bit 0 of the OSR, ie jmp_table_0 or jmp_table_1
+
+public start:
+
+dump_639:
+    out null, 16                    ; dump the 639 repeats (640 loops)
+
+get_colours:
+    out null, 6                     ; dump the background colour - it'll have to be black or a fixed colour
+    out x, 6                        ; put the foreground colour in x
+
+get_bit:
+    out PC, 1                       ; jump to the address stored in bit 0 of the OSR, ie jmp_table_0 or jmp_table_1
+
+
+% c-sdk {
+
+static inline void expand_compressed_vga_line_program_init(PIO pio, uint sm, uint offset) {
+
+    pio_sm_config c = expand_compressed_vga_line_program_get_default_config(offset);
+
+    // No input or output pins to worry about
+    // Leave the clock divisor set to its default value of 1
+    // Only need to set up autopull and autopush with their respective thresholds
+
+    // Shift OSR to the right, enable autopull, and set the pull threshold set to 32
+    sm_config_set_out_shift(&c, true, true, 32);
+
+    // Shift ISR to the right, enable autopush, and set the push threshold to 30
+    sm_config_set_in_shift(&c, true, true, 30);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+
+}
+
+
+
+; main code would reset the SM's PC to 'start' a dma transfer of count (one line )
+
+
+
+
+.program rgb5_250_mhz
+;.side_set 1 ;opt
+.origin 0

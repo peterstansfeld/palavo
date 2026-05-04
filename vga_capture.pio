@@ -399,3 +399,112 @@ static inline void vga_1bit_capture_125_mhz_program_init(PIO pio, uint sm, uint 
 
 %}
 
+.program expand_compressed_vga_line
+
+; Expands a compressed VGA line buffer. It takes a line of the compressed buffer,
+; extracts the 6-bit foreground colour and for every high bit in the rest of the 
+; buffer it returns the 6-bit foreground colour, and for every low bit it returns
+; black (0b000000).
+
+.origin 0                           ; we modify the PC, which needs absolute addresses
+
+jmp_table_0:
+    jmp set_rgb_pins0               ; can't use wrap
+    ; nop                                 ; test - always do the foreground colour
+
+jmp_table_1:
+    mov y, x                        ; copy foreground colour into y
+    in y, 6                         ; shift the 6 colour bits into the isr (auto-push when 30 bits have been shifted)
+.wrap_target
+    ; nop [2]                         ; [1] delay we're still ok, [2] and we're in trouble
+    out PC, 1                       ; jump to the address stored in bit 0 of the OSR, ie jmp_table_0 or jmp_table_1
+
+set_rgb_pins0:
+    in null, 6                      ; shift 6 zeroes (black) into the isr (auto-push when 30 bits have been shifted)
+.wrap
+
+public start:
+
+dump_639:
+    ; out null, 16                    ; dump the 639 repeats (640 loops)
+
+get_colours:
+    out null, 22                     ; dump the 639 repeats (first 16 bits) and the 6-bit background colour
+    out x, 10                        ; put the 6-bit foreground colour in x along with the remaining 4 bits
+
+get_bit:
+    out PC, 1                       ; jump to the address stored in bit 0 of the OSR, ie jmp_table_0 or jmp_table_1
+
+
+% c-sdk {
+
+static inline void expand_compressed_vga_line_program_init(PIO pio, uint sm, uint offset) {
+
+    pio_sm_config c = expand_compressed_vga_line_program_get_default_config(offset);
+
+    // No input or output pins to worry about
+    // Leave the clock divisor set to its default value of 1
+    // Only need to set up autopull and autopush with their respective thresholds
+
+    // Shift OSR to the right, enable autopull, and set the pull threshold set to 32
+    sm_config_set_out_shift(&c, true, true, 32);
+
+    // Shift ISR to the right, enable autopush, and set the push threshold to 30
+    sm_config_set_in_shift(&c, true, true, 30);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset + expand_compressed_vga_line_offset_start, &c);
+
+}
+
+%}
+
+
+.program send_words
+
+; Expands a compressed VGA line buffer. It takes a line of the compressed buffer,
+; extracts the 6-bit foreground colour and for every high bit in the rest of the 
+; buffer it returns the 6-bit foreground colour, and for every low bit it returns
+; black (0b000000).
+
+; .origin 0                           ; we modify the PC, which needs absolute addresses
+
+; .wrap_target
+;     set x, 0b10111
+;     in x, 6
+; .wrap
+
+.wrap_target
+    out y, 1
+    ; pull block
+    nop [2]             ; seems fine with [2], and not all the screen with [3]
+    set x, 0b01100
+    in x, 6
+.wrap
+
+
+% c-sdk {
+
+static inline void send_words_program_init(PIO pio, uint sm, uint offset) {
+
+    pio_sm_config c = send_words_program_get_default_config(offset);
+
+    // No input or output pins to worry about
+    // Leave the clock divisor set to its default value of 1
+    // Only need to set up autopull and autopush with their respective thresholds
+
+    // Shift OSR to the right, enable autopull, and set the pull threshold set to 32
+    sm_config_set_out_shift(&c, true, true, 32);
+
+    // Shift ISR to the right, enable autopush, and set the push threshold to 30
+    sm_config_set_in_shift(&c, true, true, 30);
+
+    // Load our configuration, and jump to the start of the program
+    // pio_sm_init(pio, sm, offset, &c);
+    // pio_sm_init(pio, sm, offset + rgb5_offset_start, &c);
+
+    pio_sm_init(pio, sm, offset, &c);
+
+}
+
+%}

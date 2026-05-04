@@ -129,16 +129,7 @@ enum colors {BLACK, DARK_GREEN, MED_GREEN, GREEN,
 #define LIGHT_GREY_64  (MED_RED_64 | MED_GREEN_64 | MED_BLUE_64)
 
 #define RASPBERRY_64 (MED_RED_64 | DARK_RED_64 | DARK_BLUE_64)
-
-#define WORDS_PER_LINE (1 + 20)
-
-#define NO_OF_LINES 480
-
-#define TXCOUNT_2 WORDS_PER_LINE * NO_OF_LINES
-
-extern uint32_t vga_1bit_data_array[TXCOUNT_2];
-
-
+ 
 // VGA primitives - usable in main
 // void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour);
 void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour, uint8_t colour_2, uint8_t colour_3);

@@ -110,6 +110,8 @@
 // #include "hardware/structs/bus_ctrl.h"
 #include <string.h>
 
+#include "globals.h"
+
 // VGA graphics library
 #include "vga2_graphics.h"
 
@@ -477,6 +479,12 @@ bi_decl(bi_ptr_int32(0x1111, FG_INTERFACES, use_dvi, USE_DVI));
 
 bi_decl(bi_ptr_int32(0x1111, FG_SYS, sys_clock_freq, SYS_CLK_HZ));
 bi_decl(bi_ptr_string(0x1111, FG_SYS, sys_string, "This may come in useful.", 64));
+
+#if USE_VGA_IN
+bool use_vga_in = true;
+#else 
+bool use_vga_in = false;
+#endif
 
 uint8_t g_no_of_captured_pins = CAPTURE_PIN_COUNT;
 uint8_t g_pins_base_captured;
@@ -3358,54 +3366,8 @@ void init_line_colours() {
 
 #if CAN_USE_DVI
 
-void mirror_VGA_data_to_DVI() {
-
-    uint32_t *vga_framebuf_ptr = (uint32_t*) &vga_1bit_data_array[0];
-    uint32_t *dvi_framebuf_ptr = (uint32_t*) &dvi_framebuf[0];
-
-    uint32_t sr = 0;
-    uint8_t shifts = 0;
-
-
-    for (int y = 0; y < MODE_V_ACTIVE_LINES; y++) {
-        // The first uint32 of each line contains colour information as well as other stuff.
-        uint32_t colours = *vga_framebuf_ptr++;
-
-        uint8_t fore_col = get_four_bit_col((colours >> 20) & 0x0f);  
-        uint8_t back_col = get_four_bit_col((colours >> 16) & 0x0f);  
-        uint8_t pixcol;
-
-        // get the 32-bit word
-        for (int x = 0; x < WORDS_PER_LINE - 1; x++) {
-            uint32_t vga_bit_word = *vga_framebuf_ptr;   
-            vga_framebuf_ptr++;    
-
-            uint32_t bitmask = 0x01;
-            for (uint32_t b = 0; b < 32; b++) {
-                if (vga_bit_word & bitmask) {
-                    pixcol = fore_col;
-                } else {
-                    pixcol = back_col;
-                }
-                // Shift the shift register and put the 6-bit colour into the most significant bits
-                sr = (sr >> 6) | (pixcol << 26);
-                if (++shifts == 5) {
-                    // Every 5 pixels the shift register consists of 5 6-bit values,
-                    // which we pack into four bytes (a uin32_t).
-                    *dvi_framebuf_ptr++ = sr;
-                    shifts = 0;
-                }
-                bitmask <<= 1;
-            }
-        }
-    }
-}
-
-
-#if CAN_USE_DVI
 enum vc_modes {VC_NONE, VC_VGA_IN, VC_VGA_OUT};
 uint8_t vga_capture_mode = VC_NONE;
-#endif
 
 
 void test_DVI_framebuf() {
@@ -3527,10 +3489,6 @@ void close_window() {
 char * start_help_text = "Press h for help.\n";
 
 #if CAN_USE_DVI
-
-PIO vga_capture_pio = pio0;
-uint vga_capture_sm = 0;
-uint vga_capture_offset;
 
 // PIO vga_detect_vsync_pio = pio0;
 uint vga_detect_vsync_sm = 1;
@@ -3915,20 +3873,26 @@ void deinit_vga_capture() {
 
 void set_vga_capture(uint8_t new_capture_mode) {
     if (use_dvi) {
+        if (use_vga_in) {
 
-        deinit_vga_capture();
+            deinit_vga_capture();
 
-        switch (new_capture_mode) {
-            case VC_NONE:
-                break;
+            switch (new_capture_mode) {
+                case VC_NONE:
+                    break;
 
-            case VC_VGA_IN:
-                vga_in_capture_set_enabled(true);
-                break;
+                case VC_VGA_IN:
+                    vga_in_capture_set_enabled(true);
+                    break;
 
-            case VC_VGA_OUT:
-                vga_out_capture_set_enabled(true);
-                break;
+                case VC_VGA_OUT:
+                    vga_out_capture_set_enabled(true);
+                    break;
+            }
+        } else {
+            // we can expand the 1-bit vga buffer to hstx (dvi) using a PIO SM & DMA (rather than via GPIO) - if we're lucky
+            // vga_buffer_expansion_set_enabled(true);
+            // this is all handled in `dvi64_graphics.c`
         }
     }
 }
@@ -4623,7 +4587,7 @@ uint total_sample_bits;
 #if CAN_USE_DVI
 
                 case UIC_V:
-                    if (use_dvi) {
+                    if ((use_dvi) && (use_vga_in)) {
                         switch (vga_capture_mode) {
                             case VC_NONE:
                                 set_vga_capture(VC_VGA_IN);
@@ -5005,7 +4969,11 @@ int main() {
         buf_size_words = VGA_BUF_SIZE_WITH_RP2040;
     #else
         if (use_dvi) {
-            buf_size_words = VGA_BUF_SIZE_WITH_RP2350_WITH_DVI;
+            if (use_vga_in) {
+                buf_size_words = VGA_BUF_SIZE_WITH_RP2350_WITH_DVI;
+            } else {
+                buf_size_words = VGA_BUF_SIZE_WITH_RP2350;
+            }
         } else {
             buf_size_words = VGA_BUF_SIZE_WITH_RP2350;
         }
@@ -5182,8 +5150,7 @@ int main() {
 
 #if CAN_USE_DVI
 
-            if (use_dvi) {
-
+            if ((use_dvi) && (use_vga_in)) {
                 // test to see if the vga capture dma write address is that of the start of the dvi frame buffer
                 if (vga_capture_dma_write_addr) {
                     // it isn't, so report the write address

@@ -21,7 +21,7 @@ if (PICO_RP2350)
 endif()
 
 # must match with executable name and source file names
-target_sources(palavo PRIVATE palavo.c vga2_graphics.c binary_info_access.c)
+target_sources(palavo PRIVATE globals.c palavo.c vga2_graphics.c binary_info_access.c)
 #if (PICO_BOARD STREQUAL "pico2")
 if (PICO_RP2350)
     target_sources(palavo PRIVATE dvi64_graphics.c)
