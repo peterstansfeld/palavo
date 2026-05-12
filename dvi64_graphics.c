@@ -49,7 +49,8 @@
 
 #include "vga_capture.pio.h"
 
-uint32_t main_use_vga_in;
+bool can_use_framebuf;
+bool using_framebuf;
 
 #define USE_EXCLUSIVE_IRQ_HANDLER 1
 
@@ -276,7 +277,7 @@ void __scratch_x("") dma_irq_handler() {
         ch->transfer_count = (MODE_H_ACTIVE_PIXELS / 2) / sizeof(uint32_t);
 
 #elif COLOUR_MODE == 2226
-        if (main_use_vga_in) {
+        if (using_framebuf) {
             ch->read_addr = (uintptr_t)&dvi_framebuf[(v_scanline - (MODE_V_TOTAL_LINES - MODE_V_ACTIVE_LINES)) * ((MODE_H_ACTIVE_PIXELS * 4) / 5)];
             ch->transfer_count = ((MODE_H_ACTIVE_PIXELS * 4) / 5) / sizeof(uint32_t);
         } else {
@@ -655,7 +656,7 @@ uint8_t get_fract_rgb(uint8_t rgb, int8_t quot, int8_t div) {
 void dvi_testbars() {
     uint32_t *framebuf_ptr = (uint32_t*) &dvi_framebuf[0]; 
 
-    if (main_use_vga_in) {
+    if (can_use_framebuf) {
         for (int y = 0; y < MODE_V_ACTIVE_LINES / 2 ; y++) {
             uint32_t sr = 0;
             uint8_t shifts = 0;
@@ -1061,6 +1062,7 @@ void dvi_deinit_hstx_gpio() {
 }
 
 
+// Must be called before any other DMA channels are claimed
 void dvi_init_hstx_dma() {
 
     static bool inited;
@@ -1068,18 +1070,13 @@ void dvi_init_hstx_dma() {
     if (!inited) {
         dma_channel_claim(DMACH_PING);
         dma_channel_claim(DMACH_PONG);
-
-        if (!main_use_vga_in) {
-            dma_channel_claim(DMACH_VGA_TO_PIO);
-            dma_channel_claim(DMACH_PIO_TO_LINE_BUF);
-            // memset(&dvi_linebuf[0], 0x00, DVI_LINEBUF_LEN); // fill the line buffer with black
-            // memset(&dvi_linebuf[0], 0xff, DVI_LINEBUF_LEN / 4); // fill left hand quarter of line buffer with white
-        }
-
+        dma_channel_claim(DMACH_VGA_TO_PIO);
+        dma_channel_claim(DMACH_PIO_TO_LINE_BUF);
         inited = true;
     }
 
-    if (!main_use_vga_in) {
+
+    if (!using_framebuf) {
         vga_capture_offset = pio_add_program(vga_capture_pio, &expand_compressed_vga_line_program);
         expand_compressed_vga_line_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset);
         pio_sm_set_enabled(vga_capture_pio, vga_capture_sm, true);
@@ -1113,7 +1110,7 @@ void dvi_init_hstx_dma() {
         false
     );
 
-    if (!main_use_vga_in) {
+    if (!using_framebuf) {
         // this channel copies a line from the vga_1bit_data_array into the vga_capture_pio sm
         c = dma_channel_get_default_config(DMACH_VGA_TO_PIO);
         channel_config_set_dreq(&c, pio_get_dreq(vga_capture_pio, vga_capture_sm, true));     // vga_capture_sm TX FIFO pacing
@@ -1192,7 +1189,7 @@ void dvi_deinit_hstx_regs() {
 
 void dvi_deinit_hstx_dma() {
     // stop and free the dma channels
-    if (!main_use_vga_in) {
+    if (!using_framebuf) {
         // stop the expand_compressed_vga_line_program pio sm and remove it
         pio_set_sm_mask_enabled(vga_capture_pio, (1u << vga_capture_sm), false);
         pio_remove_program(vga_capture_pio, &expand_compressed_vga_line_program, vga_capture_offset);
@@ -1223,48 +1220,65 @@ void dvi_deinit_hstx_dma() {
 }
 
 
-void dvi_set_initialised(bool initialise) {
-    static bool initialised;
-    if (initialise) {
-        if (!initialised) {
-            dvi_init_vars();
-            dvi_init_hstx_regs();
-            dvi_init_hstx_gpio();
-            dvi_init_hstx_dma();
-            initialised = true;
-        }
-    } else {
-        if (initialised) {
+void dvi_set_activated(bool use_framebuf, bool activate) {
+    static bool activated;
+
+    // We're either activating dvi, deactivating it, or changing which buffer
+    // (frame or line) we'll be using to generate the dvi output.
+    if (((activate != activated) || (use_framebuf != using_framebuf))) {
+        // There's something to change.
+        if (activated) {
+            // We're either deactivating or changing the buffer
             dvi_deinit_hstx_dma();
             dvi_deinit_hstx_gpio();
             // hstx_ctrl_hw->csr = 0;
             dvi_deinit_hstx_regs();
             // dvi_init_vars();
-            initialised = false;
+            activated = false;
+        }
+        if (activate) {
+            if (can_use_framebuf) {
+                // We can use either buffer.
+                using_framebuf = use_framebuf;
+            } else {
+                // We can't use the frame buffer, so we must use the line buffer.
+                using_framebuf = false;
+            }
+            dvi_init_vars();
+            dvi_init_hstx_regs();
+            dvi_init_hstx_gpio();
+            dvi_init_hstx_dma();
+            activated = true;
         }
     }
 }
 
 
-void dvi_init(bool use_vga_capture) {
+void dvi_use_framebuf(bool use_framebuf) {
+    dvi_set_activated(use_framebuf, true);
+}
+
+
+void dvi_init(bool use_framebuf) {
+// void dvi_init() {
     static bool allocated;
-    main_use_vga_in = use_vga_capture;
     if (!allocated) {
-        if (main_use_vga_in) {
+        can_use_framebuf = use_framebuf;
+        using_framebuf = use_framebuf;
+        if (use_framebuf) {
              // allocate a dvi framebuffer
             dvi_framebuf = malloc(DVI_LINEBUF_LEN * 480);
-        } else {
-            // allocate a dvi linebuffer
-            dvi_linebuf = malloc(DVI_LINEBUF_LEN);
         }
+        // allocate a dvi linebuffer regardless
+        dvi_linebuf = malloc(DVI_LINEBUF_LEN);
         allocated = true;
     }
-    dvi_set_initialised(true);
+    dvi_set_activated(use_framebuf, true);
 }
 
 
 void dvi_deinit() {
-    dvi_set_initialised(false);
+    dvi_set_activated(false, false);
 }
 
 
