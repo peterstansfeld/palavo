@@ -294,7 +294,7 @@ void __scratch_x("") dma_irq_handler() {
             // pio_sm_exec(vga_capture_pio, vga_capture_sm, pio_encode_jmp(expand_compressed_vga_line_offset_start));
             // This is a bit cheeky, but it should save a little time compared with the above.
             // (A jmp instruction is just the desired destination address.)
-            pio_sm_exec(vga_capture_pio, vga_capture_sm, expand_compressed_vga_line_offset_start);
+            pio_sm_exec(vga_capture_pio, vga_capture_sm, vga_capture_offset);
 
             dma_channel_hw_t *exp_ch  = &dma_hw->ch[DMACH_VGA_TO_PIO];
             exp_ch->read_addr = (uintptr_t)&vga_1bit_data_array[(v_scanline - (MODE_V_TOTAL_LINES - MODE_V_ACTIVE_LINES)) * WORDS_PER_LINE]; 
