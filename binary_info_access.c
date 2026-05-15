@@ -29,38 +29,37 @@ uint32_t get_flash_address(uint32_t address) {
 
 
 uint32_t* find_binary_info_start_ptr() {
-    uint32_t* flash_ptr = (uint32_t*)XIP_BASE + (0x100 / sizeof(uint32_t));
-    for (int i = 0; i < (256 / sizeof(uint32_t)); i++) {
-        if ((*flash_ptr == BINARY_INFO_MARKER_START) && (*(flash_ptr + 4) == BINARY_INFO_MARKER_END)) {
-            // binary_info_start = *(flash_ptr + 1);
-            // binary_info_end = *(flash_ptr + 2);
-            address_mapping_table = *(flash_ptr + 3);
-            return flash_ptr + 1;
-        }
-        flash_ptr += 1;
-    }
-    return 0;
-}
-
-
-void print_binary_info(uint32_t print_types, uint16_t tag, uint32_t id) {
     static uint32_t* binary_info_start_ptr;
 
     if (!binary_info_start_ptr) {
-        binary_info_start_ptr = find_binary_info_start_ptr();
+        uint32_t* flash_ptr = (uint32_t*)XIP_BASE + (0x100 / sizeof(uint32_t));
+        for (int i = 0; i < (256 / sizeof(uint32_t)); i++) {
+            if ((*flash_ptr == BINARY_INFO_MARKER_START) && (*(flash_ptr + 4) == BINARY_INFO_MARKER_END)) {
+                binary_info_start_ptr = flash_ptr + 1;
+                // binary_info_end = *(flash_ptr + 2);
+                address_mapping_table = *(flash_ptr + 3);
+                break;
+            }
+            flash_ptr += 1;
+        }
     }
+    return binary_info_start_ptr;
+}
+
+
+void print_binary_info(uint32_t print_types, uint16_t tag, uint32_t id, uint32_t group) {
+    uint32_t* binary_info_start_ptr = find_binary_info_start_ptr();
 
     uint32_t* bis_ptr = (uint32_t*)*(binary_info_start_ptr);
     uint32_t* bie_ptr = (uint32_t*)*(binary_info_start_ptr + 1);
 
-    int no_of_items = (((uint32_t*)bie_ptr - (uint32_t*)bis_ptr));
-    for (int i =  0; i < no_of_items; i++) {
-        uint32_t * bi_ptr = (uint32_t*)*bis_ptr;
+    while (bis_ptr != bie_ptr) {
+        uint32_t* bi_ptr = (uint32_t*)*bis_ptr;
         binary_info_t bi;
         memcpy(&bi, bi_ptr, sizeof(binary_info_t));
 
         if ((print_types & (1 << bi.type)) && ((bi.tag == tag) | (tag == 0))) {
-            switch (bi.type){
+            switch (bi.type) {
 
                 case BINARY_INFO_TYPE_ID_AND_INT:
                     binary_info_id_and_int_t bi_id_and_int;
@@ -75,7 +74,7 @@ void print_binary_info(uint32_t print_types, uint16_t tag, uint32_t id) {
 
                     for (int i = 0; i < 64; i++) {
                         if (bi_p64.pin_mask & (1 << i)) {
-                            stdio_printf(" %d", i);
+                            stdio_printf("  %d", i);
                             break;
                         }
                     }
@@ -86,7 +85,7 @@ void print_binary_info(uint32_t print_types, uint16_t tag, uint32_t id) {
                 case BINARY_INFO_TYPE_ID_AND_STRING:
                     binary_info_id_and_string_t bi_id_and_str;
                     memcpy(&bi_id_and_str, bi_ptr, sizeof(binary_info_id_and_string_t));
-                    if ((bi.tag == tag) && ((bi_id_and_str.id == id) | (id == 0))){
+                    if ((bi.tag == tag) && ((bi_id_and_str.id == id) | (id == 0))) {
                         stdio_printf(" ");
                         switch (bi_id_and_str.id) {
                             case BINARY_INFO_ID_RP_PROGRAM_URL:
@@ -131,21 +130,27 @@ void print_binary_info(uint32_t print_types, uint16_t tag, uint32_t id) {
                 case BINARY_INFO_TYPE_PTR_INT32_WITH_NAME:
                     binary_info_ptr_int32_with_name_t bi_ptr_int32_with_name;
                     memcpy(&bi_ptr_int32_with_name, bi_ptr, sizeof(binary_info_ptr_int32_with_name_t));
-                    stdio_printf(" %s = %d\n", (char*)get_flash_address((uint32_t)bi_ptr_int32_with_name.label),
-                        *(int32_t*)get_flash_address((uint32_t)bi_ptr_int32_with_name.value));
+                    if ((group == bi_ptr_int32_with_name.id)) {
+                        stdio_printf("  %s = %d\n", (char*)get_flash_address((uint32_t)bi_ptr_int32_with_name.label),
+                            *(int32_t*)get_flash_address((uint32_t)bi_ptr_int32_with_name.value));
+                    }
                     break;
 
                 case BINARY_INFO_TYPE_PTR_STRING_WITH_NAME:
                     binary_info_ptr_string_with_name_t bi_ptr_string_with_name;
                     memcpy(&bi_ptr_string_with_name, bi_ptr, sizeof(binary_info_ptr_string_with_name_t));
-                    stdio_printf(" %s = \"%s\"\n", (char*)get_flash_address((uint32_t)bi_ptr_string_with_name.label),
-                        (char*)get_flash_address((uint32_t)bi_ptr_string_with_name.value));
+                    if ((group == bi_ptr_string_with_name.id)) {
+                        stdio_printf("  %s = \"%s\"\n", (char*)get_flash_address((uint32_t)bi_ptr_string_with_name.label),
+                            (char*)get_flash_address((uint32_t)bi_ptr_string_with_name.value));
+                    }
                     break;
 
                 case BINARY_INFO_TYPE_NAMED_GROUP:
                     binary_info_named_group_t bi_named_group;
                     memcpy(&bi_named_group, bi_ptr, sizeof(binary_info_named_group_t));
-                    stdio_printf("%s\n", (char*)get_flash_address((uint32_t)bi_named_group.label));
+                    if ((group == bi_named_group.group_id)) {
+                        stdio_printf(" %s:\n", (char*)get_flash_address((uint32_t)bi_named_group.label));
+                    }
                     break;
 
                 default: 

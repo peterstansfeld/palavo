@@ -78,7 +78,7 @@
 
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 15
-#define VERSION_PATCH 5
+#define VERSION_PATCH 6
 
 #ifndef VGA_TIMEOUT
 // If the number of idle seconds before the VGA output is blanked and
@@ -426,6 +426,8 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 
 #define FG_UI 5
 #define FG_SYS 6
+
+#define FG_COUNT FG_SYS + 1
 
 // create feature groups to group configuration settings
 // these will also show up in picotool info, not just picotool config
@@ -4837,7 +4839,7 @@ void draw_ui() {
 
 
 void print_rp_binary_info(uint32_t id) {
-    print_binary_info((1 << BINARY_INFO_TYPE_ID_AND_STRING), BINARY_INFO_TAG_RASPBERRY_PI, id);
+    print_binary_info((1 << BINARY_INFO_TYPE_ID_AND_STRING), BINARY_INFO_TAG_RASPBERRY_PI, id, 0);
 }
 
 
@@ -4852,16 +4854,24 @@ void print_all_binary_info() {
     stdio_printf(" features:\n");
     print_rp_binary_info(BINARY_INFO_ID_RP_PROGRAM_FEATURE);
 
-    stdio_printf("\nFixed Pin Information:\n");
+    // stdio_printf("\nBoot Settings (can be configured using picotool):\n");
+
+    for (int i = 0; i < FG_COUNT; i++) {
+
+        print_binary_info(
+            (1 << BINARY_INFO_TYPE_NAMED_GROUP) |
+            0, 0, 0, i);
+
+        print_binary_info(
+            (1 << BINARY_INFO_TYPE_PTR_INT32_WITH_NAME) |
+            (1 << BINARY_INFO_TYPE_PTR_STRING_WITH_NAME) |
+            0, 0, 0, i);
+    }
+
+    stdio_printf("\n Fixed Pin Information:\n");
     print_binary_info(
         (1 << BINARY_INFO_TYPE_PINS64_WITH_NAME) |
-        0, 0, 0);
-
-    stdio_printf("\nBoot Settings (can be configured using picotool):\n");
-    print_binary_info(
-        (1 << BINARY_INFO_TYPE_PTR_INT32_WITH_NAME) |
-        (1 << BINARY_INFO_TYPE_PTR_STRING_WITH_NAME) |
-        0, 0, 0);
+        0, 0, 0, 4);
 
     stdio_printf("\n");
 }
