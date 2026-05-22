@@ -68,6 +68,7 @@
 // Font file
 #include "glcdfont.c"
 #include "font_rom_brl4.h"
+#include "globals.h"
 
 
 #include <string.h>
@@ -173,14 +174,7 @@ void set_line_colors(uint16_t line, uint8_t back_colour, uint8_t fore_colour, ui
      vga_1bit_data_array[line * WORDS_PER_LINE] = (((fore_colour << 6) | (back_colour)) << 16) | 639;
 }
 
-
-    PIO vga_out_pio = pio1;
-
     uint hsync5_sm = 0;
-
-    uint rgb5_sm = 1;
-
-    // uint csync_sm = 2;
 
     // we are using either hsync and vsync OR csync, so they can use the same SM
     uint csync_sm = 0;

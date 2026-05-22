@@ -78,7 +78,7 @@
 
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 15
-#define VERSION_PATCH 4
+#define VERSION_PATCH 7
 
 #ifndef VGA_TIMEOUT
 // If the number of idle seconds before the VGA output is blanked and
@@ -110,6 +110,8 @@
 // #include "hardware/structs/bus_ctrl.h"
 #include <string.h>
 
+#include "globals.h"
+
 // VGA graphics library
 #include "vga2_graphics.h"
 
@@ -137,14 +139,14 @@ bi_decl(bi_program_description("PIO-Assisted Logic Analyser with VGA Output"));
 bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
 
 // we can always use the UART for STDIO (as well as the always enabled USB)
-bi_decl(bi_program_feature("UART stdin / stdout (if use_uart == 1)"));
+bi_decl(bi_program_feature("UART stdin / stdout (if use_uart = 1)"));
 
 // we can always enable infra-red remote control
-bi_decl(bi_program_feature("Infra-red remote control (if use_ir == 1)"));
+bi_decl(bi_program_feature("Infra-red remote control (if use_ir = 1)"));
 
 #if CAN_USE_DVI
     // we can sometimes enable DVI output
-    bi_decl(bi_program_feature("DVI output (if use_dvi == 1)"));
+    bi_decl(bi_program_feature("DVI output (if use_dvi = 1)"));
     bi_decl(bi_1pin_with_name(19, "DVI Out - D2+"));
     bi_decl(bi_1pin_with_name(18, "DVI Out - D2-"));
     bi_decl(bi_1pin_with_name(17, "DVI Out - D1+"));
@@ -293,6 +295,13 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
     #ifndef VGA_IN_RGB_PIN_COUNT
     #define VGA_IN_RGB_PIN_COUNT 6
     #endif
+
+#define FLAG_VALUE 123
+#define CORE1_CMD_DEINIT_DVI 456
+#define CORE1_CMD_INIT_DVI 789
+#define CORE1_CMD_INIT_DVI_FRAMEBUF 012
+#define CORE1_CMD_INIT_DVI_LINEBUF 345
+
 #endif
 
 #if BOARD_HAS_SAME_RESERVED_GPIO_AS_PICO
@@ -406,17 +415,18 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 
 #define CAPTURE_SAMPLE_FREQ_DIVISOR (SYS_CLK_HZ / (25 * MHZ))
 
-#define FG_INTERFACES 0
-#define FG_IR 1
-#define FG_UART 2
-#define FG_VGA 3
-
+#define FG_SYS 0
+#define FG_INTERFACES 1
 #if CAN_USE_DVI
-#define FG_DVI 4
+#define FG_DVI 2
 #endif
 
-#define FG_UI 5
-#define FG_SYS 6
+#define FG_IR 3
+#define FG_UART 4
+#define FG_VGA 5
+#define FG_UI 6
+
+#define FG_COUNT FG_UI + 1
 
 // create feature groups to group configuration settings
 // these will also show up in picotool info, not just picotool config
@@ -425,11 +435,12 @@ bi_decl(bi_program_feature_group(0x1111, FG_UI, "UI Configuration"));
 bi_decl(bi_program_feature_group(0x1111, FG_VGA, "VGA Configuration"));
 bi_decl(bi_program_feature_group(0x1111, FG_UART, "UART Configuration"));
 bi_decl(bi_program_feature_group(0x1111, FG_IR, "IR Configuration"));
-bi_decl(bi_program_feature_group(0x1111, FG_INTERFACES, "Enabled Interfaces"));
 
 #if CAN_USE_DVI
 bi_decl(bi_program_feature_group(0x1111, FG_DVI, "DVI Configuration"));
 #endif
+
+bi_decl(bi_program_feature_group(0x1111, FG_INTERFACES, "Enabled Interfaces"));
 
 // user interface configuration and initialisation
 bi_decl(bi_ptr_int32(0x1111, FG_UI, ui_trig_type, CAPTUTRE_TRIGGER_TYPE));
@@ -448,12 +459,17 @@ bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_out_timeout, VGA_TIMEOUT));
 bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_in_rgb_pins_count, VGA_IN_RGB_PIN_COUNT));
 bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_in_rgb_pins_base, VGA_IN_RGB_BASE_PIN));
 bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_in_hsync_pin, VGA_IN_HSYNC_CSYNC_PIN));
+bi_decl(bi_ptr_int32(0x1111, FG_INTERFACES, use_vga_in, 1));
 #endif
 
 bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_out_rgb_pins_count, VGA_OUT_RGB_PIN_COUNT));
 bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_out_rgb_pins_base, VGA_OUT_RGB_BASE_PIN));
 bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_out_hsync_pin, VGA_OUT_HSYNC_CSYNC_PIN));
 bi_decl(bi_ptr_int32(0x1111, FG_VGA, vga_out_use_csync, USE_CSYNC));
+
+#if CAN_USE_DVI
+bi_decl(bi_ptr_int32(0x1111, FG_INTERFACES, use_vga_out, 1));
+#endif
 
 // stdio_usb configuration and initialisation
 // bi_decl(bi_ptr_int32(0x1111, FG_INTERFACES, use_usb, 1));
@@ -475,8 +491,8 @@ bi_decl(bi_ptr_int32(0x1111, FG_DVI, vga_in_to_dvi_on_boot, USE_VGA_IN_TO_DVI));
 bi_decl(bi_ptr_int32(0x1111, FG_INTERFACES, use_dvi, USE_DVI));
 #endif
 
-bi_decl(bi_ptr_int32(0x1111, FG_SYS, sys_clock_freq, SYS_CLK_HZ));
 bi_decl(bi_ptr_string(0x1111, FG_SYS, sys_string, "This may come in useful.", 64));
+bi_decl(bi_ptr_int32(0x1111, FG_SYS, sys_clock_freq, SYS_CLK_HZ));
 
 uint8_t g_no_of_captured_pins = CAPTURE_PIN_COUNT;
 uint8_t g_pins_base_captured;
@@ -858,7 +874,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     PIO capture_pio = pio;
     uint capture_sm = sm;
 
-    uart_my_puts("\nArming trigger...\n");
+    uart_my_puts("\nArming trigger\n");
 
     // Remove the ir rx - actually, we dont really need to because it's always using GPIO_BASE 16.
     // Keep it for now. After trying without stopping it, the response time of the trigger (a 
@@ -1136,7 +1152,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     if (!triggered) {   
         // Failed to trigger, so restart the state machine otherwise it'll be stuck
         // in a latched EXEC instruction, and we'll never fill up the capture buffer.
-        uart_my_puts("failed to trigger, restarting the state machine...\n");
+        uart_my_puts("failed to trigger, restarting the state machine\n");
         pio_sm_restart(capture_pio, capture_sm);
     }
 
@@ -1706,7 +1722,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
 #ifdef DEBUG_PINS
             if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
-                sprintf(str, "finding prev edge on pin %d at scrollx: %d...\n", pin, scrollx);
+                sprintf(str, "finding prev edge on pin %d at scrollx: %d\n", pin, scrollx);
                 uart_my_puts(str);
             }
 #endif
@@ -1917,7 +1933,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
 #ifdef DEBUG_PINS
                 if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
-                    sprintf(str, "finding next edge on pin %d at scrollx: %d...\n", pin, scrollx);
+                    sprintf(str, "finding next edge on pin %d at scrollx: %d\n", pin, scrollx);
                     uart_my_puts(str);
                 }
 #endif
@@ -2056,7 +2072,7 @@ bool my_uart_is_readable_within_us(uart_inst_t * uart, uint32_t us) {
 
 // Measures the number of samples between various transitions. Intended for VGA signal analysis.
 int measure(const uint32_t *buf) {
-    uart_my_puts("\nMeasuring...\n");
+    uart_my_puts("\nMeasuring\n");
 
 
     char pin = 2;
@@ -2176,7 +2192,7 @@ int measure(const uint32_t *buf) {
 
 // Finds the previous or next transition.
 int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next) {
-    // uart_my_puts("\nFinding transition...\n");
+    // uart_my_puts("\nFinding transition\n");
 
     uint record_size_bits = bits_packed_per_word(g_no_of_captured_pins);
 
@@ -2937,6 +2953,9 @@ void set_settings_state(uint8_t state) {
     // uart_my_putcf("State: %d\n", settings_state);
 }
 
+#if CAN_USE_DVI
+    char* help_string_dvi_mode = "v to cycle DVI modes: mirror VGA out -> test -> VGA in\n";
+#endif
 
 char* help_strings =
     "HELP\n"
@@ -2957,15 +2976,7 @@ char* help_strings =
     "h or F1 to show this help window\n"
     "a to show the about window\n"
     "S to start the screensaver\n"
-    "CTRL-P to upload the framebuffer using xmodem\n"
-
-#if CAN_USE_DVI
-    "v to cycle DVI modes: mirror VGA out -> test -> VGA in\n"
-#else
-    "\n"
-#endif
-
-    "\n";
+    "CTRL-P to upload the framebuffer using xmodem\n";
 
 char* press_any_key_string = 
     "Press any key to close this window\n";
@@ -2992,10 +3003,34 @@ void show_help_window() {
     setCursor(HELP_WINDOW_LEFT + FONT_WIDTH, HELP_WINDOW_TOP + FONT_HEIGHT + HELP_WINDOW_PADDING);
     set_text_padding(HELP_WINDOW_PADDING);
     writeString(help_strings);
+
+#if CAN_USE_DVI
+    if ((use_dvi) && (use_vga_in)) {
+        writeString(help_string_dvi_mode);
+    } else {
+        writeString("\n");
+    }
+#else
+    writeString("\n");
+#endif
+
+    writeString("\n");
     writeString(press_any_key_string);
 
     uart_my_puts("\n");
     uart_my_puts(help_strings);
+
+#if CAN_USE_DVI
+    if ((use_dvi) && (use_vga_in)) {
+        uart_my_puts(help_string_dvi_mode);
+    } else {
+        uart_my_puts("\n");
+    }
+#else
+    uart_my_puts("\n");
+#endif
+
+    uart_my_puts("\n");
     uart_my_puts(press_any_key_string);
     uart_my_puts("\n\n");
 
@@ -3358,61 +3393,9 @@ void init_line_colours() {
 
 #if CAN_USE_DVI
 
-void mirror_VGA_data_to_DVI() {
-
-    uint32_t *vga_framebuf_ptr = (uint32_t*) &vga_1bit_data_array[0];
-    uint32_t *dvi_framebuf_ptr = (uint32_t*) &dvi_framebuf[0];
-
-    uint32_t sr = 0;
-    uint8_t shifts = 0;
-
-
-    for (int y = 0; y < MODE_V_ACTIVE_LINES; y++) {
-        // The first uint32 of each line contains colour information as well as other stuff.
-        uint32_t colours = *vga_framebuf_ptr++;
-
-        uint8_t fore_col = get_four_bit_col((colours >> 20) & 0x0f);  
-        uint8_t back_col = get_four_bit_col((colours >> 16) & 0x0f);  
-        uint8_t pixcol;
-
-        // get the 32-bit word
-        for (int x = 0; x < WORDS_PER_LINE - 1; x++) {
-            uint32_t vga_bit_word = *vga_framebuf_ptr;   
-            vga_framebuf_ptr++;    
-
-            uint32_t bitmask = 0x01;
-            for (uint32_t b = 0; b < 32; b++) {
-                if (vga_bit_word & bitmask) {
-                    pixcol = fore_col;
-                } else {
-                    pixcol = back_col;
-                }
-                // Shift the shift register and put the 6-bit colour into the most significant bits
-                sr = (sr >> 6) | (pixcol << 26);
-                if (++shifts == 5) {
-                    // Every 5 pixels the shift register consists of 5 6-bit values,
-                    // which we pack into four bytes (a uin32_t).
-                    *dvi_framebuf_ptr++ = sr;
-                    shifts = 0;
-                }
-                bitmask <<= 1;
-            }
-        }
-    }
-}
-
-
-#if CAN_USE_DVI
-enum vc_modes {VC_NONE, VC_VGA_IN, VC_VGA_OUT};
+enum vc_modes {VC_NONE, VC_VGA_IN, VC_VGA_OUT, VC_VGA_BUF};
 uint8_t vga_capture_mode = VC_NONE;
-#endif
 
-
-void test_DVI_framebuf() {
-    if (use_dvi) {
-        dvi_testbars();
-    }
-}
 #endif
 
 
@@ -3527,10 +3510,6 @@ void close_window() {
 char * start_help_text = "Press h for help.\n";
 
 #if CAN_USE_DVI
-
-PIO vga_capture_pio = pio0;
-uint vga_capture_sm = 0;
-uint vga_capture_offset;
 
 // PIO vga_detect_vsync_pio = pio0;
 uint vga_detect_vsync_sm = 1;
@@ -3913,21 +3892,56 @@ void deinit_vga_capture() {
 }
 
 
-void set_vga_capture(uint8_t new_capture_mode) {
-    if (use_dvi) {
+bool send_multicore_msg(uint32_t msg) {
+    bool result;
+    multicore_fifo_push_blocking(msg);
+    uint32_t popped_value = multicore_fifo_pop_blocking();
+    result = popped_value == FLAG_VALUE;
+    // if (result) {
+    //     uart_my_puts("multicore msg acked\n");
+    // }
+    return result;
+}
 
+
+void set_vga_capture(uint8_t new_capture_mode) {
+    // Only allowed if using DVI out and we can use VGA in.
+    // In which case we can switch between LA output, a test screen and VGA in (if there is one).
+    // If we're using VGA out we might as well use the framebuffer as we need it for VGA in.
+
+    if ((use_dvi) && (use_vga_in)) {
+        // uart_my_puts("deinit_vga_capture()\n");
         deinit_vga_capture();
 
         switch (new_capture_mode) {
             case VC_NONE:
+                uart_my_puts("Setting VC_NONE\n");
+                if (!use_vga_out) {
+                    send_multicore_msg(CORE1_CMD_INIT_DVI_FRAMEBUF);
+                }
+                dvi_testbars();
+                vga_capture_mode = VC_NONE;
                 break;
 
             case VC_VGA_IN:
+                uart_my_puts("Setting VC_VGA_IN\n");
+                if (!use_vga_out) {
+                    send_multicore_msg(CORE1_CMD_INIT_DVI_FRAMEBUF);
+                }
+
                 vga_in_capture_set_enabled(true);
+                last_vga_capture_time = time_us_64();
                 break;
 
             case VC_VGA_OUT:
+                uart_my_puts("Setting VC_VGA_OUT\n");
                 vga_out_capture_set_enabled(true);
+                break;
+
+            case VC_VGA_BUF:
+                uart_my_puts("Setting VC_VGA_BUF\n");
+                send_multicore_msg(CORE1_CMD_INIT_DVI_LINEBUF);
+                vga_capture_mode = VC_VGA_BUF;
                 break;
         }
     }
@@ -4165,7 +4179,7 @@ uint total_sample_bits;
 
 
     void start_screensaver() {
-        uart_my_puts("Saving VGA screen...\n");
+        uart_my_puts("Saving screen\n");
         main_state = MS_SCREENSAVE;
         last_event_time = time_us_64();
         screensaver_line = 0;
@@ -4198,15 +4212,23 @@ uint total_sample_bits;
 
 
     void start_screen_blanking() {
-        uart_my_puts("Blanking VGA screen...\n");
+        uart_my_puts("Blanking screen\n");
         main_state = MS_BLANK;
         last_event_time = time_us_64();
     }
 
 
     void halt_vga_out() {
-        uart_my_puts("Halting VGA output...\n");
-        vga_pause();
+
+#if CAN_USE_DVI
+        if (use_vga_out) {
+#endif
+            uart_my_puts("Halting VGA output\n");
+            vga_pause();
+#if CAN_USE_DVI
+        }
+#endif
+
         main_state = MS_VGA_HALTED;
     }
 
@@ -4219,12 +4241,21 @@ uint total_sample_bits;
         // plot_capture_buf(capture_buf, g_pins_base, g_no_of_captured_pins, g_capture_n_samples, g_mag, g_scrollx, false);
         // draw_statusbar_info();
 
-        uart_my_puts("Restarting VGA output...\n");
         init_line_colours();
         if (!showing_window) {
             set_plot_line_colors(g_no_of_captured_pins);
         }
-        vga_restart();
+
+#if CAN_USE_DVI
+        if (use_vga_out) {
+#endif
+            uart_my_puts("Restarting VGA output\n");
+            vga_restart();
+
+#if CAN_USE_DVI
+        }
+#endif
+
         main_state = MS_ACTIVE;
         last_event_time = time_us_64();
     }
@@ -4623,7 +4654,8 @@ uint total_sample_bits;
 #if CAN_USE_DVI
 
                 case UIC_V:
-                    if (use_dvi) {
+                    if ((use_dvi) && (use_vga_in)) {
+                        // we're using the dvi_framebuffer
                         switch (vga_capture_mode) {
                             case VC_NONE:
                                 set_vga_capture(VC_VGA_IN);
@@ -4631,14 +4663,19 @@ uint total_sample_bits;
                                 break;
 
                             case VC_VGA_IN:
-                                set_vga_capture(VC_VGA_OUT);
-                                writeString("mirror VGA OUT to DVI");
+                                if (use_vga_out) {
+                                    set_vga_capture(VC_VGA_OUT);
+                                    writeString("mirror VGA OUT to DVI");
+                                } else {
+                                    set_vga_capture(VC_VGA_BUF);
+                                    writeString("mirror VGA OUT to DVI");
+                                }
                                 break;
 
                             case VC_VGA_OUT:
+                            case VC_VGA_BUF:
                                 set_vga_capture(VC_NONE);
                                 writeString("display DVI test pattern");
-                                test_DVI_framebuf();
                                 break;
                         }
                     }
@@ -4711,10 +4748,19 @@ uint total_sample_bits;
 #define FLAG_VALUE 123
 #define CORE1_CMD_DEINIT_DVI 456
 #define CORE1_CMD_INIT_DVI 789
+#define CORE1_CMD_INIT_DVI_FRAMEBUF 012
+#define CORE1_CMD_INIT_DVI_LINEBUF 345
+
 
 void core1_main() { 
-    dvi_init();
+    dvi_init(use_vga_in);
     dvi_testbars();
+
+    if ((use_vga_in) && (!use_vga_out)) {
+        // We've initialised the frame buffer, but we need to use the line buffer right now
+        // as the frame buffer is not being filled by capturing vga out.
+        dvi_use_framebuf(false);
+    }
 
     multicore_fifo_push_blocking(FLAG_VALUE);
 
@@ -4724,12 +4770,29 @@ void core1_main() {
             uint32_t cmnd = multicore_fifo_pop_blocking();
             switch (cmnd) {
                 case CORE1_CMD_DEINIT_DVI:
-                dvi_deinit();
-                break;
+                    dvi_deinit();
+                    multicore_fifo_push_blocking(FLAG_VALUE);
+                    break;
 
                 case CORE1_CMD_INIT_DVI:
-                dvi_init();
-                break;
+                    dvi_init(use_vga_in);
+                    if ((use_vga_in) && (!use_vga_out)) {
+                        // We'll have initialised the frame buffer, but we need to use the line buffer instead
+                        // because the frame buffer is not being filled by capturing the vga out signals.
+                        dvi_use_framebuf(false);
+                    }
+                    multicore_fifo_push_blocking(FLAG_VALUE);
+                    break;
+
+                case CORE1_CMD_INIT_DVI_FRAMEBUF:
+                    dvi_init(true);
+                    multicore_fifo_push_blocking(FLAG_VALUE);
+                    break;
+
+                case CORE1_CMD_INIT_DVI_LINEBUF:
+                    dvi_init(false);
+                    multicore_fifo_push_blocking(FLAG_VALUE);
+                    break;
             }
         } else {
             tight_loop_contents();
@@ -4776,12 +4839,12 @@ void draw_ui() {
 
 
 void print_rp_binary_info(uint32_t id) {
-    print_binary_info((1 << BINARY_INFO_TYPE_ID_AND_STRING), BINARY_INFO_TAG_RASPBERRY_PI, id);
+    print_binary_info((1 << BINARY_INFO_TYPE_ID_AND_STRING), BINARY_INFO_TAG_RASPBERRY_PI, id, 0);
 }
 
 
 void print_all_binary_info() {
-    stdio_printf("\nProgram Info:\n");
+    stdio_printf("\nProgram Information\n");
     print_rp_binary_info(BINARY_INFO_ID_RP_PROGRAM_NAME);
     print_rp_binary_info(BINARY_INFO_ID_RP_PROGRAM_DESCRIPTION);
     print_rp_binary_info(BINARY_INFO_ID_RP_PROGRAM_VERSION_STRING);
@@ -4791,16 +4854,24 @@ void print_all_binary_info() {
     stdio_printf(" features:\n");
     print_rp_binary_info(BINARY_INFO_ID_RP_PROGRAM_FEATURE);
 
+    // stdio_printf("\nBoot Settings (can be configured using picotool):\n");
+
+    for (int i = 0; i < FG_COUNT; i++) {
+
+        print_binary_info(
+            (1 << BINARY_INFO_TYPE_NAMED_GROUP) |
+            0, 0, 0, i);
+
+        print_binary_info(
+            (1 << BINARY_INFO_TYPE_PTR_INT32_WITH_NAME) |
+            (1 << BINARY_INFO_TYPE_PTR_STRING_WITH_NAME) |
+            0, 0, 0, i);
+    }
+
     stdio_printf("\nFixed Pin Information:\n");
     print_binary_info(
         (1 << BINARY_INFO_TYPE_PINS64_WITH_NAME) |
-        0, 0, 0);
-
-    stdio_printf("\nBoot Settings (can be configured using picotool):\n");
-    print_binary_info(
-        (1 << BINARY_INFO_TYPE_PTR_INT32_WITH_NAME) |
-        (1 << BINARY_INFO_TYPE_PTR_STRING_WITH_NAME) |
-        0, 0, 0);
+        0, 0, 0, 4);
 
     stdio_printf("\n");
 }
@@ -4905,13 +4976,31 @@ int main() {
 //     uart_my_puts("\n");
 // #endif
 
+#if CAN_USE_DVI
+
+    // uint32_t* package_sel_ptr = (uint32_t*)(SYSINFO_BASE + 0x04);
+    // uart_my_putcf("PACKAGE_SEL: %d\n", *package_sel_ptr);
+
+    if ((!use_vga_out) && (!use_dvi)) {
+
+        uart_my_puts("The settings use_vga_out and use_dvi are both set to 0. Please use picotool to set either one or both to 1.\n");
+        while (true) {
+            sleep_ms(10);
+        }
+    } else if ((!use_dvi) && (use_vga_in)) {
+        uart_my_puts("The setting use_vga_in is set to 1, but use_dvi is set to 0. Please use picotool to set use_vga_in to 0 to prevent this warning.\n");
+        use_vga_in = 0;
+    }
+
+#endif
+
 
 #if CAN_USE_DVI
 
     if (use_dvi) {
 
         // Initialise the HSTX DVI driver
-        uart_my_puts("Initialising DVI...\n");
+        uart_my_puts("Initialising DVI\n");
 
         #if SYS_CLK_HZ == 250 * MHZ
         // clock_configure_int_divider (clk_hstx, 0, 0, clock_get_hz(clk_sys), 2);
@@ -4941,7 +5030,7 @@ int main() {
         multicore_launch_core1(core1_main);
 
         // wait for core 1 to acknowledge that it's initialised the DVI output
-        if (multicore_fifo_pop_blocking()) {   
+        if (multicore_fifo_pop_blocking() == FLAG_VALUE) {
             uart_my_puts("DVI initialised\n");
         }
 
@@ -4960,33 +5049,42 @@ int main() {
 
 #endif
 
-    // Initialize the VGA screen
+    // Initialize the VGA driver
 
     change_plot_line_colour_palette(ui_palette);
 
-    uart_my_puts("Initialising VGA...\n");
-
-    // sometimes we the VGA to DVI doesn't work if this delay is too short
-    // sleep_ms(1);
-
-    // uart_my_puts("Initialising VGA...\n");
-    
-    // uart_my_putcf("VGA_OUT_RGB_BASE_PIN: %x\n", VGA_OUT_RGB_BASE_PIN);
-
-    // The VGA driver state machines are on pio1
-
-#if PICO_PIO_USE_GPIO_BASE
-        if ((vga_out_rgb_pins_base + vga_out_rgb_pins_count) >= 32) {
-            my_pio_set_gpio_base(pio1, 16);
-        } else {
-            my_pio_set_gpio_base(pio1, 0);
-        }
+#if CAN_USE_DVI
+    if (use_vga_out) {
 #endif
 
-    uart_my_putcf("With RGB base pin on: %d\n", vga_out_rgb_pins_base);
-    uart_my_putcf("And: %d pins\n", vga_out_rgb_pins_count);
+        uart_my_puts("Initialising VGA\n");
 
-    initVGA(vga_out_hsync_pin, vga_out_use_csync, vga_out_rgb_pins_base, vga_out_rgb_pins_count, sys_clock_freq);
+        // sometimes we the VGA to DVI doesn't work if this delay is too short
+        // sleep_ms(1);
+
+        // uart_my_puts("Initialising VGA\n");
+        
+        // uart_my_putcf("VGA_OUT_RGB_BASE_PIN: %x\n", VGA_OUT_RGB_BASE_PIN);
+
+        // The VGA driver state machines are on pio1
+
+#if PICO_PIO_USE_GPIO_BASE
+            if ((vga_out_rgb_pins_base + vga_out_rgb_pins_count) >= 32) {
+                my_pio_set_gpio_base(pio1, 16);
+            } else {
+                my_pio_set_gpio_base(pio1, 0);
+            }
+#endif
+
+        uart_my_putcf("With RGB base pin on: %d\n", vga_out_rgb_pins_base);
+        uart_my_putcf("And: %d pins\n", vga_out_rgb_pins_count);
+
+        initVGA(vga_out_hsync_pin, vga_out_use_csync, vga_out_rgb_pins_base, vga_out_rgb_pins_count, sys_clock_freq);
+
+#if CAN_USE_DVI
+    }
+#endif
+
     init_line_colours();
 
     // We're going to capture into a u32 buffer, for best DMA efficiency. Need
@@ -5005,7 +5103,11 @@ int main() {
         buf_size_words = VGA_BUF_SIZE_WITH_RP2040;
     #else
         if (use_dvi) {
-            buf_size_words = VGA_BUF_SIZE_WITH_RP2350_WITH_DVI;
+            if (use_vga_in) {
+                buf_size_words = VGA_BUF_SIZE_WITH_RP2350_WITH_DVI;
+            } else {
+                buf_size_words = VGA_BUF_SIZE_WITH_RP2350;
+            }
         } else {
             buf_size_words = VGA_BUF_SIZE_WITH_RP2350;
         }
@@ -5071,16 +5173,17 @@ int main() {
     if (use_dvi) {
 
         sleep_ms(500);
-
         if (vga_in_to_dvi_on_boot) {
-
+            // uart_my_puts("setting vga in capture");
             set_vga_capture(VC_VGA_IN);
-
         } else {
-            set_vga_capture(VC_VGA_OUT);
-
+            if (use_vga_out) {
+                // uart_my_puts("setting vga out capture");
+                set_vga_capture(VC_VGA_OUT);
+            } else {
+                set_vga_capture(VC_VGA_BUF);
+            }
         }
-
     }
 
  #endif
@@ -5151,40 +5254,66 @@ int main() {
                 handle_command(ui_command);
             } else {
                 restart_vga_out();
+#if CAN_USE_DVI
+                if ((use_dvi) && (main_dvi_state == MDS_NO_SIGNAL)) {
+                    uart_my_puts("Restarting DVI output\n");
+                    switch (vga_capture_mode) {
+                        case VC_NONE:
+                        case VC_VGA_OUT:
+                            send_multicore_msg(CORE1_CMD_INIT_DVI_FRAMEBUF);
+                            break;
+
+                        case VC_VGA_BUF:
+                            send_multicore_msg(CORE1_CMD_INIT_DVI_LINEBUF);
+                            break;
+                    }
+                    main_dvi_state = MDS_ACTIVE;
+                }
+#endif
             }
         } else {
 
-            switch (main_state) {
-                case MS_ACTIVE:
-                if (vga_out_timeout && (time_us_64() - last_event_time >= (vga_out_timeout_us))) {
-                        start_screensaver();
+#if CAN_USE_DVI
+            if (vga_capture_mode != VC_VGA_IN) {
+#endif
+
+                switch (main_state) {
+                    case MS_ACTIVE:
+                        if (vga_out_timeout && (time_us_64() - last_event_time >= (vga_out_timeout_us))) {
+                                start_screensaver();
+                        }
+                        break;
+
+                    case MS_SCREENSAVE:
+                        if (screensaver_animate()) {
+                            screensaver_animate();
+                        } else {
+                            start_screen_blanking();
+                        }
+                        break;
+
+                    case MS_BLANK:
+                        if (time_us_64() - last_event_time >= (1 * 1000 * 1000)) {
+                            halt_vga_out();
+#if CAN_USE_DVI
+                            if (use_dvi) {
+                                uart_my_puts("Halting DVI output\n");
+                                send_multicore_msg(CORE1_CMD_DEINIT_DVI);
+                                main_dvi_state = MDS_NO_SIGNAL;
+                            }
+#endif
+                        }
+                        break;
+
+                    case MS_VGA_HALTED:
+                        break;
+
                 }
-                break;
-
-                case MS_SCREENSAVE:
-                if (screensaver_animate()) {
-                    screensaver_animate();
-                } else {
-                    start_screen_blanking();
-                }
-                break;
-
-                case MS_BLANK:
-                if (time_us_64() - last_event_time >= (1 * 1000 * 1000)) {
-                    halt_vga_out();
-                }
-                break;
-
-                case MS_VGA_HALTED:
-                break;
-
-            }
 
 #if CAN_USE_DVI
-
-            if (use_dvi) {
-
-                // test to see if the vga capture dma write address is that of the start of the dvi frame buffer
+            }
+            if (use_dvi && use_vga_in && ((vga_capture_mode == VC_VGA_IN) || (vga_capture_mode == VC_VGA_OUT))) {
+                // We're expecting to see captured VGA being DMA'ed into the dvi_framebuffer by the PIO
                 if (vga_capture_dma_write_addr) {
                     // it isn't, so report the write address
                     uart_my_putuif("vga_capture_dma_write_addr: %x\n", vga_capture_dma_write_addr);
@@ -5198,14 +5327,14 @@ int main() {
                         last_vga_capture_seconds_count = vga_capture_seconds_count;
                         last_vga_capture_time = time_us_64();
                         if (main_dvi_state == MDS_NO_SIGNAL) {
-                            uart_my_puts("VGA input signal detected. Restarting DVI output...\n");
-                            multicore_fifo_push_blocking(CORE1_CMD_INIT_DVI);
+                            uart_my_puts("VGA input signal detected. Restarting DVI output\n");
+                            send_multicore_msg(CORE1_CMD_INIT_DVI_FRAMEBUF);
                             main_dvi_state = MDS_ACTIVE;
                         }
                     } else if (main_dvi_state == MDS_ACTIVE) {
                         if (time_us_64() - last_vga_capture_time >= (5 * 1000 * 1000)) {
-                            uart_my_puts("No VGA input signal. Halting DVI output...\n");
-                            multicore_fifo_push_blocking(CORE1_CMD_DEINIT_DVI);
+                            uart_my_puts("No VGA input signal. Halting DVI output\n");
+                            send_multicore_msg(CORE1_CMD_DEINIT_DVI);
                             main_dvi_state = MDS_NO_SIGNAL;
     #if defined(PICO_DEFAULT_LED_PIN)
                             led_state = 0;

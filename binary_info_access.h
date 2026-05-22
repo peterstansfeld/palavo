@@ -5,6 +5,6 @@
 
 extern uint32_t address_mapping_table;
 
-void print_binary_info(uint32_t print_types, uint16_t tag, uint32_t id);
+void print_binary_info(uint32_t print_types, uint16_t tag, uint32_t id, uint32_t group);
 
 #endif
