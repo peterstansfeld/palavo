@@ -78,7 +78,7 @@
 
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 15
-#define VERSION_PATCH 6
+#define VERSION_PATCH 7
 
 #ifndef VGA_TIMEOUT
 // If the number of idle seconds before the VGA output is blanked and
@@ -139,14 +139,14 @@ bi_decl(bi_program_description("PIO-Assisted Logic Analyser with VGA Output"));
 bi_decl(bi_program_url("https://github.com/peterstansfeld/palavo"));
 
 // we can always use the UART for STDIO (as well as the always enabled USB)
-bi_decl(bi_program_feature("UART stdin / stdout (if use_uart == 1)"));
+bi_decl(bi_program_feature("UART stdin / stdout (if use_uart = 1)"));
 
 // we can always enable infra-red remote control
-bi_decl(bi_program_feature("Infra-red remote control (if use_ir == 1)"));
+bi_decl(bi_program_feature("Infra-red remote control (if use_ir = 1)"));
 
 #if CAN_USE_DVI
     // we can sometimes enable DVI output
-    bi_decl(bi_program_feature("DVI output (if use_dvi == 1)"));
+    bi_decl(bi_program_feature("DVI output (if use_dvi = 1)"));
     bi_decl(bi_1pin_with_name(19, "DVI Out - D2+"));
     bi_decl(bi_1pin_with_name(18, "DVI Out - D2-"));
     bi_decl(bi_1pin_with_name(17, "DVI Out - D1+"));
@@ -415,19 +415,18 @@ enum TRIGGER_TYPES {TT_NONE, TT_LOW_LEVEL, TT_HIGH_LEVEL, TT_RISING_EDGE, TT_FAL
 
 #define CAPTURE_SAMPLE_FREQ_DIVISOR (SYS_CLK_HZ / (25 * MHZ))
 
-#define FG_INTERFACES 0
-#define FG_IR 1
-#define FG_UART 2
-#define FG_VGA 3
-
+#define FG_SYS 0
+#define FG_INTERFACES 1
 #if CAN_USE_DVI
-#define FG_DVI 4
+#define FG_DVI 2
 #endif
 
-#define FG_UI 5
-#define FG_SYS 6
+#define FG_IR 3
+#define FG_UART 4
+#define FG_VGA 5
+#define FG_UI 6
 
-#define FG_COUNT FG_SYS + 1
+#define FG_COUNT FG_UI + 1
 
 // create feature groups to group configuration settings
 // these will also show up in picotool info, not just picotool config
@@ -436,11 +435,12 @@ bi_decl(bi_program_feature_group(0x1111, FG_UI, "UI Configuration"));
 bi_decl(bi_program_feature_group(0x1111, FG_VGA, "VGA Configuration"));
 bi_decl(bi_program_feature_group(0x1111, FG_UART, "UART Configuration"));
 bi_decl(bi_program_feature_group(0x1111, FG_IR, "IR Configuration"));
-bi_decl(bi_program_feature_group(0x1111, FG_INTERFACES, "Enabled Interfaces"));
 
 #if CAN_USE_DVI
 bi_decl(bi_program_feature_group(0x1111, FG_DVI, "DVI Configuration"));
 #endif
+
+bi_decl(bi_program_feature_group(0x1111, FG_INTERFACES, "Enabled Interfaces"));
 
 // user interface configuration and initialisation
 bi_decl(bi_ptr_int32(0x1111, FG_UI, ui_trig_type, CAPTUTRE_TRIGGER_TYPE));
@@ -491,8 +491,8 @@ bi_decl(bi_ptr_int32(0x1111, FG_DVI, vga_in_to_dvi_on_boot, USE_VGA_IN_TO_DVI));
 bi_decl(bi_ptr_int32(0x1111, FG_INTERFACES, use_dvi, USE_DVI));
 #endif
 
-bi_decl(bi_ptr_int32(0x1111, FG_SYS, sys_clock_freq, SYS_CLK_HZ));
 bi_decl(bi_ptr_string(0x1111, FG_SYS, sys_string, "This may come in useful.", 64));
+bi_decl(bi_ptr_int32(0x1111, FG_SYS, sys_clock_freq, SYS_CLK_HZ));
 
 uint8_t g_no_of_captured_pins = CAPTURE_PIN_COUNT;
 uint8_t g_pins_base_captured;
@@ -874,7 +874,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     PIO capture_pio = pio;
     uint capture_sm = sm;
 
-    uart_my_puts("\nArming trigger...\n");
+    uart_my_puts("\nArming trigger\n");
 
     // Remove the ir rx - actually, we dont really need to because it's always using GPIO_BASE 16.
     // Keep it for now. After trying without stopping it, the response time of the trigger (a 
@@ -1152,7 +1152,7 @@ bool logic_analyser_arm(PIO pio, uint sm, uint dma_chan, uint32_t *capture_buf, 
     if (!triggered) {   
         // Failed to trigger, so restart the state machine otherwise it'll be stuck
         // in a latched EXEC instruction, and we'll never fill up the capture buffer.
-        uart_my_puts("failed to trigger, restarting the state machine...\n");
+        uart_my_puts("failed to trigger, restarting the state machine\n");
         pio_sm_restart(capture_pio, capture_sm);
     }
 
@@ -1722,7 +1722,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
 #ifdef DEBUG_PINS
             if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
-                sprintf(str, "finding prev edge on pin %d at scrollx: %d...\n", pin, scrollx);
+                sprintf(str, "finding prev edge on pin %d at scrollx: %d\n", pin, scrollx);
                 uart_my_puts(str);
             }
 #endif
@@ -1933,7 +1933,7 @@ void plot_capture_buf(const uint32_t *buf, uint pin_base, uint pin_count, uint32
 
 #ifdef DEBUG_PINS
                 if ((pin >= FIRST_PIN_TO_DEBUG) && (pin <= LAST_PIN_TO_DEBUG)) {
-                    sprintf(str, "finding next edge on pin %d at scrollx: %d...\n", pin, scrollx);
+                    sprintf(str, "finding next edge on pin %d at scrollx: %d\n", pin, scrollx);
                     uart_my_puts(str);
                 }
 #endif
@@ -2072,7 +2072,7 @@ bool my_uart_is_readable_within_us(uart_inst_t * uart, uint32_t us) {
 
 // Measures the number of samples between various transitions. Intended for VGA signal analysis.
 int measure(const uint32_t *buf) {
-    uart_my_puts("\nMeasuring...\n");
+    uart_my_puts("\nMeasuring\n");
 
 
     char pin = 2;
@@ -2192,7 +2192,7 @@ int measure(const uint32_t *buf) {
 
 // Finds the previous or next transition.
 int find_transition(const uint32_t *buf, uint8_t pin, int from_sample, bool next) {
-    // uart_my_puts("\nFinding transition...\n");
+    // uart_my_puts("\nFinding transition\n");
 
     uint record_size_bits = bits_packed_per_word(g_no_of_captured_pins);
 
@@ -4179,7 +4179,7 @@ uint total_sample_bits;
 
 
     void start_screensaver() {
-        uart_my_puts("Saving screen...\n");
+        uart_my_puts("Saving screen\n");
         main_state = MS_SCREENSAVE;
         last_event_time = time_us_64();
         screensaver_line = 0;
@@ -4212,7 +4212,7 @@ uint total_sample_bits;
 
 
     void start_screen_blanking() {
-        uart_my_puts("Blanking screen...\n");
+        uart_my_puts("Blanking screen\n");
         main_state = MS_BLANK;
         last_event_time = time_us_64();
     }
@@ -4223,7 +4223,7 @@ uint total_sample_bits;
 #if CAN_USE_DVI
         if (use_vga_out) {
 #endif
-            uart_my_puts("Halting VGA output...\n");
+            uart_my_puts("Halting VGA output\n");
             vga_pause();
 #if CAN_USE_DVI
         }
@@ -4249,7 +4249,7 @@ uint total_sample_bits;
 #if CAN_USE_DVI
         if (use_vga_out) {
 #endif
-            uart_my_puts("Restarting VGA output...\n");
+            uart_my_puts("Restarting VGA output\n");
             vga_restart();
 
 #if CAN_USE_DVI
@@ -4844,7 +4844,7 @@ void print_rp_binary_info(uint32_t id) {
 
 
 void print_all_binary_info() {
-    stdio_printf("\nProgram Info:\n");
+    stdio_printf("\nProgram Information\n");
     print_rp_binary_info(BINARY_INFO_ID_RP_PROGRAM_NAME);
     print_rp_binary_info(BINARY_INFO_ID_RP_PROGRAM_DESCRIPTION);
     print_rp_binary_info(BINARY_INFO_ID_RP_PROGRAM_VERSION_STRING);
@@ -4868,7 +4868,7 @@ void print_all_binary_info() {
             0, 0, 0, i);
     }
 
-    stdio_printf("\n Fixed Pin Information:\n");
+    stdio_printf("\nFixed Pin Information:\n");
     print_binary_info(
         (1 << BINARY_INFO_TYPE_PINS64_WITH_NAME) |
         0, 0, 0, 4);
@@ -5000,7 +5000,7 @@ int main() {
     if (use_dvi) {
 
         // Initialise the HSTX DVI driver
-        uart_my_puts("Initialising DVI...\n");
+        uart_my_puts("Initialising DVI\n");
 
         #if SYS_CLK_HZ == 250 * MHZ
         // clock_configure_int_divider (clk_hstx, 0, 0, clock_get_hz(clk_sys), 2);
@@ -5057,12 +5057,12 @@ int main() {
     if (use_vga_out) {
 #endif
 
-        uart_my_puts("Initialising VGA...\n");
+        uart_my_puts("Initialising VGA\n");
 
         // sometimes we the VGA to DVI doesn't work if this delay is too short
         // sleep_ms(1);
 
-        // uart_my_puts("Initialising VGA...\n");
+        // uart_my_puts("Initialising VGA\n");
         
         // uart_my_putcf("VGA_OUT_RGB_BASE_PIN: %x\n", VGA_OUT_RGB_BASE_PIN);
 
@@ -5256,7 +5256,7 @@ int main() {
                 restart_vga_out();
 #if CAN_USE_DVI
                 if ((use_dvi) && (main_dvi_state == MDS_NO_SIGNAL)) {
-                    uart_my_puts("Restarting DVI output...\n");
+                    uart_my_puts("Restarting DVI output\n");
                     switch (vga_capture_mode) {
                         case VC_NONE:
                         case VC_VGA_OUT:
@@ -5297,7 +5297,7 @@ int main() {
                             halt_vga_out();
 #if CAN_USE_DVI
                             if (use_dvi) {
-                                uart_my_puts("Halting DVI output...\n");
+                                uart_my_puts("Halting DVI output\n");
                                 send_multicore_msg(CORE1_CMD_DEINIT_DVI);
                                 main_dvi_state = MDS_NO_SIGNAL;
                             }
@@ -5327,13 +5327,13 @@ int main() {
                         last_vga_capture_seconds_count = vga_capture_seconds_count;
                         last_vga_capture_time = time_us_64();
                         if (main_dvi_state == MDS_NO_SIGNAL) {
-                            uart_my_puts("VGA input signal detected. Restarting DVI output...\n");
+                            uart_my_puts("VGA input signal detected. Restarting DVI output\n");
                             send_multicore_msg(CORE1_CMD_INIT_DVI_FRAMEBUF);
                             main_dvi_state = MDS_ACTIVE;
                         }
                     } else if (main_dvi_state == MDS_ACTIVE) {
                         if (time_us_64() - last_vga_capture_time >= (5 * 1000 * 1000)) {
-                            uart_my_puts("No VGA input signal. Halting DVI output...\n");
+                            uart_my_puts("No VGA input signal. Halting DVI output\n");
                             send_multicore_msg(CORE1_CMD_DEINIT_DVI);
                             main_dvi_state = MDS_NO_SIGNAL;
     #if defined(PICO_DEFAULT_LED_PIN)

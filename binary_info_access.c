@@ -74,7 +74,7 @@ void print_binary_info(uint32_t print_types, uint16_t tag, uint32_t id, uint32_t
 
                     for (int i = 0; i < 64; i++) {
                         if (bi_p64.pin_mask & (1 << i)) {
-                            stdio_printf("  %d", i);
+                            stdio_printf(" %d", i);
                             break;
                         }
                     }
@@ -131,7 +131,7 @@ void print_binary_info(uint32_t print_types, uint16_t tag, uint32_t id, uint32_t
                     binary_info_ptr_int32_with_name_t bi_ptr_int32_with_name;
                     memcpy(&bi_ptr_int32_with_name, bi_ptr, sizeof(binary_info_ptr_int32_with_name_t));
                     if ((group == bi_ptr_int32_with_name.id)) {
-                        stdio_printf("  %s = %d\n", (char*)get_flash_address((uint32_t)bi_ptr_int32_with_name.label),
+                        stdio_printf(" %s = %d\n", (char*)get_flash_address((uint32_t)bi_ptr_int32_with_name.label),
                             *(int32_t*)get_flash_address((uint32_t)bi_ptr_int32_with_name.value));
                     }
                     break;
@@ -140,7 +140,7 @@ void print_binary_info(uint32_t print_types, uint16_t tag, uint32_t id, uint32_t
                     binary_info_ptr_string_with_name_t bi_ptr_string_with_name;
                     memcpy(&bi_ptr_string_with_name, bi_ptr, sizeof(binary_info_ptr_string_with_name_t));
                     if ((group == bi_ptr_string_with_name.id)) {
-                        stdio_printf("  %s = \"%s\"\n", (char*)get_flash_address((uint32_t)bi_ptr_string_with_name.label),
+                        stdio_printf(" %s = \"%s\"\n", (char*)get_flash_address((uint32_t)bi_ptr_string_with_name.label),
                             (char*)get_flash_address((uint32_t)bi_ptr_string_with_name.value));
                     }
                     break;
@@ -149,7 +149,7 @@ void print_binary_info(uint32_t print_types, uint16_t tag, uint32_t id, uint32_t
                     binary_info_named_group_t bi_named_group;
                     memcpy(&bi_named_group, bi_ptr, sizeof(binary_info_named_group_t));
                     if ((group == bi_named_group.group_id)) {
-                        stdio_printf(" %s:\n", (char*)get_flash_address((uint32_t)bi_named_group.label));
+                        stdio_printf("%s:\n", (char*)get_flash_address((uint32_t)bi_named_group.label));
                     }
                     break;
 
