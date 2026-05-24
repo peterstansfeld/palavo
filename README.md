@@ -25,7 +25,7 @@ There are a number of configurations, which can capture any of the 32 GPIOs of t
 
 If you plan to build your own firmware, configurations are defined by adding the appropriate `PALAVO_CONFIG` variable to the `cmake` command line that's used to create a build directory, in which the firmware is then built. Instructions for this are detailed in each of the configurations.
 
-Update. Various settings, e.g. GPIO pins; enabling/disabling of interfaces; UI settings; etc., can be configured using Raspberry Pi's [`picotool`](https://github.com/raspberrypi/picotool) command line utility. A `.uf2` file can be configured with the settings, or the settings can configured on a device. For more details please see the [Configuring settings with Picotool](#configuring-settings-with-picotool) section.
+Note. Various settings, e.g. GPIO pin usage; enabling/disabling of interfaces; UI settings; etc., can now be configured using Raspberry Pi's [`picotool`](https://github.com/raspberrypi/picotool) command line utility. A `.uf2` file can be configured with the settings, or the settings can configured on a device. For more details please see the [Configuring Palavo with Picotool](#configuring-palavo-with-picotool) section.
 
 
 ## Configuration 0
@@ -178,7 +178,7 @@ If all went well, when Palavo starts you should see something like the following
 
 ![Palavo's start-up screen. A long description follows.](images/config0_on_pico.png "Palavo start-up screen.")
 
-*At the top of the screen, to the right of the palavo logo, are various adjustable settings. The first setting, which is highlighted, is the selected channel (0) followed by: the colour palette used to plot each of the captured channels (JJ - standing for Jumper Jerky), the zoom level of the plots (1:1), the frequency divisor used when capturing (6), the base GPIO pin from which to capture (GP0), the number of pins to capture (8), the pin to use as a trigger pin (GP0), and the type of trigger used to start the capture (VSYNC). Below the settings and taking up most of the rest of the screen is a scrollable area filled with colourful plots of sections of each of the 8 captured channels, one below the other. Along each plot, if there is space for them, are the number of capture periods between transitions. Below this area is a minimap of the 8 channels, which is a condensed view of the whole of the captured channels scaled to fit the width of the screen. Just above the minimap is a small marker indicating which section of the minimap is being shown in the scrollable area above it. Below the minimap and at the bottom of the screen is a status bar. The left section of the status bar shows a little information, usually about the last key that was pressed; in this case it just reads "Press h for help." The right section of the status bar shows the current position of the main window "x: 0", its previous position "prev: 0", and the difference between the two "diff: 0".*
+*At the top of the screen, to the right of the Palavo logo, are various adjustable settings. The first setting, which is highlighted, is the selected channel (0) followed by: the colour palette used to plot each of the captured channels (JJ - standing for Jumper Jerky), the zoom level of the plots (1:1), the frequency divisor used when capturing (6), the base GPIO pin from which to capture (GP0), the number of pins to capture (8), the pin to use as a trigger pin (GP0), and the type of trigger used to start the capture (VSYNC). Below the settings and taking up most of the rest of the screen is a scrollable area filled with colourful plots of sections of each of the 8 captured channels, one below the other. Along each plot, if there is space for them, are the number of capture periods between transitions. Below this area is a minimap of the 8 channels, which is a condensed view of the whole of the captured channels scaled to fit the width of the screen. Just above the minimap is a small marker indicating which section of the minimap is being shown in the scrollable area above it. Below the minimap and at the bottom of the screen is a status bar. The left section of the status bar shows a little information, usually about the last key that was pressed; in this case it just reads "Press h for help." The right section of the status bar shows the current position of the main window "x: 0", its previous position "prev: 0", and the difference between the two "diff: 0".*
 
 The channels captured in this screenshot are the GPIO pins used to generate the VGA signals which drive the VGA monitor, namely VSYNC, HSYNC, Dark Blue, Light Blue, Dark Green, Light Green, Dark Red and Light Red. The channels were captured before the coloured traces were drawn, so the only activity on the RGB channels is the white of the Palavo logo and the settings. If - instead of a Pico - we'd used a Pico 2 with its extra SRAM, the screenshot would also show the white of the status bar towards the end of the minimap, as well as a second pulse on VSYNC.
 
@@ -659,7 +659,7 @@ Choose a suitable file name (e.g. `image1.pss` ) and press `Enter`.
 
 After a while the file should be received and saved to the directory from where minicom was run. This example assumes that directory is `utils`.  
 
-The received file has an unusual format and needs to be persuaded into a recognisable one for viewing. This is a two stage process. The first stage is to use a Python script in the `utils` directory called `expand-pss.py` (expand palavo screenshot) to convert our `image1.pss` to a `.rgb` file:
+The received file has an unusual format and needs to be persuaded into a recognisable one for viewing. This is a two stage process. The first stage is to use a Python script in the `utils` directory called `expand-pss.py` (expand Palavo screenshot) to convert our `image1.pss` to a `.rgb` file:
 
 ```bash
 python3 expand-pss.py image1.pss image1.rgb
@@ -775,10 +775,10 @@ This builds the firmware of each of the configurations mentioned in this documen
 
 ### compress-rgb.py
 
-A Python script to convert a 640x480 `.rgb` image file to a monochrome palavo screenshot `.pss` image file. I lost a screenshot, which upset me, and used this script to recreate it from a `.png` file, which wasn't lost, and which had been generated from the original screenshot (before I lost it).
+A Python script to convert a 640x480 `.rgb` image file to a monochrome Palavo screenshot `.pss` image file. I lost a screenshot, which upset me, and used this script to recreate it from a `.png` file, which wasn't lost, and which had been generated from the original screenshot (before I lost it).
 
 
-## Configuring settings with Picotool
+## Configuring Palavo with Picotool
 
 Various settings can be configured using Raspberry Pi's [`picotool`](https://github.com/raspberrypi/picotool) command line utility. A `.uf2` file can be configured with the settings, or the settings can configured on a device.
 
@@ -794,16 +794,18 @@ which will return something like:
 File palavo.uf2:
 
 DVI Configuration:
- vga_in_to_dvi_on_boot = 1
+ vga_in_to_dvi_on_boot = 0
 Enabled Interfaces:
  use_dvi = 1
  use_ir = 0
  use_uart = 0
+ use_vga_out = 1
+ use_vga_in = 1
 IR Configuration:
- ir_rx_pin = 28
+ ir_rx_pin = 10
 System Configuration:
  sys_clock_freq = 150000000
- sys_string = "Text (configurable using picotool)"
+ sys_string = "This may come in useful."
 UART Configuration:
  uart_baud = 115200
  uart_num = 1
@@ -814,15 +816,15 @@ UI Configuration:
  ui_palette = 0
  ui_zoom = 1
  ui_freq_div = 6
- ui_pins_base = 10
- ui_pins_count = 10
- ui_trig_pin = 10
- ui_trig_type = 9
+ ui_pins_base = 0
+ ui_pins_count = 8
+ ui_trig_pin = 0
+ ui_trig_type = 6
 VGA Configuration:
- vga_out_use_csync = 1
- vga_out_hsync_pin = 10
- vga_out_rgb_pins_base = 11
- vga_out_rgb_pins_count = 1
+ vga_out_use_csync = 0
+ vga_out_hsync_pin = 1
+ vga_out_rgb_pins_base = 2
+ vga_out_rgb_pins_count = 6
  vga_in_hsync_pin = 1
  vga_in_rgb_pins_base = 2
  vga_in_rgb_pins_count = 6
