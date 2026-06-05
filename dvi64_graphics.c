@@ -47,6 +47,7 @@
 #include "dvi64_graphics.h"
 #include "globals.h"
 
+#include "hardware/clocks.h"
 #include "vga_capture.pio.h"
 
 bool can_use_framebuf;

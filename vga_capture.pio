@@ -89,7 +89,7 @@ wait_for_vsync_on_csync:
 ; in vga_detect_vsync in order to test whether we need to resynchronise the
 ; dvi frame buffer
 
-; I don't particulaly like it but we can probably lose this instruction
+; I don't particularly like it but we can probably lose this instruction
 
 ;    wait 1 jmppin                   ; wait for csync to be high
 
@@ -146,6 +146,13 @@ static inline void vga_detect_vsync_on_csync_program_init(PIO pio, uint sm, uint
 
     // Configure the jmp pin to start at `rgb_pin`
     sm_config_set_jmp_pin(&c, hsync_pin);
+
+    uint32_t clock_hz = clock_get_hz(clk_sys);
+    if ((clock_hz == 125000000) || (clock_hz == 250000000))  {
+        sm_config_set_clkdiv(&c, clock_hz / 125000000);
+    } else {
+        sm_config_set_clkdiv(&c, clock_hz / 150000000);
+    }
 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
@@ -206,6 +213,8 @@ static inline void vga_capture_program_init(PIO pio, uint sm, uint offset, uint 
     // Shift ISR to the right, enable autopush, and set the push threshold set to 30
     sm_config_set_in_shift(&c, true, true, 30);
 
+    sm_config_set_clkdiv(&c, clock_get_hz(clk_sys) / 150000000);
+
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
 
@@ -261,6 +270,8 @@ static inline void vga_capture_125_mhz_program_init(PIO pio, uint sm, uint offse
 
     // Shift ISR to the right, enable autopush, and set the push threshold set to 30
     sm_config_set_in_shift(&c, true, true, 30);
+
+    sm_config_set_clkdiv(&c, clock_get_hz(clk_sys) / 125000000);
 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
@@ -325,6 +336,9 @@ static inline void vga_1bit_capture_program_init(PIO pio, uint sm, uint offset, 
     // Shift ISR to the right, enable autopush, and set the push threshold to 30
     sm_config_set_in_shift(&c, true, true, 30);
 
+    // Set the PIO clock divider for 150 MHz
+    sm_config_set_clkdiv(&c, clock_get_hz(clk_sys) / 150000000);
+
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);
 
@@ -388,6 +402,9 @@ static inline void vga_1bit_capture_125_mhz_program_init(PIO pio, uint sm, uint 
 
     // Shift ISR to the right, enable autopush, and set the push threshold to 30
     sm_config_set_in_shift(&c, true, true, 30);
+
+    // Set the PIO clock divider for 125 MHz
+    sm_config_set_clkdiv(&c, clock_get_hz(clk_sys) / 125000000);
 
     // Load our configuration, and jump to the start of the program
     pio_sm_init(pio, sm, offset, &c);

@@ -220,9 +220,9 @@ void initVGA(uint hsync_or_csync_pin, bool use_csync, uint rgb_base_pin, uint rg
 
     uint rgb5_offset;
 
-    if (clock_hz == 125 * MHZ) {
+    if ((clock_hz == 125 * MHZ) || (clock_hz == 250 * MHZ)) {
         rgb5_offset = pio_add_program(vga_out_pio, &rgb5_program);
-    } else if (clock_hz == 150 * MHZ) {
+    } else {
         rgb5_offset = pio_add_program(vga_out_pio, &rgb5_150_mhz_rp235x_program);
     }
 
@@ -244,10 +244,10 @@ void initVGA(uint hsync_or_csync_pin, bool use_csync, uint rgb_base_pin, uint rg
 
 // todo - tidy these GPIO pin definitions below
 
-    if (clock_hz == 125 * MHZ) {
-      rgb5_program_init(vga_out_pio, rgb5_sm, rgb5_offset, rgb_base_pin, rgb_pin_count);
-    } else if (clock_hz == 150 * MHZ) {
-    rgb5_150_mhz_rp235x_program_init(vga_out_pio, rgb5_sm, rgb5_offset, rgb_base_pin, rgb_pin_count);
+    if ((clock_hz == 125 * MHZ) || (clock_hz == 250 * MHZ)) {
+        rgb5_program_init(vga_out_pio, rgb5_sm, rgb5_offset, rgb_base_pin, rgb_pin_count);
+    } else {
+        rgb5_150_mhz_rp235x_program_init(vga_out_pio, rgb5_sm, rgb5_offset, rgb_base_pin, rgb_pin_count);
     }
 
 #ifdef PICO_PLATFORM

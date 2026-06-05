@@ -368,6 +368,8 @@ static inline void rgb5_program_init(PIO pio, uint sm, uint offset, uint pin, ui
     // float div = (float)clock_get_hz(clk_sys) / 125000000;
     // sm_config_set_clkdiv(&c, div);
 
+    sm_config_set_clkdiv(&c, clock_get_hz(clk_sys) / 125000000);
+
     // shift OSR to the right, enable autopull, and set the pull threshold set to 32
     sm_config_set_out_shift(&c, true, true, 32);
 
@@ -421,6 +423,8 @@ static inline void rgb5_150_mhz_program_init(PIO pio, uint sm, uint offset, uint
     // float div = (float)clock_get_hz(clk_sys) / 150000000;
     // sm_config_set_clkdiv(&c, div);
 
+    sm_config_set_clkdiv(&c, clock_get_hz(clk_sys) / 150000000);
+
     // shift OSR to the right, enable autopull, and set the pull threshold set to 32
     sm_config_set_out_shift(&c, true, true, 32);
 
@@ -463,6 +467,8 @@ static inline void rgb5_150_mhz_rp235x_program_init(PIO pio, uint sm, uint offse
     // Set PIO clock frequency to 150 MHz
     // float div = (float)clock_get_hz(clk_sys) / 150000000;
     // sm_config_set_clkdiv(&c, div);
+
+    sm_config_set_clkdiv(&c, clock_get_hz(clk_sys) / 150000000);
 
     // shift OSR to the right, enable autopull, and set the pull threshold set to 32
     sm_config_set_out_shift(&c, true, true, 32);
