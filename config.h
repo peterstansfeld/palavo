@@ -47,6 +47,13 @@
     #pragma message "Building Palavo for PIMORONI_PICO_PLUS2_RP2350"
     #define BOARD_TYPE 5
 
+#elif defined(ADAFRUIT_FRUIT_JAM)
+
+    #pragma message "Building Palavo for ADAFRUIT_FRUIT_JAM"
+    #define BOARD_TYPE 6
+
+    #undef BOARD_HAS_SAME_RESERVED_GPIO_AS_PICO
+
 #else
 
     #pragma message "Building Palavo for an unknown board"

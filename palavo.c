@@ -78,7 +78,7 @@
 
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 15
-#define VERSION_PATCH 7
+#define VERSION_PATCH 8
 
 #ifndef VGA_TIMEOUT
 // If the number of idle seconds before the VGA output is blanked and
@@ -148,15 +148,28 @@ bi_decl(bi_program_feature("Infra-red remote control (if use_ir = 1)"));
 #if CAN_USE_DVI
     // we can sometimes enable DVI output
     bi_decl(bi_program_feature("DVI output (if use_dvi = 1)"));
+
+#ifdef ADAFRUIT_FRUIT_JAM
     bi_decl(bi_1pin_with_name(19, "DVI Out - D2+"));
     bi_decl(bi_1pin_with_name(18, "DVI Out - D2-"));
     bi_decl(bi_1pin_with_name(17, "DVI Out - D1+"));
     bi_decl(bi_1pin_with_name(16, "DVI Out - D1-"));
+    bi_decl(bi_1pin_with_name(15, "DVI Out - DO+"));
+    bi_decl(bi_1pin_with_name(14, "DVI Out - DO-"));
+    bi_decl(bi_1pin_with_name(13, "DVI Out - CK+"));
+    bi_decl(bi_1pin_with_name(12, "DVI Out - CK-"));
+#else
+    bi_decl(bi_1pin_with_name(19, "DVI Out - D1-"));
+    bi_decl(bi_1pin_with_name(18, "DVI Out - D1+"));
+    bi_decl(bi_1pin_with_name(17, "DVI Out - D2-"));
+    bi_decl(bi_1pin_with_name(16, "DVI Out - D2+"));
     bi_decl(bi_1pin_with_name(15, "DVI Out - CK-"));
     bi_decl(bi_1pin_with_name(14, "DVI Out - CK+"));
     bi_decl(bi_1pin_with_name(13, "DVI Out - D0-"));
     bi_decl(bi_1pin_with_name(12, "DVI Out - D0+"));
 #endif
+
+    #endif
 
 // Maybe make this a feature?...
 bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
@@ -309,7 +322,7 @@ bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
 
     #define GPIO_INPUT_MASK_0_31 (0xffffffff & ~PICO_RESERVED_GPIO_0_31)
 
-#else
+    #else
 
     #define GPIO_INPUT_MASK_0_31 0xffffffff
 
