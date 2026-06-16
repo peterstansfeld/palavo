@@ -102,6 +102,7 @@
 #include "hardware/pio.h"
 #include "hardware/dma.h"
 #include "hardware/flash.h"
+#include "hardware/vreg.h"
 #include "pico/binary_info.h"
 
 #include "binary_info_access.h"
@@ -3682,6 +3683,11 @@ void deinit_vga_capture_interrupts_and_dma() {
 }
 
 
+bool pixel_clock_requires_5_sys_clk_ticks() {
+    return ((sys_clock_freq == 125 * MHZ) || (sys_clock_freq == 250 * MHZ));
+}
+
+
 // Capture the RGB on GP(vga_in_rgb_pins_base) to GP(vga_in_rgb_pins_base + vga_in_rgb_pins_count - 1)
 // using  CSYNC on GP(vga_in_hsync_pin), and - if vga_in_rgb_pins_count == 6 - VSYNC and HSYNC on GP(vga_in_hsync_pin - 1) and GP(vga_in_hsync_pin).
 void vga_in_capture_set_enabled(bool enabled) {
@@ -3700,10 +3706,10 @@ void vga_in_capture_set_enabled(bool enabled) {
 #endif
 
                 if (vga_in_rgb_pins_count == 1) {
-                    if (sys_clock_freq == 125 * MHZ) {
+                    if (pixel_clock_requires_5_sys_clk_ticks()) {
                         vga_capture_offset = pio_add_program(vga_capture_pio, &vga_1bit_capture_125_mhz_program);
                         vga_1bit_capture_125_mhz_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_in_rgb_pins_base);
-                    } else if (sys_clock_freq == 150 * MHZ) {
+                    } else {
                         vga_capture_offset = pio_add_program(vga_capture_pio, &vga_1bit_capture_program);
                         vga_1bit_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_in_rgb_pins_base);
                     }
@@ -3714,10 +3720,10 @@ void vga_in_capture_set_enabled(bool enabled) {
                     // vga_detect_vsync_offset = pio_add_program(vga_capture_pio, &vga_detect_vsync_program);
                     // vga_detect_vsync_program_init(vga_capture_pio, vga_detect_vsync_sm, vga_detect_vsync_offset, vga_in_hsync_pin - 1);
                 } else {
-                    if (sys_clock_freq == 125 * MHZ) {
+                    if (pixel_clock_requires_5_sys_clk_ticks()) {
                         vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_125_mhz_program);
                         vga_capture_125_mhz_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_in_rgb_pins_base);
-                    } else if (sys_clock_freq == 150 * MHZ) {
+                    } else {
                         vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
                         vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_in_rgb_pins_base);
                     }
@@ -3752,17 +3758,17 @@ void vga_in_capture_set_enabled(bool enabled) {
             }
 
             if (vga_in_rgb_pins_count == 1) {
-                if (sys_clock_freq == 125 * MHZ) {
+                if (pixel_clock_requires_5_sys_clk_ticks()) {
                     pio_remove_program(vga_capture_pio, &vga_1bit_capture_125_mhz_program, vga_capture_offset);
-                } else if (sys_clock_freq == 150 * MHZ) {
+                } else {
                     pio_remove_program(vga_capture_pio, &vga_1bit_capture_program, vga_capture_offset);
                 }
                 // free the remaining state machine
                 // pio_remove_program(vga_capture_pio, &vga_detect_vsync_program, vga_detect_vsync_offset);
             } else {
-                if (sys_clock_freq == 125 * MHZ) {
+                if (pixel_clock_requires_5_sys_clk_ticks()) {
                     pio_remove_program(vga_capture_pio, &vga_capture_125_mhz_program, vga_capture_offset);
-                } else if (sys_clock_freq == 150 * MHZ) {
+                } else {
                     pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
                 }
                 // free the remaining state machine
@@ -3796,19 +3802,18 @@ void vga_out_capture_set_enabled(bool enabled) {
                 }
 #endif
                 if (vga_out_rgb_pins_count == 1) {
-                    if (sys_clock_freq == 125 * MHZ) {
+                    if (pixel_clock_requires_5_sys_clk_ticks()) {
                         vga_capture_offset = pio_add_program(vga_capture_pio, &vga_1bit_capture_125_mhz_program);
                         vga_1bit_capture_125_mhz_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_out_rgb_pins_base);
-                    } else if (sys_clock_freq == 150 * MHZ) {
-
+                    } else {
                         vga_capture_offset = pio_add_program(vga_capture_pio, &vga_1bit_capture_program);
                         vga_1bit_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_out_rgb_pins_base);
                     }
                 } else {
-                    if (sys_clock_freq == 125 * MHZ) {
+                    if (pixel_clock_requires_5_sys_clk_ticks()) {
                         vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_125_mhz_program);
                         vga_capture_125_mhz_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_out_rgb_pins_base);
-                    } else if (sys_clock_freq == 150 * MHZ) {
+                    } else {
                         vga_capture_offset = pio_add_program(vga_capture_pio, &vga_capture_program);
                         vga_capture_program_init(vga_capture_pio, vga_capture_sm, vga_capture_offset, vga_out_rgb_pins_base);
                     }
@@ -3855,16 +3860,16 @@ void vga_out_capture_set_enabled(bool enabled) {
 
             if (vga_out_rgb_pins_count == 1) {
 
-                if (sys_clock_freq == 125 * MHZ) {
+                if (pixel_clock_requires_5_sys_clk_ticks()) {
                     pio_remove_program(vga_capture_pio, &vga_1bit_capture_125_mhz_program, vga_capture_offset);
-                } else if (sys_clock_freq == 150 * MHZ) {
+                } else {
                     pio_remove_program(vga_capture_pio, &vga_1bit_capture_program, vga_capture_offset);
                 }
 
             } else {
-                if (sys_clock_freq == 125 * MHZ) {
+                if (pixel_clock_requires_5_sys_clk_ticks()) {
                     pio_remove_program(vga_capture_pio, &vga_capture_125_mhz_program, vga_capture_offset);
-                } else if (sys_clock_freq == 150 * MHZ) {
+                } else {
                     pio_remove_program(vga_capture_pio, &vga_capture_program, vga_capture_offset);
                 }
             }
@@ -4878,19 +4883,23 @@ void print_all_binary_info() {
 
 
 int main() {
-    // system clock frequency is initially defined by SYS_CLK_HZ
-    // we may want to set it to the sys_clock_freq setting
 
-    if (sys_clock_freq != clock_get_hz(clk_sys)) {
-        // we do
-        if ((sys_clock_freq == 125 * MHZ) || (sys_clock_freq == 150 * MHZ)) {
-            // and we can
-            set_sys_clock_hz(sys_clock_freq, true);
-        } else {
-            // but we can't
-            sys_clock_freq = clock_get_hz(clk_sys);
+    // Test to see whether the system clock frequency is allowed.
+    if ((sys_clock_freq == 125 * MHZ) || (sys_clock_freq == 150 * MHZ) || (sys_clock_freq == 250 * MHZ) || (sys_clock_freq == 300 * MHZ)) {
+        // It is allowed, increase the core voltage if overclocking.
+        if (sys_clock_freq >= 250 * MHZ) {
+            if (sys_clock_freq == 250 * MHZ) {
+                vreg_set_voltage(VREG_VOLTAGE_1_15);
+            } else {
+                vreg_set_voltage(VREG_VOLTAGE_1_20);
+            }
+            sleep_ms(10);
         }
+    } else {
+        // The system clock frequency is not not allowed, so set it to default value.
+        sys_clock_freq = 125 * MHZ;
     }
+    set_sys_clock_hz(sys_clock_freq, true);
 
     int32_t vga_out_timeout_us = vga_out_timeout * 1000 * 1000;
     ui_zoom = -(ui_zoom - 1); 
@@ -5002,9 +5011,11 @@ int main() {
         // Initialise the HSTX DVI driver
         uart_my_puts("Initialising DVI\n");
 
-        #if SYS_CLK_HZ == 250 * MHZ
-        // clock_configure_int_divider (clk_hstx, 0, 0, clock_get_hz(clk_sys), 2);
-        #endif
+        if (sys_clock_freq >= 250 * MHZ) {
+            // If we double the system clock frequency to 250 MHz or 300 MHz we
+            // need to halve the HSTX clock frequency.
+            clock_configure_int_divider(clk_hstx, 0, 0, clock_get_hz(clk_sys), 2);
+        }
 
         uart_my_putcf("clk_hstx: %d\n", clock_get_hz (clk_hstx));
         // uart_my_putcf("HSTX Frequency: %d\n", clock_get_hz (CLK_DEST_HSTX));
