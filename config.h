@@ -20,6 +20,15 @@
 
 #define BOARD_HAS_SAME_RESERVED_GPIO_AS_PICO 1
 
+#define DVI_D0_PLUS_PIN 12
+#define DVI_D0_MINUS_PIN 13
+#define DVI_CK_PLUS_PIN 14
+#define DVI_CK_MINUS_PIN 15
+#define DVI_D2_PLUS_PIN 16
+#define DVI_D2_MINUS_PIN 17
+#define DVI_D1_PLUS_PIN 18
+#define DVI_D1_MINUS_PIN 19
+
 #if defined(RASPBERRYPI_PICO2)
 
     #pragma message "Building Palavo for RASPBERRYPI_PICO2"
@@ -53,6 +62,24 @@
     #define BOARD_TYPE 6
 
     #undef BOARD_HAS_SAME_RESERVED_GPIO_AS_PICO
+
+#undef DVI_CK_MINUS_PIN
+#undef DVI_CK_PLUS_PIN
+#undef DVI_D0_MINUS_PIN
+#undef DVI_D0_PLUS_PIN
+#undef DVI_D1_MINUS_PIN
+#undef DVI_D1_PLUS_PIN
+#undef DVI_D2_MINUS_PIN
+#undef DVI_D2_PLUS_PIN
+
+#define DVI_CK_MINUS_PIN 12
+#define DVI_CK_PLUS_PIN 13
+#define DVI_D0_MINUS_PIN 14
+#define DVI_D0_PLUS_PIN 15
+#define DVI_D1_MINUS_PIN 16
+#define DVI_D1_PLUS_PIN 17
+#define DVI_D2_MINUS_PIN 18
+#define DVI_D2_PLUS_PIN 19
 
 #else
 

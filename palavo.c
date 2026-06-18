@@ -78,7 +78,7 @@
 
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 15
-#define VERSION_PATCH 8
+#define VERSION_PATCH 9
 
 #ifndef VGA_TIMEOUT
 // If the number of idle seconds before the VGA output is blanked and
@@ -148,28 +148,7 @@ bi_decl(bi_program_feature("Infra-red remote control (if use_ir = 1)"));
 #if CAN_USE_DVI
     // we can sometimes enable DVI output
     bi_decl(bi_program_feature("DVI output (if use_dvi = 1)"));
-
-#ifdef ADAFRUIT_FRUIT_JAM
-    bi_decl(bi_1pin_with_name(19, "DVI Out - D2+"));
-    bi_decl(bi_1pin_with_name(18, "DVI Out - D2-"));
-    bi_decl(bi_1pin_with_name(17, "DVI Out - D1+"));
-    bi_decl(bi_1pin_with_name(16, "DVI Out - D1-"));
-    bi_decl(bi_1pin_with_name(15, "DVI Out - DO+"));
-    bi_decl(bi_1pin_with_name(14, "DVI Out - DO-"));
-    bi_decl(bi_1pin_with_name(13, "DVI Out - CK+"));
-    bi_decl(bi_1pin_with_name(12, "DVI Out - CK-"));
-#else
-    bi_decl(bi_1pin_with_name(19, "DVI Out - D1-"));
-    bi_decl(bi_1pin_with_name(18, "DVI Out - D1+"));
-    bi_decl(bi_1pin_with_name(17, "DVI Out - D2-"));
-    bi_decl(bi_1pin_with_name(16, "DVI Out - D2+"));
-    bi_decl(bi_1pin_with_name(15, "DVI Out - CK-"));
-    bi_decl(bi_1pin_with_name(14, "DVI Out - CK+"));
-    bi_decl(bi_1pin_with_name(13, "DVI Out - D0-"));
-    bi_decl(bi_1pin_with_name(12, "DVI Out - D0+"));
 #endif
-
-    #endif
 
 // Maybe make this a feature?...
 bi_decl(bi_program_feature("Config: " STR(PALAVO_CONFIG)));
@@ -502,6 +481,14 @@ bi_decl(bi_ptr_int32(0x1111, FG_INTERFACES, use_ir, USE_IR));
 #if CAN_USE_DVI
 // bi_decl(bi_program_feature_group(0x1111, FG_DVI, "DVI Configuration"));
 bi_decl(bi_ptr_int32(0x1111, FG_DVI, vga_in_to_dvi_on_boot, USE_VGA_IN_TO_DVI));
+bi_decl(bi_ptr_int32(0x1111, FG_DVI, dvi_d1_minus_pin, DVI_D1_MINUS_PIN));
+bi_decl(bi_ptr_int32(0x1111, FG_DVI, dvi_d1_plus_pin, DVI_D1_PLUS_PIN));
+bi_decl(bi_ptr_int32(0x1111, FG_DVI, dvi_d2_minus_pin, DVI_D2_MINUS_PIN));
+bi_decl(bi_ptr_int32(0x1111, FG_DVI, dvi_d2_plus_pin, DVI_D2_PLUS_PIN));
+bi_decl(bi_ptr_int32(0x1111, FG_DVI, dvi_ck_minus_pin, DVI_CK_MINUS_PIN));
+bi_decl(bi_ptr_int32(0x1111, FG_DVI, dvi_ck_plus_pin, DVI_CK_PLUS_PIN));
+bi_decl(bi_ptr_int32(0x1111, FG_DVI, dvi_d0_minus_pin, DVI_D0_MINUS_PIN));
+bi_decl(bi_ptr_int32(0x1111, FG_DVI, dvi_d0_plus_pin, DVI_D0_PLUS_PIN));
 bi_decl(bi_ptr_int32(0x1111, FG_INTERFACES, use_dvi, USE_DVI));
 #endif
 
@@ -4770,7 +4757,12 @@ uint total_sample_bits;
 #define CORE1_CMD_INIT_DVI_LINEBUF 345
 
 
-void core1_main() { 
+void core1_main() {
+    dvi_configure_hstx_pins(
+        dvi_ck_plus_pin, dvi_ck_minus_pin,
+        dvi_d0_plus_pin, dvi_d0_minus_pin,
+        dvi_d1_plus_pin, dvi_d1_minus_pin,
+        dvi_d2_plus_pin, dvi_d2_minus_pin);
     dvi_init(use_vga_in);
     dvi_testbars();
 

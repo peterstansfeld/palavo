@@ -50,6 +50,15 @@
 #include "hardware/clocks.h"
 #include "vga_capture.pio.h"
 
+uint8_t ck_plus_bit_no;
+uint8_t ck_minus_bit_no;
+uint8_t d0_plus_bit_no;
+uint8_t d0_minus_bit_no;
+uint8_t d1_plus_bit_no;
+uint8_t d1_minus_bit_no;
+uint8_t d2_plus_bit_no;
+uint8_t d2_minus_bit_no;
+
 bool can_use_framebuf;
 bool using_framebuf;
 
@@ -786,6 +795,26 @@ void dvi_testbars() {
 #endif
 
 
+uint8_t dvi_hstx_pin_to_bit_no(uint8_t pin) {
+    // HSTX GPIO pins, which need to be in the range 12..19, correspond to the
+    // HSTX data control registers for output bits 0..7
+    return ((pin - 12) & 0x07);
+}
+
+
+void dvi_configure_hstx_pins(uint8_t ck_plus_pin, uint8_t ck_minus_pin, uint8_t d0_plus_pin, uint8_t d0_minus_pin,
+                             uint8_t d1_plus_pin, uint8_t d1_minus_pin, uint8_t d2_plus_pin, uint8_t d2_minus_pin) {
+    ck_plus_bit_no = dvi_hstx_pin_to_bit_no(ck_plus_pin);
+    ck_minus_bit_no = dvi_hstx_pin_to_bit_no(ck_minus_pin);
+    d0_plus_bit_no = dvi_hstx_pin_to_bit_no(d0_plus_pin);
+    d0_minus_bit_no = dvi_hstx_pin_to_bit_no(d0_minus_pin);
+    d1_plus_bit_no = dvi_hstx_pin_to_bit_no(d1_plus_pin);
+    d1_minus_bit_no = dvi_hstx_pin_to_bit_no(d1_minus_pin);
+    d2_plus_bit_no = dvi_hstx_pin_to_bit_no(d2_plus_pin);
+    d2_minus_bit_no = dvi_hstx_pin_to_bit_no(d2_minus_pin);
+}
+
+
 void dvi_init_hstx_regs() {
     // modify the first horizontal line to be red
     // memset(&framebuf, 0xe0, MODE_H_ACTIVE_PIXELS);
@@ -1022,64 +1051,27 @@ void dvi_init_hstx_regs() {
 
     // HSTX outputs 0 through 7 appear on GPIO 12 through 19.
 
-#ifdef ADAFRUIT_FRUIT_JAM
+    // set up the clock pair
 
-    // Pinout for Adafruit's Fruit Jam:
-    //
-    //   GP12 CK-  GP13 CK+
-    //   GP14 D0-  GP15 D0+
-    //   GP16 D1-  GP17 D1+
-    //   GP18 D2-  GP19 D2+
+    hstx_ctrl_hw->bit[ck_plus_bit_no] = HSTX_CTRL_BIT0_CLK_BITS;
+    hstx_ctrl_hw->bit[ck_minus_bit_no] = HSTX_CTRL_BIT0_CLK_BITS | HSTX_CTRL_BIT0_INV_BITS;
 
-    // Assign clock pair to two neighbouring pins:
-    // hstx_ctrl_hw->bit[2] = HSTX_CTRL_BIT0_CLK_BITS;
-    // hstx_ctrl_hw->bit[3] = HSTX_CTRL_BIT0_CLK_BITS | HSTX_CTRL_BIT0_INV_BITS;
-    hstx_ctrl_hw->bit[0] = HSTX_CTRL_BIT0_CLK_BITS | HSTX_CTRL_BIT0_INV_BITS;
-    hstx_ctrl_hw->bit[1] = HSTX_CTRL_BIT0_CLK_BITS;
-    for (uint lane = 0; lane < 3; ++lane) {
-        // For each TMDS lane, assign it to the correct GPIO pair based on the
-        // desired pinout:
-        // static const int lane_to_output_bit[3] = {0, 6, 4};
-        static const int lane_to_output_bit[3] = {2, 4, 6};
-        int bit = lane_to_output_bit[lane];
-        // Output even bits during first half of each HSTX cycle, and odd bits
-        // during second half. The shifter advances by two bits each cycle.
-        uint32_t lane_data_sel_bits =
-            (lane * 10    ) << HSTX_CTRL_BIT0_SEL_P_LSB |
-            (lane * 10 + 1) << HSTX_CTRL_BIT0_SEL_N_LSB;
-        // The two halves of each pair get identical data, but one pin is inverted.
-        hstx_ctrl_hw->bit[bit    ] = lane_data_sel_bits | HSTX_CTRL_BIT0_INV_BITS;
-        hstx_ctrl_hw->bit[bit + 1] = lane_data_sel_bits;
-    }
+    // set up the three data lane pairs
 
-#else
+    // lane == 0
+    #define DVI_LANE_0_SEL_BITS ((0 << HSTX_CTRL_BIT0_SEL_P_LSB) | (1 << HSTX_CTRL_BIT0_SEL_N_LSB))
+    hstx_ctrl_hw->bit[d0_plus_bit_no] = DVI_LANE_0_SEL_BITS;
+    hstx_ctrl_hw->bit[d0_minus_bit_no] = DVI_LANE_0_SEL_BITS | HSTX_CTRL_BIT0_INV_BITS;
 
-    // Pinout on Pico DVI sock:
-    //
-    //   GP12 D0+  GP13 D0-
-    //   GP14 CK+  GP15 CK-
-    //   GP16 D2+  GP17 D2-
-    //   GP18 D1+  GP19 D1-
+    // lane == 1
+    #define DVI_LANE_1_SEL_BITS ((10 << HSTX_CTRL_BIT0_SEL_P_LSB) | (11 << HSTX_CTRL_BIT0_SEL_N_LSB))
+    hstx_ctrl_hw->bit[d1_plus_bit_no] = DVI_LANE_1_SEL_BITS;
+    hstx_ctrl_hw->bit[d1_minus_bit_no] = DVI_LANE_1_SEL_BITS | HSTX_CTRL_BIT0_INV_BITS;
 
-    // Assign clock pair to two neighbouring pins:
-    hstx_ctrl_hw->bit[2] = HSTX_CTRL_BIT0_CLK_BITS;
-    hstx_ctrl_hw->bit[3] = HSTX_CTRL_BIT0_CLK_BITS | HSTX_CTRL_BIT0_INV_BITS;
-    for (uint lane = 0; lane < 3; ++lane) {
-        // For each TMDS lane, assign it to the correct GPIO pair based on the
-        // desired pinout:
-        static const int lane_to_output_bit[3] = {0, 6, 4};
-        int bit = lane_to_output_bit[lane];
-        // Output even bits during first half of each HSTX cycle, and odd bits
-        // during second half. The shifter advances by two bits each cycle.
-        uint32_t lane_data_sel_bits =
-            (lane * 10    ) << HSTX_CTRL_BIT0_SEL_P_LSB |
-            (lane * 10 + 1) << HSTX_CTRL_BIT0_SEL_N_LSB;
-        // The two halves of each pair get identical data, but one pin is inverted.
-        hstx_ctrl_hw->bit[bit    ] = lane_data_sel_bits;
-        hstx_ctrl_hw->bit[bit + 1] = lane_data_sel_bits | HSTX_CTRL_BIT0_INV_BITS;
-    }
-
-#endif
+    // lane == 2
+    #define DVI_LANE_2_SEL_BITS ((20 << HSTX_CTRL_BIT0_SEL_P_LSB) | (21 << HSTX_CTRL_BIT0_SEL_N_LSB))
+    hstx_ctrl_hw->bit[d2_plus_bit_no] = DVI_LANE_2_SEL_BITS;
+    hstx_ctrl_hw->bit[d2_minus_bit_no] = DVI_LANE_2_SEL_BITS | HSTX_CTRL_BIT0_INV_BITS;
 
 }
 

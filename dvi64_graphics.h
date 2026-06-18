@@ -61,5 +61,7 @@ uint32_t dvi_get_csr();
 
 uint32_t dvi_get_v_scanline();
 
+void dvi_configure_hstx_pins(uint8_t ck_plus_pin, uint8_t ck_minus_pin, uint8_t d0_plus_pin, uint8_t d0_minus_pin,
+                             uint8_t d1_plus_pin, uint8_t d1_minus_pin, uint8_t d2_plus_pin, uint8_t d2_minus_pin);
 
 #endif
